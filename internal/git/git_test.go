@@ -301,6 +301,194 @@ func TestPush(t *testing.T) {
 	})
 }
 
+func TestPull_conflictFallsBackToMerge(t *testing.T) {
+	workDir, remoteDir := initTestRepoWithRemote(t)
+
+	// Clone a second copy, make a conflicting change, push
+	secondDir := filepath.Join(t.TempDir(), "clone")
+	cmd := exec.Command("git", "clone", remoteDir, secondDir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("clone failed: %s (%v)", out, err)
+	}
+	for _, args := range [][]string{
+		{"git", "config", "user.email", "other@test.com"},
+		{"git", "config", "user.name", "Other"},
+		{"git", "checkout", "main"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = secondDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v failed: %s (%v)", args, out, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(secondDir, "README.md"), []byte("remote change\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"git", "add", "README.md"},
+		{"git", "commit", "-m", "remote conflicting change"},
+		{"git", "push", "origin", "main"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = secondDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("[%v] failed: %s (%v)", args, out, err)
+		}
+	}
+
+	// Edit same file locally with conflicting content
+	if err := os.WriteFile(filepath.Join(workDir, "README.md"), []byte("local conflicting change\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"git", "add", "README.md"},
+		{"git", "commit", "-m", "local conflicting change"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = workDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v failed: %s (%v)", args, out, err)
+		}
+	}
+
+	// Pull — rebase will conflict, abort, merge will also conflict
+	r := NewRunner(workDir)
+	err := r.Pull("main")
+	if err == nil {
+		t.Fatal("expected error from conflicting pull")
+	}
+	if !strings.Contains(err.Error(), "merge also failed") {
+		t.Errorf("expected merge-also-failed error, got: %v", err)
+	}
+}
+
+func TestPush_nonFastForward(t *testing.T) {
+	workDir, remoteDir := initTestRepoWithRemote(t)
+
+	// Advance remote from a second clone
+	secondDir := filepath.Join(t.TempDir(), "clone")
+	cmd := exec.Command("git", "clone", remoteDir, secondDir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("clone failed: %s (%v)", out, err)
+	}
+	for _, args := range [][]string{
+		{"git", "config", "user.email", "other@test.com"},
+		{"git", "config", "user.name", "Other"},
+		{"git", "checkout", "main"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = secondDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v failed: %s (%v)", args, out, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(secondDir, "remote.txt"), []byte("advance remote"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"git", "add", "remote.txt"},
+		{"git", "commit", "-m", "advance remote"},
+		{"git", "push", "origin", "main"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = secondDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("[%v] failed: %s (%v)", args, out, err)
+		}
+	}
+
+	// Make a local divergent commit
+	if err := os.WriteFile(filepath.Join(workDir, "local.txt"), []byte("local"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"git", "add", "local.txt"},
+		{"git", "commit", "-m", "local diverge"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = workDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v failed: %s (%v)", args, out, err)
+		}
+	}
+
+	// Push should fail — remote is ahead, non-fast-forward
+	r := NewRunner(workDir)
+	err := r.Push("main")
+	if err == nil {
+		t.Fatal("expected error from non-fast-forward push")
+	}
+	if !strings.Contains(err.Error(), "git push main") {
+		t.Errorf("expected push error message, got: %v", err)
+	}
+}
+
+func TestErrorPaths(t *testing.T) {
+	// A Runner pointing at a non-existent directory triggers error
+	// branches in every method.
+	r := NewRunner("/nonexistent/git/path")
+
+	t.Run("CurrentBranch", func(t *testing.T) {
+		_, err := r.CurrentBranch()
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !strings.Contains(err.Error(), "git current branch") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("HasUncommittedChanges", func(t *testing.T) {
+		_, err := r.HasUncommittedChanges()
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !strings.Contains(err.Error(), "git status") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("LastCommit", func(t *testing.T) {
+		_, err := r.LastCommit()
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !strings.Contains(err.Error(), "git last commit") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("Stash", func(t *testing.T) {
+		err := r.Stash()
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !strings.Contains(err.Error(), "git stash") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("StashPop", func(t *testing.T) {
+		err := r.StashPop()
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !strings.Contains(err.Error(), "git stash pop") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("Revert", func(t *testing.T) {
+		err := r.Revert("abc1234")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !strings.Contains(err.Error(), "git revert abc1234") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+}
+
 func TestDiffFromRemote(t *testing.T) {
 	t.Run("no diff when in sync", func(t *testing.T) {
 		workDir, _ := initTestRepoWithRemote(t)

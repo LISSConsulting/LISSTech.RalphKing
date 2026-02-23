@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **All core features complete (P1–P6).** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 85%+ test coverage across all packages.
+> Current state: **All core features complete (P1–P6).** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 84–97% test coverage across all packages.
 
 ## Completed Work
 
@@ -31,6 +31,7 @@
 | Regent test runner — `test_command` execution, revert on failure, push revert | the-regent.md | 0.0.5 |
 | Regent TUI integration — `LogRegent` kind, orange `regentStyle`, inline messages | the-regent.md | 0.0.5 |
 | Regent CLI wiring — `regent.enabled` toggles supervision for plan/build/run | the-regent.md | 0.0.5 |
+| Git package tests — conflict fallback, push rejection, error paths (75.5% → 96.2%) | ralph-core.md | 0.0.6 |
 
 ## Key Learnings
 
