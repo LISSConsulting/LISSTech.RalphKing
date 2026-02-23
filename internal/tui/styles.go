@@ -1,0 +1,89 @@
+// Package tui provides a bubbletea + lipgloss terminal UI for the Ralph loop.
+package tui
+
+import "github.com/charmbracelet/lipgloss"
+
+// Color palette matching the spec.
+var (
+	colorIndigo = lipgloss.Color("#7D56F4")
+	colorWhite  = lipgloss.Color("#FAFAFA")
+	colorGray   = lipgloss.Color("#888888")
+	colorBlue   = lipgloss.Color("#5B9BD5")
+	colorGreen  = lipgloss.Color("#6BCB77")
+	colorYellow = lipgloss.Color("#FFD93D")
+	colorRed    = lipgloss.Color("#FF6B6B")
+	colorOrange = lipgloss.Color("#FFA54F")
+)
+
+// Styles used across the TUI.
+var (
+	headerStyle = lipgloss.NewStyle().
+			Background(colorIndigo).
+			Foreground(colorWhite).
+			Bold(true).
+			Padding(0, 1)
+
+	footerStyle = lipgloss.NewStyle().
+			Foreground(colorGray)
+
+	timestampStyle = lipgloss.NewStyle().
+			Foreground(colorGray)
+
+	readStyle = lipgloss.NewStyle().
+			Foreground(colorBlue)
+
+	writeStyle = lipgloss.NewStyle().
+			Foreground(colorGreen)
+
+	bashStyle = lipgloss.NewStyle().
+			Foreground(colorYellow)
+
+	errorStyle = lipgloss.NewStyle().
+			Foreground(colorRed).
+			Bold(true)
+
+	resultStyle = lipgloss.NewStyle().
+			Foreground(colorGreen).
+			Bold(true)
+
+	gitStyle = lipgloss.NewStyle().
+			Foreground(colorIndigo)
+
+	regentStyle = lipgloss.NewStyle().
+			Foreground(colorOrange)
+
+	infoStyle = lipgloss.NewStyle().
+			Foreground(colorWhite)
+)
+
+// toolIcon returns the emoji icon for a given tool name.
+func toolIcon(toolName string) string {
+	switch toolName {
+	case "Read", "read_file", "Glob", "Grep":
+		return "📖"
+	case "Write", "write_file", "Edit", "NotebookEdit":
+		return "✏️ "
+	case "Bash":
+		return "🔧"
+	case "WebFetch", "WebSearch":
+		return "🌐"
+	case "Task":
+		return "🔀"
+	default:
+		return "⚡"
+	}
+}
+
+// toolStyle returns the lipgloss style for a given tool name.
+func toolStyle(toolName string) lipgloss.Style {
+	switch toolName {
+	case "Read", "read_file", "Glob", "Grep":
+		return readStyle
+	case "Write", "write_file", "Edit", "NotebookEdit":
+		return writeStyle
+	case "Bash":
+		return bashStyle
+	default:
+		return infoStyle
+	}
+}

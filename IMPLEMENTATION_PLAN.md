@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: P1–P4 complete. Spec commands, core loop, ClaudeAgent, and CLI wiring implemented. 95% test coverage on spec package.
+> Current state: P1–P5 complete. TUI with bubbletea/lipgloss, structured event system, color-coded log, header/footer bars. 85%+ test coverage across all packages.
 
 ## Completed Work
 
@@ -19,19 +19,14 @@
 | Signal handling — SIGINT/SIGTERM graceful shutdown via context | ralph-core.md | 0.0.2 |
 | Status command — reads .ralph/regent-state.json, prints summary | the-regent.md | 0.0.2 |
 | Spec package — discovery, status detection, template scaffolding | ralph-core.md | 0.0.3 |
-| `ralph spec list` — list specs with ✅/🔄/⬜ status indicators | ralph-core.md | 0.0.3 |
+| `ralph spec list` — list specs with status indicators | ralph-core.md | 0.0.3 |
 | `ralph spec new <name>` — create spec from embedded template, open $EDITOR | ralph-core.md | 0.0.3 |
+| TUI — bubbletea model with header, scrollable log, footer | ralph-core.md | 0.0.4 |
+| Loop event system — LogEntry/LogKind types, emit() replaces logf() | ralph-core.md | 0.0.4 |
+| TUI styles — lipgloss color-coded tool display (reads=blue, writes=green, bash=yellow, errors=red) | ralph-core.md | 0.0.4 |
+| TUI CLI wiring — `--no-tui` flag, alt-screen mode, event channel bridge | ralph-core.md | 0.0.4 |
 
 ## Remaining Work (Prioritized)
-
-### P5 — TUI (`internal/tui/`) — ralph-core.md
-
-- `bubbletea` model with header bar, scrollable log, footer bar
-- Header: `RalphKing  |  branch  |  iter N/M  |  cost $X.XX`
-- Log: timestamped tool events (read, write, bash, result, error)
-- Footer: `[pull] [push]  last commit: ...  |  q to quit`
-- Color-coded: reads=blue, writes=green, bash=yellow, errors=red, regent=orange
-- Replace loop's io.Writer log with TUI event consumption
 
 ### P6 — Regent (`internal/regent/`) — the-regent.md
 
@@ -43,7 +38,7 @@
 ## Key Learnings
 
 - Go module: `github.com/LISSConsulting/LISSTech.RalphKing`
-- `go 1.23` — use modern Go idioms
+- `go 1.24` — bumped from 1.23 by bubbletea dependency
 - Approved deps: `cobra`, `BurntSushi/toml`, `bubbletea`, `lipgloss`
 - Build target: `go build ./cmd/ralph/`
 - Test: `go test ./...`
@@ -51,7 +46,9 @@
 - Cross-compile: `darwin/arm64`, `darwin/amd64`, `linux/amd64`, `windows/amd64`
 - Start tags at `0.0.1`, increment patch per meaningful milestone
 - GitOps interface defined at consumer (loop package) for clean testability — *git.Runner satisfies it implicitly
-- Spec status detection uses IMPLEMENTATION_PLAN.md cross-referencing — reference spec filenames in remaining work headers for accurate 🔄 detection
+- Spec status detection uses IMPLEMENTATION_PLAN.md cross-referencing — reference spec filenames in remaining work headers for accurate status detection
+- Loop emit() is non-blocking on the event channel to prevent deadlock when TUI exits before loop finishes
+- TUI uses bubbletea channel pattern: `waitForEvent` Cmd reads from `<-chan LogEntry`, re-schedules itself after each message
 
 ## Out of Scope (for now)
 

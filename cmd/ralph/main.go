@@ -11,12 +11,14 @@ import (
 	"path/filepath"
 	"syscall"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui"
 )
 
 // version is set at build time via -ldflags.
@@ -34,6 +36,8 @@ func rootCmd() *cobra.Command {
 		Short:   "RalphKing — spec-driven AI coding loop",
 		Version: version,
 	}
+
+	root.PersistentFlags().Bool("no-tui", false, "disable TUI, use plain text output")
 
 	root.AddCommand(
 		planCmd(),
@@ -53,7 +57,8 @@ func planCmd() *cobra.Command {
 		Short: "Run Claude in plan mode",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			max, _ := cmd.Flags().GetInt("max")
-			return executeLoop(loop.ModePlan, max)
+			noTUI, _ := cmd.Flags().GetBool("no-tui")
+			return executeLoop(loop.ModePlan, max, noTUI)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
@@ -66,7 +71,8 @@ func buildCmd() *cobra.Command {
 		Short: "Run Claude in build mode",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			max, _ := cmd.Flags().GetInt("max")
-			return executeLoop(loop.ModeBuild, max)
+			noTUI, _ := cmd.Flags().GetBool("no-tui")
+			return executeLoop(loop.ModeBuild, max, noTUI)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
@@ -79,7 +85,8 @@ func runCmd() *cobra.Command {
 		Short: "Smart mode: plan if needed, then build",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			max, _ := cmd.Flags().GetInt("max")
-			return executeSmartRun(max)
+			noTUI, _ := cmd.Flags().GetBool("no-tui")
+			return executeSmartRun(max, noTUI)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
@@ -184,7 +191,7 @@ func specNewCmd() *cobra.Command {
 }
 
 // executeLoop loads config, builds the loop, and runs it in the given mode.
-func executeLoop(mode loop.Mode, maxOverride int) error {
+func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 	cfg, err := config.Load("")
 	if err != nil {
 		return err
@@ -195,21 +202,28 @@ func executeLoop(mode loop.Mode, maxOverride int) error {
 		return fmt.Errorf("get working directory: %w", err)
 	}
 
-	ctx := signalContext()
+	ctx, cancel := signalContext()
+	defer cancel()
 
 	lp := &loop.Loop{
 		Agent:  loop.NewClaudeAgent(),
 		Git:    git.NewRunner(dir),
 		Config: cfg,
-		Log:    os.Stdout,
 		Dir:    dir,
 	}
 
-	return lp.Run(ctx, mode, maxOverride)
+	if noTUI {
+		lp.Log = os.Stdout
+		return lp.Run(ctx, mode, maxOverride)
+	}
+
+	return runWithTUI(ctx, lp, func() tea.Cmd {
+		return tui.RunLoop(ctx, lp, mode, maxOverride)
+	})
 }
 
 // executeSmartRun runs plan if IMPLEMENTATION_PLAN.md doesn't exist, then build.
-func executeSmartRun(maxOverride int) error {
+func executeSmartRun(maxOverride int, noTUI bool) error {
 	cfg, err := config.Load("")
 	if err != nil {
 		return err
@@ -220,33 +234,72 @@ func executeSmartRun(maxOverride int) error {
 		return fmt.Errorf("get working directory: %w", err)
 	}
 
-	ctx := signalContext()
+	ctx, cancel := signalContext()
+	defer cancel()
 
 	lp := &loop.Loop{
 		Agent:  loop.NewClaudeAgent(),
 		Git:    git.NewRunner(dir),
 		Config: cfg,
-		Log:    os.Stdout,
 		Dir:    dir,
 	}
 
 	// Check if plan is needed
 	planPath := filepath.Join(dir, "IMPLEMENTATION_PLAN.md")
 	needsPlan := false
-	info, err := os.Stat(planPath)
-	if err != nil || info.Size() == 0 {
+	info, statErr := os.Stat(planPath)
+	if statErr != nil || info.Size() == 0 {
 		needsPlan = true
 	}
 
-	if needsPlan {
-		fmt.Println("No IMPLEMENTATION_PLAN.md found — running plan first")
-		if planErr := lp.Run(ctx, loop.ModePlan, 0); planErr != nil {
-			return fmt.Errorf("plan phase: %w", planErr)
+	if noTUI {
+		lp.Log = os.Stdout
+		if needsPlan {
+			fmt.Println("No IMPLEMENTATION_PLAN.md found — running plan first")
+			if planErr := lp.Run(ctx, loop.ModePlan, 0); planErr != nil {
+				return fmt.Errorf("plan phase: %w", planErr)
+			}
 		}
+		fmt.Println("Starting build phase")
+		return lp.Run(ctx, loop.ModeBuild, maxOverride)
 	}
 
-	fmt.Println("Starting build phase")
-	return lp.Run(ctx, loop.ModeBuild, maxOverride)
+	return runWithTUI(ctx, lp, func() tea.Cmd {
+		return tui.RunSmartLoop(ctx, lp, maxOverride, needsPlan)
+	})
+}
+
+// runWithTUI creates an event channel, wires it to the loop and TUI, and
+// runs the bubbletea program. The loopCmd factory is called after the event
+// channel is set on the loop.
+func runWithTUI(ctx context.Context, lp *loop.Loop, loopCmdFn func() tea.Cmd) error {
+	events := make(chan loop.LogEntry, 128)
+	lp.Events = events
+
+	model := tui.New(events)
+	program := tea.NewProgram(model, tea.WithAltScreen())
+
+	// Start the loop in a goroutine; close channel when done.
+	loopCmd := loopCmdFn()
+	go func() {
+		defer close(events)
+		loopCmd()
+	}()
+
+	finalModel, err := program.Run()
+	if err != nil {
+		return fmt.Errorf("tui: %w", err)
+	}
+
+	if m, ok := finalModel.(tui.Model); ok && m.Err() != nil {
+		// Context cancellation is expected from q/ctrl+c
+		if ctx.Err() != nil {
+			return nil
+		}
+		return m.Err()
+	}
+
+	return nil
 }
 
 // showStatus reads .ralph/regent-state.json and prints a summary.
@@ -279,8 +332,9 @@ func showStatus() error {
 	return nil
 }
 
-// signalContext returns a context that is cancelled on SIGINT or SIGTERM.
-func signalContext() context.Context {
+// signalContext returns a context that is cancelled on SIGINT or SIGTERM,
+// and a cancel function for cleanup.
+func signalContext() (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -288,7 +342,7 @@ func signalContext() context.Context {
 		<-sigs
 		cancel()
 	}()
-	return ctx
+	return ctx, cancel
 }
 
 // openEditor launches the given editor with the file path, connecting stdio.

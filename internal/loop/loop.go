@@ -38,8 +38,9 @@ type Loop struct {
 	Agent  claude.Agent
 	Git    GitOps
 	Config *config.Config
-	Log    io.Writer // output destination; defaults to os.Stdout
-	Dir    string    // working directory for prompt file resolution
+	Log    io.Writer      // output destination; defaults to os.Stdout
+	Events chan<- LogEntry // optional: structured event sink for TUI
+	Dir    string         // working directory for prompt file resolution
 }
 
 // Run executes the loop in the given mode. It runs iterations until the
@@ -62,31 +63,55 @@ func (l *Loop) Run(ctx context.Context, mode Mode, maxOverride int) error {
 		return fmt.Errorf("loop: get branch: %w", err)
 	}
 
-	l.logf("Starting %s loop on branch %s (max: %s)", mode, branch, iterLabel(maxIter))
+	l.emit(LogEntry{
+		Kind:    LogInfo,
+		Message: fmt.Sprintf("Starting %s loop on branch %s (max: %s)", mode, branch, iterLabel(maxIter)),
+		Branch:  branch,
+		MaxIter: maxIter,
+		Mode:    string(mode),
+	})
 
 	var totalCost float64
 	for i := 1; maxIter == 0 || i <= maxIter; i++ {
 		select {
 		case <-ctx.Done():
-			l.logf("Loop stopped: %v", ctx.Err())
+			l.emit(LogEntry{
+				Kind:    LogStopped,
+				Message: fmt.Sprintf("Loop stopped: %v", ctx.Err()),
+			})
 			return ctx.Err()
 		default:
 		}
 
-		cost, iterErr := l.iteration(ctx, i, string(prompt), branch)
+		cost, iterErr := l.iteration(ctx, i, maxIter, string(prompt), branch)
 		if iterErr != nil {
 			return fmt.Errorf("loop: iteration %d: %w", i, iterErr)
 		}
 		totalCost += cost
-		l.logf("Running total: $%.2f", totalCost)
+		l.emit(LogEntry{
+			Kind:      LogInfo,
+			Message:   fmt.Sprintf("Running total: $%.2f", totalCost),
+			TotalCost: totalCost,
+		})
 	}
 
-	l.logf("Loop complete — %s iterations done, total cost: $%.2f", iterLabel(maxIter), totalCost)
+	l.emit(LogEntry{
+		Kind:      LogDone,
+		Message:   fmt.Sprintf("Loop complete — %s iterations done, total cost: $%.2f", iterLabel(maxIter), totalCost),
+		TotalCost: totalCost,
+		MaxIter:   maxIter,
+	})
 	return nil
 }
 
-func (l *Loop) iteration(ctx context.Context, n int, prompt, branch string) (float64, error) {
-	l.logf("── iteration %d ──", n)
+func (l *Loop) iteration(ctx context.Context, n, maxIter int, prompt, branch string) (float64, error) {
+	l.emit(LogEntry{
+		Kind:      LogIterStart,
+		Message:   fmt.Sprintf("── iteration %d ──", n),
+		Iteration: n,
+		MaxIter:   maxIter,
+		Branch:    branch,
+	})
 
 	// Stash uncommitted changes before pulling
 	stashed, err := l.stashIfDirty()
@@ -96,21 +121,34 @@ func (l *Loop) iteration(ctx context.Context, n int, prompt, branch string) (flo
 
 	// Pull latest from remote
 	if l.Config.Git.AutoPullRebase {
-		l.logf("Pulling %s", branch)
+		l.emit(LogEntry{
+			Kind:    LogGitPull,
+			Message: fmt.Sprintf("Pulling %s", branch),
+			Branch:  branch,
+		})
 		if pullErr := l.Git.Pull(branch); pullErr != nil {
-			l.logf("Pull failed: %v (continuing)", pullErr)
+			l.emit(LogEntry{
+				Kind:    LogInfo,
+				Message: fmt.Sprintf("Pull failed: %v (continuing)", pullErr),
+			})
 		}
 	}
 
 	// Restore stashed changes
 	if stashed {
 		if popErr := l.Git.StashPop(); popErr != nil {
-			l.logf("Stash pop failed: %v", popErr)
+			l.emit(LogEntry{
+				Kind:    LogInfo,
+				Message: fmt.Sprintf("Stash pop failed: %v", popErr),
+			})
 		}
 	}
 
 	// Run Claude
-	l.logf("Running Claude...")
+	l.emit(LogEntry{
+		Kind:    LogInfo,
+		Message: "Running Claude...",
+	})
 	events, err := l.Agent.Run(ctx, prompt, claude.RunOptions{
 		Model:                 l.Config.Claude.Model,
 		DangerSkipPermissions: l.Config.Claude.DangerSkipPermissions,
@@ -124,21 +162,38 @@ func (l *Loop) iteration(ctx context.Context, n int, prompt, branch string) (flo
 	for ev := range events {
 		switch ev.Type {
 		case claude.EventToolUse:
-			l.logf("tool: %s  %s", ev.ToolName, summarizeInput(ev.ToolInput))
+			l.emit(LogEntry{
+				Kind:      LogToolUse,
+				Message:   fmt.Sprintf("tool: %s  %s", ev.ToolName, summarizeInput(ev.ToolInput)),
+				ToolName:  ev.ToolName,
+				ToolInput: summarizeInput(ev.ToolInput),
+			})
 		case claude.EventText:
 			// Skip text events in log output (verbose)
 		case claude.EventResult:
 			cost = ev.CostUSD
-			l.logf("Iteration %d complete — $%.2f — %.1fs", n, ev.CostUSD, ev.Duration)
+			l.emit(LogEntry{
+				Kind:      LogIterComplete,
+				Message:   fmt.Sprintf("Iteration %d complete — $%.2f — %.1fs", n, ev.CostUSD, ev.Duration),
+				Iteration: n,
+				CostUSD:   ev.CostUSD,
+				Duration:  ev.Duration,
+			})
 		case claude.EventError:
-			l.logf("Error: %s", ev.Error)
+			l.emit(LogEntry{
+				Kind:    LogError,
+				Message: fmt.Sprintf("Error: %s", ev.Error),
+			})
 		}
 	}
 
 	// Push if there are new local commits
 	if l.Config.Git.AutoPush {
 		if pushErr := l.pushIfNeeded(branch); pushErr != nil {
-			l.logf("Push error: %v", pushErr)
+			l.emit(LogEntry{
+				Kind:    LogError,
+				Message: fmt.Sprintf("Push error: %v", pushErr),
+			})
 		}
 	}
 
@@ -151,7 +206,10 @@ func (l *Loop) stashIfDirty() (bool, error) {
 		return false, fmt.Errorf("check changes: %w", err)
 	}
 	if dirty {
-		l.logf("Stashing uncommitted changes")
+		l.emit(LogEntry{
+			Kind:    LogInfo,
+			Message: "Stashing uncommitted changes",
+		})
 		if stashErr := l.Git.Stash(); stashErr != nil {
 			return false, fmt.Errorf("stash: %w", stashErr)
 		}
@@ -163,19 +221,54 @@ func (l *Loop) stashIfDirty() (bool, error) {
 func (l *Loop) pushIfNeeded(branch string) error {
 	hasChanges, err := l.Git.DiffFromRemote(branch)
 	if err != nil {
-		l.logf("Diff check failed: %v (skipping push)", err)
+		l.emit(LogEntry{
+			Kind:    LogInfo,
+			Message: fmt.Sprintf("Diff check failed: %v (skipping push)", err),
+		})
 		return nil
 	}
 	if !hasChanges {
 		return nil
 	}
-	l.logf("Pushing %s", branch)
+	l.emit(LogEntry{
+		Kind:    LogGitPush,
+		Message: fmt.Sprintf("Pushing %s", branch),
+		Branch:  branch,
+	})
 	if pushErr := l.Git.Push(branch); pushErr != nil {
 		return pushErr
 	}
 	commit, _ := l.Git.LastCommit()
-	l.logf("Pushed — last commit: %s", commit)
+	l.emit(LogEntry{
+		Kind:    LogGitPush,
+		Message: fmt.Sprintf("Pushed — last commit: %s", commit),
+		Commit:  commit,
+		Branch:  branch,
+	})
 	return nil
+}
+
+// emit sends a structured log entry. When Events is set, it sends to the
+// channel for TUI consumption. Otherwise, it writes formatted text to Log.
+// The channel send is non-blocking to prevent deadlock if the TUI exits
+// while the loop is still draining events.
+func (l *Loop) emit(entry LogEntry) {
+	if entry.Timestamp.IsZero() {
+		entry.Timestamp = time.Now()
+	}
+	if l.Events != nil {
+		select {
+		case l.Events <- entry:
+		default:
+		}
+		return
+	}
+	w := l.Log
+	if w == nil {
+		w = os.Stdout
+	}
+	ts := entry.Timestamp.Format("15:04:05")
+	fmt.Fprintf(w, "[%s]  %s\n", ts, entry.Message)
 }
 
 func (l *Loop) modeConfig(mode Mode) (promptFile string, maxIter int) {
@@ -185,15 +278,6 @@ func (l *Loop) modeConfig(mode Mode) (promptFile string, maxIter int) {
 	default:
 		return l.Config.Build.PromptFile, l.Config.Build.MaxIterations
 	}
-}
-
-func (l *Loop) logf(format string, args ...any) {
-	w := l.Log
-	if w == nil {
-		w = os.Stdout
-	}
-	ts := time.Now().Format("15:04:05")
-	fmt.Fprintf(w, "[%s]  %s\n", ts, fmt.Sprintf(format, args...))
 }
 
 func iterLabel(max int) string {

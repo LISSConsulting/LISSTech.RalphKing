@@ -1,0 +1,47 @@
+package loop
+
+import "time"
+
+// LogKind identifies the type of a loop log event.
+type LogKind int
+
+const (
+	LogInfo         LogKind = iota // General informational message
+	LogIterStart                   // Iteration starting
+	LogToolUse                     // Claude tool use event
+	LogIterComplete                // Iteration finished
+	LogError                       // Error from Claude or loop
+	LogGitPull                     // Git pull operation
+	LogGitPush                     // Git push operation
+	LogDone                        // Loop finished normally
+	LogStopped                     // Loop stopped (context cancelled)
+)
+
+// LogEntry is a structured event emitted by the loop during execution.
+// When the Loop.Events channel is set, entries are sent there for TUI
+// consumption. Otherwise, they fall back to the Loop.Log io.Writer.
+type LogEntry struct {
+	Kind      LogKind
+	Timestamp time.Time
+	Message   string
+
+	// ToolUse fields
+	ToolName  string
+	ToolInput string
+
+	// Cost/timing fields
+	CostUSD   float64
+	Duration  float64
+	TotalCost float64
+
+	// Iteration state
+	Iteration int
+	MaxIter   int
+
+	// Git state
+	Branch string
+	Commit string
+
+	// Mode (plan/build)
+	Mode string
+}
