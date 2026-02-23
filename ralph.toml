@@ -1,0 +1,29 @@
+# ralph.toml — RalphKing project configuration
+# Place this file in the root of your project.
+
+[project]
+name = "RalphKing"
+
+[claude]
+model = "sonnet"
+danger_skip_permissions = true
+
+[plan]
+prompt_file = "PROMPT_plan.md"
+max_iterations = 3
+
+[build]
+prompt_file = "PROMPT_build.md"
+max_iterations = 0  # 0 = unlimited
+
+[git]
+auto_pull_rebase = true
+auto_push = true
+
+[regent]
+enabled = true
+rollback_on_test_failure = false  # set true once test command configured
+test_command = ""                  # e.g. "go test ./..."
+max_retries = 3
+retry_backoff_seconds = 30
+hang_timeout_seconds = 300        # kill Ralph if no output for 5 min
