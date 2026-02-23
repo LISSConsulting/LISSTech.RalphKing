@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: P1 foundation complete. Config, git, claude packages and cobra CLI skeleton implemented with 86% test coverage.
+> Current state: P1–P3 complete. Core loop, ClaudeAgent, and CLI wiring implemented with 88% test coverage on loop package.
 
 ## Completed Work
 
@@ -11,44 +11,29 @@
 | Git package — branch, pull/push, stash, revert, diff helpers | ralph-core.md | 0.0.1 |
 | Claude package — Agent interface, event types, stream-JSON parser | ralph-core.md | 0.0.1 |
 | Cobra CLI skeleton — root + plan/build/run/status/init/spec commands | ralph-core.md | 0.0.1 |
+| Loop package — Loop struct, Run method, iteration cycle (stash/pull/claude/push) | ralph-core.md | 0.0.2 |
+| ClaudeAgent — implements claude.Agent, spawns claude -p subprocess | ralph-core.md | 0.0.2 |
+| GitOps interface — consumer-side interface for testable git operations | ralph-core.md | 0.0.2 |
+| CLI wiring — plan/build/run/status commands connected to loop | ralph-core.md | 0.0.2 |
+| Smart run — plan if no IMPLEMENTATION_PLAN.md, then build | ralph-core.md | 0.0.2 |
+| Signal handling — SIGINT/SIGTERM graceful shutdown via context | ralph-core.md | 0.0.2 |
+| Status command — reads .ralph/regent-state.json, prints summary | the-regent.md | 0.0.2 |
 
 ## Remaining Work (Prioritized)
 
-### P2 — Core Loop (`internal/loop/`)
-
-- **`loop.go`** — `Loop` struct, `Run(ctx, config, mode) error`
-  - Mode: `plan` or `build`
-  - Each iteration: stash if dirty → pull → run Claude → push if new commits
-  - Respects `max_iterations` (0 = unlimited)
-  - Emits iteration events for TUI consumption
-
-- **`runner.go`** — Claude process management
-  - Wraps `internal/claude` agent with `ClaudeAgent` implementation
-  - Spawns `claude -p` subprocess with `--output-format=stream-json --verbose`
-  - Reads prompt file, feeds to Claude
-  - Returns parsed events via channel
-
-### P3 — Commands (wire up loop to CLI)
-
-- **`ralph plan [--max N]`** — run plan loop, feed `plan.prompt_file`
-- **`ralph build [--max N]`** — run build loop, feed `build.prompt_file`
-- **`ralph run [--max N]`** — smart: plan if no `IMPLEMENTATION_PLAN.md`, then build
-- **`ralph init`** — ✅ wired to `config.InitFile`
-- **`ralph status`** — read `.ralph/regent-state.json`, print summary
-
 ### P4 — Spec Commands
 
-- **`ralph spec list`** — list `specs/*.md` with status (✅ complete per IMPLEMENTATION_PLAN, ⬜ not started)
+- **`ralph spec list`** — list `specs/*.md` with status (done/in-progress/not-started per IMPLEMENTATION_PLAN)
 - **`ralph spec new <name>`** — create `specs/<name>.md` from Spec Kit template, open `$EDITOR`
 
 ### P5 — TUI (`internal/tui/`)
 
 - `bubbletea` model with header bar, scrollable log, footer bar
-- Header: `👑 RalphKing  │  branch  │  iter N/M  │  cost $X.XX`
-- Log: timestamped tool events (📖 read, ✏️ write, 🔧 bash, ✅ result, ❌ error)
-- Footer: `[⬆ pull] [⬇ push]  last commit: ...  │  q to quit`
+- Header: `RalphKing  |  branch  |  iter N/M  |  cost $X.XX`
+- Log: timestamped tool events (read, write, bash, result, error)
+- Footer: `[pull] [push]  last commit: ...  |  q to quit`
 - Color-coded: reads=blue, writes=green, bash=yellow, errors=red, regent=orange
-- Initial implementation can use simple `fmt.Println` output (loop works first, pretty TUI second)
+- Replace loop's io.Writer log with TUI event consumption
 
 ### P6 — Regent (`internal/regent/`)
 
@@ -67,6 +52,7 @@
 - Vet: `go vet ./...`
 - Cross-compile: `darwin/arm64`, `darwin/amd64`, `linux/amd64`, `windows/amd64`
 - Start tags at `0.0.1`, increment patch per meaningful milestone
+- GitOps interface defined at consumer (loop package) for clean testability — *git.Runner satisfies it implicitly
 
 ## Out of Scope (for now)
 
