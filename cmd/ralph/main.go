@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,6 +18,7 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui"
 )
@@ -205,21 +207,32 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 	ctx, cancel := signalContext()
 	defer cancel()
 
+	gitRunner := git.NewRunner(dir)
 	lp := &loop.Loop{
 		Agent:  loop.NewClaudeAgent(),
-		Git:    git.NewRunner(dir),
+		Git:    gitRunner,
 		Config: cfg,
 		Dir:    dir,
 	}
 
-	if noTUI {
-		lp.Log = os.Stdout
+	runFn := func(ctx context.Context) error {
 		return lp.Run(ctx, mode, maxOverride)
 	}
 
-	return runWithTUI(ctx, lp, func() tea.Cmd {
-		return tui.RunLoop(ctx, lp, mode, maxOverride)
-	})
+	if !cfg.Regent.Enabled {
+		if noTUI {
+			lp.Log = os.Stdout
+			return runFn(ctx)
+		}
+		return runWithTUI(lp, func() tea.Cmd {
+			return tui.RunLoop(ctx, lp, mode, maxOverride)
+		})
+	}
+
+	if noTUI {
+		return runWithRegent(ctx, lp, cfg, gitRunner, dir, runFn)
+	}
+	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, runFn)
 }
 
 // executeSmartRun runs plan if IMPLEMENTATION_PLAN.md doesn't exist, then build.
@@ -237,9 +250,10 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 	ctx, cancel := signalContext()
 	defer cancel()
 
+	gitRunner := git.NewRunner(dir)
 	lp := &loop.Loop{
 		Agent:  loop.NewClaudeAgent(),
-		Git:    git.NewRunner(dir),
+		Git:    gitRunner,
 		Config: cfg,
 		Dir:    dir,
 	}
@@ -252,27 +266,34 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 		needsPlan = true
 	}
 
-	if noTUI {
-		lp.Log = os.Stdout
+	smartRunFn := func(ctx context.Context) error {
 		if needsPlan {
-			fmt.Println("No IMPLEMENTATION_PLAN.md found — running plan first")
 			if planErr := lp.Run(ctx, loop.ModePlan, 0); planErr != nil {
 				return fmt.Errorf("plan phase: %w", planErr)
 			}
 		}
-		fmt.Println("Starting build phase")
 		return lp.Run(ctx, loop.ModeBuild, maxOverride)
 	}
 
-	return runWithTUI(ctx, lp, func() tea.Cmd {
-		return tui.RunSmartLoop(ctx, lp, maxOverride, needsPlan)
-	})
+	if !cfg.Regent.Enabled {
+		if noTUI {
+			lp.Log = os.Stdout
+			return smartRunFn(ctx)
+		}
+		return runWithTUI(lp, func() tea.Cmd {
+			return tui.RunSmartLoop(ctx, lp, maxOverride, needsPlan)
+		})
+	}
+
+	if noTUI {
+		return runWithRegent(ctx, lp, cfg, gitRunner, dir, smartRunFn)
+	}
+	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, smartRunFn)
 }
 
 // runWithTUI creates an event channel, wires it to the loop and TUI, and
-// runs the bubbletea program. The loopCmd factory is called after the event
-// channel is set on the loop.
-func runWithTUI(ctx context.Context, lp *loop.Loop, loopCmdFn func() tea.Cmd) error {
+// runs the bubbletea program without Regent supervision.
+func runWithTUI(lp *loop.Loop, loopCmdFn func() tea.Cmd) error {
 	events := make(chan loop.LogEntry, 128)
 	lp.Events = events
 
@@ -286,14 +307,88 @@ func runWithTUI(ctx context.Context, lp *loop.Loop, loopCmdFn func() tea.Cmd) er
 		loopCmd()
 	}()
 
+	return finishTUI(program)
+}
+
+// runWithRegent runs the loop under Regent supervision without TUI.
+// Events are drained to stdout.
+func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRunner *git.Runner, dir string, run regent.RunFunc) error {
+	events := make(chan loop.LogEntry, 128)
+	lp.Events = events
+
+	rgt := regent.New(cfg.Regent, dir, gitRunner, events)
+
+	// Drain events to stdout and update regent state
+	drainDone := make(chan struct{})
+	go func() {
+		defer close(drainDone)
+		for entry := range events {
+			if entry.Kind != loop.LogRegent {
+				rgt.UpdateState(entry)
+			}
+			ts := entry.Timestamp.Format("15:04:05")
+			if entry.Kind == loop.LogRegent {
+				fmt.Fprintf(os.Stdout, "[%s]  🛡️  Regent: %s\n", ts, entry.Message)
+			} else {
+				fmt.Fprintf(os.Stdout, "[%s]  %s\n", ts, entry.Message)
+			}
+		}
+	}()
+
+	err := rgt.Supervise(ctx, run)
+	close(events)
+	<-drainDone
+	return err
+}
+
+// runWithRegentTUI runs the loop under Regent supervision with TUI display.
+// Loop events are forwarded through the Regent for state/hang tracking, then
+// sent to the TUI. Regent messages are sent directly to the TUI channel.
+func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRunner *git.Runner, dir string, run regent.RunFunc) error {
+	loopEvents := make(chan loop.LogEntry, 128)
+	tuiEvents := make(chan loop.LogEntry, 128)
+
+	lp.Events = loopEvents
+	rgt := regent.New(cfg.Regent, dir, gitRunner, tuiEvents)
+
+	model := tui.New(tuiEvents)
+	program := tea.NewProgram(model, tea.WithAltScreen())
+
+	// Forward loop events → regent state update → TUI
+	forwardDone := make(chan struct{})
+	go func() {
+		defer close(forwardDone)
+		for entry := range loopEvents {
+			rgt.UpdateState(entry)
+			select {
+			case tuiEvents <- entry:
+			default:
+			}
+		}
+	}()
+
+	// Run loop under Regent supervision; close channels when done
+	go func() {
+		defer close(tuiEvents)
+		rgt.Supervise(ctx, run)
+		close(loopEvents)
+		<-forwardDone
+	}()
+
+	return finishTUI(program)
+}
+
+// finishTUI runs the bubbletea program and returns any loop error.
+// Context cancellation errors are suppressed since they indicate normal
+// shutdown (user quit, signal).
+func finishTUI(program *tea.Program) error {
 	finalModel, err := program.Run()
 	if err != nil {
 		return fmt.Errorf("tui: %w", err)
 	}
 
 	if m, ok := finalModel.(tui.Model); ok && m.Err() != nil {
-		// Context cancellation is expected from q/ctrl+c
-		if ctx.Err() != nil {
+		if errors.Is(m.Err(), context.Canceled) {
 			return nil
 		}
 		return m.Err()

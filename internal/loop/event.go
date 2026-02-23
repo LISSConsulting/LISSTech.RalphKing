@@ -15,6 +15,7 @@ const (
 	LogGitPush                     // Git push operation
 	LogDone                        // Loop finished normally
 	LogStopped                     // Loop stopped (context cancelled)
+	LogRegent                      // Regent supervisor message
 )
 
 // LogEntry is a structured event emitted by the loop during execution.

@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: P1–P5 complete. TUI with bubbletea/lipgloss, structured event system, color-coded log, header/footer bars. 85%+ test coverage across all packages.
+> Current state: **All core features complete (P1–P6).** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 85%+ test coverage across all packages.
 
 ## Completed Work
 
@@ -25,15 +25,12 @@
 | Loop event system — LogEntry/LogKind types, emit() replaces logf() | ralph-core.md | 0.0.4 |
 | TUI styles — lipgloss color-coded tool display (reads=blue, writes=green, bash=yellow, errors=red) | ralph-core.md | 0.0.4 |
 | TUI CLI wiring — `--no-tui` flag, alt-screen mode, event channel bridge | ralph-core.md | 0.0.4 |
-
-## Remaining Work (Prioritized)
-
-### P6 — Regent (`internal/regent/`) — the-regent.md
-
-- `regent.go` — supervisor goroutine: crash detection, hang detection, restart with backoff
-- `state.go` — read/write `.ralph/regent-state.json`
-- `tester.go` — run `test_command`, revert on failure
-- Wire into `ralph build` / `ralph run` when `regent.enabled = true`
+| Regent supervisor — crash detection, retry with backoff, max retries | the-regent.md | 0.0.5 |
+| Regent hang detection — output timeout tracking, kill and restart | the-regent.md | 0.0.5 |
+| Regent state persistence — `.ralph/regent-state.json` read/write | the-regent.md | 0.0.5 |
+| Regent test runner — `test_command` execution, revert on failure, push revert | the-regent.md | 0.0.5 |
+| Regent TUI integration — `LogRegent` kind, orange `regentStyle`, inline messages | the-regent.md | 0.0.5 |
+| Regent CLI wiring — `regent.enabled` toggles supervision for plan/build/run | the-regent.md | 0.0.5 |
 
 ## Key Learnings
 
@@ -49,6 +46,10 @@
 - Spec status detection uses IMPLEMENTATION_PLAN.md cross-referencing — reference spec filenames in remaining work headers for accurate status detection
 - Loop emit() is non-blocking on the event channel to prevent deadlock when TUI exits before loop finishes
 - TUI uses bubbletea channel pattern: `waitForEvent` Cmd reads from `<-chan LogEntry`, re-schedules itself after each message
+- Regent uses RunFunc abstraction (`func(ctx) error`) to supervise any loop variant (plan, build, smart run)
+- Regent hang detection uses a ticker goroutine checking `lastOutputAt` every `hangTimeout/4`; cancelled when the loop context is done
+- Regent TUI wiring uses two channels: loopEvents → forwarding goroutine (updates state) → tuiEvents; Regent emits directly to tuiEvents
+- Regent no-TUI wiring uses a single shared channel with a drain goroutine; both loop and Regent write non-blocking
 
 ## Out of Scope (for now)
 

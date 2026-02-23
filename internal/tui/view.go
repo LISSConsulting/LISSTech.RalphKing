@@ -133,6 +133,9 @@ func (m Model) renderLine(line logLine) string {
 	case loop.LogStopped:
 		return fmt.Sprintf("%s  %s", ts, errorStyle.Render("⏹ "+e.Message))
 
+	case loop.LogRegent:
+		return fmt.Sprintf("%s  %s", ts, regentStyle.Render("🛡️  Regent: "+e.Message))
+
 	default:
 		return fmt.Sprintf("%s  %s", ts, infoStyle.Render(e.Message))
 	}

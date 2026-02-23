@@ -1,0 +1,97 @@
+package regent
+
+import (
+	"strings"
+	"testing"
+)
+
+// mockGit is a test double for GitOps.
+type mockGit struct {
+	lastCommit string
+	branch     string
+	revertErr  error
+	pushErr    error
+
+	revertCalls []string
+	pushCalls   []string
+}
+
+func (m *mockGit) LastCommit() (string, error) { return m.lastCommit, nil }
+func (m *mockGit) CurrentBranch() (string, error) { return m.branch, nil }
+
+func (m *mockGit) Revert(sha string) error {
+	m.revertCalls = append(m.revertCalls, sha)
+	return m.revertErr
+}
+
+func (m *mockGit) Push(branch string) error {
+	m.pushCalls = append(m.pushCalls, branch)
+	return m.pushErr
+}
+
+func TestRunTests(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		passed  bool
+	}{
+		{"empty command passes", "", true},
+		{"true passes", "true", true},
+		{"false fails", "false", false},
+		{"exit 0 passes", "exit 0", true},
+		{"exit 1 fails", "exit 1", false},
+		{"echo passes", "echo hello", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := RunTests(t.TempDir(), tt.command)
+			if err != nil {
+				t.Fatalf("RunTests error: %v", err)
+			}
+			if result.Passed != tt.passed {
+				t.Errorf("Passed = %v, want %v (output: %s)", result.Passed, tt.passed, result.Output)
+			}
+		})
+	}
+}
+
+func TestRunTests_CapturesOutput(t *testing.T) {
+	result, err := RunTests(t.TempDir(), "echo test-output-marker")
+	if err != nil {
+		t.Fatalf("RunTests error: %v", err)
+	}
+	if !strings.Contains(result.Output, "test-output-marker") {
+		t.Errorf("expected output to contain marker, got: %s", result.Output)
+	}
+}
+
+func TestRevertLastCommit(t *testing.T) {
+	t.Run("reverts and pushes", func(t *testing.T) {
+		g := &mockGit{lastCommit: "abc1234 bad commit", branch: "feat/test"}
+		sha, err := RevertLastCommit(g)
+		if err != nil {
+			t.Fatalf("RevertLastCommit error: %v", err)
+		}
+		if sha != "abc1234" {
+			t.Errorf("sha = %q, want %q", sha, "abc1234")
+		}
+		if len(g.revertCalls) != 1 || g.revertCalls[0] != "abc1234" {
+			t.Errorf("revert calls = %v, want [abc1234]", g.revertCalls)
+		}
+		if len(g.pushCalls) != 1 || g.pushCalls[0] != "feat/test" {
+			t.Errorf("push calls = %v, want [feat/test]", g.pushCalls)
+		}
+	})
+
+	t.Run("handles commit with no space (SHA only)", func(t *testing.T) {
+		g := &mockGit{lastCommit: "abc1234", branch: "main"}
+		sha, err := RevertLastCommit(g)
+		if err != nil {
+			t.Fatalf("RevertLastCommit error: %v", err)
+		}
+		if sha != "abc1234" {
+			t.Errorf("sha = %q, want %q", sha, "abc1234")
+		}
+	})
+}
