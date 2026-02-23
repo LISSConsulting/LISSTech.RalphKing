@@ -14,14 +14,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
           cache: true
       - name: Download dependencies
         run: go mod download
       - name: Vet
         run: go vet ./...
       - name: Test
-        run: go test ./...
+        run: go test -cover ./...
 
   build:
     name: Cross-compile
@@ -40,9 +40,11 @@ jobs:
             goarch: amd64
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
           cache: true
       - name: Build
         env:
@@ -51,7 +53,8 @@ jobs:
         run: |
           EXT=""
           [ "$GOOS" = "windows" ] && EXT=".exe"
-          go build -ldflags="-s -w" -o ralph-${{ matrix.goos }}-${{ matrix.goarch }}$EXT ./cmd/ralph
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+          go build -ldflags="-s -w -X main.version=$VERSION" -o ralph-${{ matrix.goos }}-${{ matrix.goarch }}$EXT ./cmd/ralph
       - uses: actions/upload-artifact@v4
         with:
           name: ralph-${{ matrix.goos }}-${{ matrix.goarch }}

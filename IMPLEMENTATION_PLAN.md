@@ -32,6 +32,7 @@
 | Regent TUI integration — `LogRegent` kind, orange `regentStyle`, inline messages | the-regent.md | 0.0.5 |
 | Regent CLI wiring — `regent.enabled` toggles supervision for plan/build/run | the-regent.md | 0.0.5 |
 | Git package tests — conflict fallback, push rejection, error paths (75.5% → 96.2%) | ralph-core.md | 0.0.6 |
+| CI/build hygiene — Go 1.24 in CI, version injection, gitignore binary, go mod tidy, tag normalization | — | 0.0.7 |
 
 ## Key Learnings
 
