@@ -10,6 +10,7 @@ import (
 func TestSaveAndLoadState(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Date(2026, 2, 23, 14, 30, 0, 0, time.UTC)
+	later := now.Add(5 * time.Minute)
 
 	original := State{
 		RalphPID:        12345,
@@ -18,6 +19,11 @@ func TestSaveAndLoadState(t *testing.T) {
 		LastOutputAt:    now,
 		LastCommit:      "abc1234",
 		TotalCostUSD:    1.42,
+		Branch:          "feat/test-branch",
+		Mode:            "build",
+		StartedAt:       now,
+		FinishedAt:      later,
+		Passed:          true,
 	}
 
 	if err := SaveState(dir, original); err != nil {
@@ -46,6 +52,21 @@ func TestSaveAndLoadState(t *testing.T) {
 	}
 	if loaded.TotalCostUSD != original.TotalCostUSD {
 		t.Errorf("TotalCostUSD = %f, want %f", loaded.TotalCostUSD, original.TotalCostUSD)
+	}
+	if loaded.Branch != original.Branch {
+		t.Errorf("Branch = %q, want %q", loaded.Branch, original.Branch)
+	}
+	if loaded.Mode != original.Mode {
+		t.Errorf("Mode = %q, want %q", loaded.Mode, original.Mode)
+	}
+	if !loaded.StartedAt.Equal(original.StartedAt) {
+		t.Errorf("StartedAt = %v, want %v", loaded.StartedAt, original.StartedAt)
+	}
+	if !loaded.FinishedAt.Equal(original.FinishedAt) {
+		t.Errorf("FinishedAt = %v, want %v", loaded.FinishedAt, original.FinishedAt)
+	}
+	if loaded.Passed != original.Passed {
+		t.Errorf("Passed = %v, want %v", loaded.Passed, original.Passed)
 	}
 }
 

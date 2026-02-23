@@ -43,10 +43,12 @@ func New(cfg config.RegentConfig, dir string, git GitOps, events chan<- loop.Log
 // detection with retry/backoff, hang detection via output timeout, and optional
 // test-gated rollback after each successful run.
 func (r *Regent) Supervise(ctx context.Context, run RunFunc) error {
+	now := time.Now()
 	r.mu.Lock()
 	r.state = State{
 		RalphPID:     os.Getpid(),
-		LastOutputAt: time.Now(),
+		LastOutputAt: now,
+		StartedAt:    now,
 	}
 	r.mu.Unlock()
 	r.saveState()
@@ -69,6 +71,8 @@ func (r *Regent) Supervise(ctx context.Context, run RunFunc) error {
 			consecutiveErrors = 0
 			r.mu.Lock()
 			r.state.ConsecutiveErrs = 0
+			r.state.FinishedAt = time.Now()
+			r.state.Passed = true
 			r.mu.Unlock()
 
 			if testErr := r.runPostIterationTests(); testErr != nil {
@@ -93,6 +97,11 @@ func (r *Regent) Supervise(ctx context.Context, run RunFunc) error {
 		r.emit(fmt.Sprintf("Ralph exited with error: %v", err))
 
 		if consecutiveErrors > r.cfg.MaxRetries {
+			r.mu.Lock()
+			r.state.FinishedAt = time.Now()
+			r.state.Passed = false
+			r.mu.Unlock()
+			r.saveState()
 			r.emit(fmt.Sprintf("Max retries (%d) exceeded — giving up", r.cfg.MaxRetries))
 			return fmt.Errorf("regent: max retries exceeded after %d failures: %w", consecutiveErrors, err)
 		}
@@ -169,6 +178,12 @@ func (r *Regent) UpdateState(entry loop.LogEntry) {
 	}
 	if entry.Commit != "" {
 		r.state.LastCommit = entry.Commit
+	}
+	if entry.Branch != "" {
+		r.state.Branch = entry.Branch
+	}
+	if entry.Mode != "" {
+		r.state.Mode = entry.Mode
 	}
 	r.mu.Unlock()
 }

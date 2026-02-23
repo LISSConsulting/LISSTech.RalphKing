@@ -163,6 +163,67 @@ func TestSupervise(t *testing.T) {
 		}
 	})
 
+	t.Run("successful run sets passed and timestamps", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := defaultTestRegentConfig()
+		events := make(chan loop.LogEntry, 128)
+		rgt := New(cfg, dir, &mockGit{branch: "main"}, events)
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- rgt.Supervise(context.Background(), func(_ context.Context) error {
+				return nil
+			})
+			close(events)
+		}()
+
+		<-errCh
+		state, err := LoadState(dir)
+		if err != nil {
+			t.Fatalf("LoadState: %v", err)
+		}
+		if !state.Passed {
+			t.Error("expected Passed = true after successful run")
+		}
+		if state.StartedAt.IsZero() {
+			t.Error("expected StartedAt to be set")
+		}
+		if state.FinishedAt.IsZero() {
+			t.Error("expected FinishedAt to be set")
+		}
+		if state.FinishedAt.Before(state.StartedAt) {
+			t.Error("expected FinishedAt >= StartedAt")
+		}
+	})
+
+	t.Run("failed run sets passed false", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := defaultTestRegentConfig()
+		cfg.MaxRetries = 0
+		events := make(chan loop.LogEntry, 128)
+		rgt := New(cfg, dir, &mockGit{branch: "main"}, events)
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- rgt.Supervise(context.Background(), func(_ context.Context) error {
+				return errors.New("fail")
+			})
+			close(events)
+		}()
+
+		<-errCh
+		state, err := LoadState(dir)
+		if err != nil {
+			t.Fatalf("LoadState: %v", err)
+		}
+		if state.Passed {
+			t.Error("expected Passed = false after failed run")
+		}
+		if state.FinishedAt.IsZero() {
+			t.Error("expected FinishedAt to be set on failure")
+		}
+	})
+
 	t.Run("emits regent events", func(t *testing.T) {
 		dir := t.TempDir()
 		cfg := defaultTestRegentConfig()
@@ -278,9 +339,9 @@ func TestUpdateState(t *testing.T) {
 	rgt := New(cfg, t.TempDir(), &mockGit{}, events)
 
 	tests := []struct {
-		name   string
-		entry  loop.LogEntry
-		check  func(t *testing.T, r *Regent)
+		name  string
+		entry loop.LogEntry
+		check func(t *testing.T, r *Regent)
 	}{
 		{
 			name:  "updates iteration",
@@ -316,14 +377,38 @@ func TestUpdateState(t *testing.T) {
 			},
 		},
 		{
+			name:  "updates branch",
+			entry: loop.LogEntry{Branch: "feat/new-feature"},
+			check: func(t *testing.T, r *Regent) {
+				r.mu.Lock()
+				defer r.mu.Unlock()
+				if r.state.Branch != "feat/new-feature" {
+					t.Errorf("Branch = %q, want %q", r.state.Branch, "feat/new-feature")
+				}
+			},
+		},
+		{
+			name:  "updates mode",
+			entry: loop.LogEntry{Mode: "build"},
+			check: func(t *testing.T, r *Regent) {
+				r.mu.Lock()
+				defer r.mu.Unlock()
+				if r.state.Mode != "build" {
+					t.Errorf("Mode = %q, want %q", r.state.Mode, "build")
+				}
+			},
+		},
+		{
 			name:  "zero values do not overwrite",
 			entry: loop.LogEntry{Message: "just a message"},
 			check: func(t *testing.T, r *Regent) {
 				r.mu.Lock()
 				defer r.mu.Unlock()
-				// Previous values should be preserved
 				if r.state.Iteration != 5 {
 					t.Errorf("Iteration should remain 5, got %d", r.state.Iteration)
+				}
+				if r.state.Branch != "feat/new-feature" {
+					t.Errorf("Branch should remain feat/new-feature, got %q", r.state.Branch)
 				}
 			},
 		},

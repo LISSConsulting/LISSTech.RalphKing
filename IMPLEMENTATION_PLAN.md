@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **All core features complete (P1–P6).** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 84–97% test coverage across all packages.
+> Current state: **All core features complete (P1–P6) + spec polish.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 84–97% test coverage across all packages.
 
 ## Completed Work
 
@@ -33,6 +33,9 @@
 | Regent CLI wiring — `regent.enabled` toggles supervision for plan/build/run | the-regent.md | 0.0.5 |
 | Git package tests — conflict fallback, push rejection, error paths (75.5% → 96.2%) | ralph-core.md | 0.0.6 |
 | CI/build hygiene — Go 1.24 in CI, version injection, gitignore binary, go mod tidy, tag normalization | — | 0.0.7 |
+| `ralph status` — proper formatted display (branch, commit, iteration, cost, duration, pass/fail) | ralph-core.md | 0.0.8 |
+| Regent state — added Branch, Mode, StartedAt, FinishedAt, Passed fields | the-regent.md | 0.0.8 |
+| SIGQUIT immediate kill — platform-specific handler (unix/windows build tags) | the-regent.md | 0.0.8 |
 
 ## Key Learnings
 

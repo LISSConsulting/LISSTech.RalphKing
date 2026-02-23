@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -27,6 +27,7 @@ import (
 var version = "dev"
 
 func main() {
+	registerQuitHandler()
 	if err := rootCmd().Execute(); err != nil {
 		os.Exit(1)
 	}
@@ -397,33 +398,50 @@ func finishTUI(program *tea.Program) error {
 	return nil
 }
 
-// showStatus reads .ralph/regent-state.json and prints a summary.
+// showStatus reads .ralph/regent-state.json and prints a formatted summary.
+// Per ralph-core.md: branch, last commit, iteration count, total cost, duration, pass/fail.
 func showStatus() error {
 	dir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("get working directory: %w", err)
 	}
 
-	statePath := filepath.Join(dir, ".ralph", "regent-state.json")
-	data, err := os.ReadFile(statePath)
+	state, err := regent.LoadState(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			fmt.Println("No Regent state found. Run 'ralph build' or 'ralph run' first.")
-			return nil
-		}
-		return fmt.Errorf("read state: %w", err)
+		return err
 	}
 
-	var state map[string]any
-	if jsonErr := json.Unmarshal(data, &state); jsonErr != nil {
-		return fmt.Errorf("parse state: %w", jsonErr)
+	if state.RalphPID == 0 && state.Iteration == 0 {
+		fmt.Println("No Regent state found. Run 'ralph build' or 'ralph run' first.")
+		return nil
 	}
 
 	fmt.Println("Ralph Status")
 	fmt.Println("────────────")
-	for k, v := range state {
-		fmt.Printf("  %-20s %v\n", k+":", v)
+
+	if state.Branch != "" {
+		fmt.Printf("  %-20s %s\n", "Branch:", state.Branch)
 	}
+	if state.Mode != "" {
+		fmt.Printf("  %-20s %s\n", "Mode:", state.Mode)
+	}
+	if state.LastCommit != "" {
+		fmt.Printf("  %-20s %s\n", "Last commit:", state.LastCommit)
+	}
+	fmt.Printf("  %-20s %d\n", "Iteration:", state.Iteration)
+	fmt.Printf("  %-20s $%.2f\n", "Total cost:", state.TotalCostUSD)
+
+	if !state.StartedAt.IsZero() && !state.FinishedAt.IsZero() {
+		dur := state.FinishedAt.Sub(state.StartedAt).Round(time.Second)
+		fmt.Printf("  %-20s %s\n", "Duration:", dur)
+	}
+
+	if state.Passed {
+		fmt.Printf("  %-20s %s\n", "Result:", "pass")
+	} else if state.ConsecutiveErrs > 0 {
+		fmt.Printf("  %-20s fail (%d consecutive errors)\n", "Result:", state.ConsecutiveErrs)
+	}
+
 	return nil
 }
 

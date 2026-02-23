@@ -12,12 +12,17 @@ import (
 
 // State tracks the Regent's operational state, persisted to .ralph/regent-state.json.
 type State struct {
-	RalphPID         int       `json:"ralph_pid"`
-	Iteration        int       `json:"iteration"`
-	ConsecutiveErrs  int       `json:"consecutive_errors"`
-	LastOutputAt     time.Time `json:"last_output_at"`
-	LastCommit       string    `json:"last_commit"`
-	TotalCostUSD     float64   `json:"total_cost_usd"`
+	RalphPID        int       `json:"ralph_pid"`
+	Iteration       int       `json:"iteration"`
+	ConsecutiveErrs int       `json:"consecutive_errors"`
+	LastOutputAt    time.Time `json:"last_output_at"`
+	LastCommit      string    `json:"last_commit"`
+	TotalCostUSD    float64   `json:"total_cost_usd"`
+	Branch          string    `json:"branch"`
+	Mode            string    `json:"mode"`
+	StartedAt       time.Time `json:"started_at"`
+	FinishedAt      time.Time `json:"finished_at"`
+	Passed          bool      `json:"passed"`
 }
 
 // stateFileName is the path within the .ralph directory.
