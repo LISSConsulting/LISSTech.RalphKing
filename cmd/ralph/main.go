@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"syscall"
@@ -15,6 +16,7 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
 )
 
 // version is set at build time via -ldflags.
@@ -128,7 +130,26 @@ func specListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List all spec files with status",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("ralph spec list: not yet implemented")
+			dir, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("get working directory: %w", err)
+			}
+
+			specs, err := spec.List(dir)
+			if err != nil {
+				return err
+			}
+
+			if len(specs) == 0 {
+				fmt.Println("No specs found in specs/")
+				return nil
+			}
+
+			fmt.Println("Specs")
+			fmt.Println("─────")
+			for _, s := range specs {
+				fmt.Printf("  %s  %-30s  %s\n", s.Status.Symbol(), s.Path, s.Status)
+			}
 			return nil
 		},
 	}
@@ -140,8 +161,24 @@ func specNewCmd() *cobra.Command {
 		Short: "Create a new spec file from template",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("ralph spec new %q: not yet implemented\n", args[0])
-			return nil
+			dir, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("get working directory: %w", err)
+			}
+
+			path, err := spec.New(dir, args[0])
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("Created %s\n", path)
+
+			editor := os.Getenv("EDITOR")
+			if editor == "" {
+				return nil
+			}
+
+			return openEditor(editor, path)
 		},
 	}
 }
@@ -252,4 +289,13 @@ func signalContext() context.Context {
 		cancel()
 	}()
 	return ctx
+}
+
+// openEditor launches the given editor with the file path, connecting stdio.
+func openEditor(editor, path string) error {
+	cmd := exec.Command(editor, path)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
