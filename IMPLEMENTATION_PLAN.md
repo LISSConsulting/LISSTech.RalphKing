@@ -17,6 +17,7 @@
 | Hardening | Stream-JSON `is_error` handling, `DiffFromRemote` error distinction, config validation gating, stale closure fix, ClaudeAgent stderr capture, TUI error propagation | 0.0.12, 0.0.17-0.0.20 |
 | Prompt files | `PROMPT_build.md` (build loop instructions), `PROMPT_plan.md` (plan loop instructions) | 0.0.21 |
 | TUI config | Configurable accent color via `[tui] accent_color` in ralph.toml (spec: "configurable, default indigo") | v0.0.22 |
+| TUI polish | "New messages below" indicator (`↓N new`) in footer when scrolled up and events arrive | v0.0.23 |
 | Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, removed dead TUI code | 0.0.9 |
 
 ## Key Learnings
@@ -39,6 +40,7 @@
 - Claude result events with `is_error: true` emit ErrorEvent then ResultEvent (preserves cost tracking)
 - `git diff --quiet` exit 128 + "fatal:" = error; exit 1 = real diff; `pushIfNeeded` pushes on error
 - Accent-dependent TUI styles (header, git) live on Model as instance fields; non-accent styles remain package vars
+- TUI `newBelow` counter tracks events arriving while scrolled up; resets when `scrollOffset` returns to 0
 
 ## Out of Scope (for now)
 

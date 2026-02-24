@@ -595,6 +595,172 @@ func TestScrollFooterIndicator(t *testing.T) {
 	}
 }
 
+func TestNewBelowIndicator(t *testing.T) {
+	tests := []struct {
+		name           string
+		scrollOffset   int
+		newBelow       int
+		wantNewBelow   bool // footer should contain "↓N new"
+		wantScrollHint bool // footer should contain "↑N"
+	}{
+		{"at_bottom_no_new", 0, 0, false, false},
+		{"scrolled_up_no_new", 3, 0, false, true},
+		{"scrolled_up_with_new", 3, 5, true, true},
+		{"at_bottom_counter_reset", 0, 5, false, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ch := make(chan loop.LogEntry, 1)
+			m := New(ch, "")
+			m.scrollOffset = tt.scrollOffset
+			m.newBelow = tt.newBelow
+
+			footer := m.renderFooter()
+
+			if tt.wantNewBelow {
+				want := fmt.Sprintf("↓%d new", tt.newBelow)
+				if !strings.Contains(footer, want) {
+					t.Errorf("footer should contain %q, got: %s", want, footer)
+				}
+			} else {
+				if strings.Contains(footer, "new") {
+					t.Errorf("footer should not contain 'new', got: %s", footer)
+				}
+			}
+
+			if tt.wantScrollHint {
+				want := fmt.Sprintf("↑%d", tt.scrollOffset)
+				if !strings.Contains(footer, want) {
+					t.Errorf("footer should contain %q, got: %s", want, footer)
+				}
+			}
+		})
+	}
+}
+
+func TestNewBelowIncrements(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "")
+	m.height = 5 // log height = 3
+
+	// Add enough lines to allow scrolling
+	for i := 0; i < 10; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("line %d", i)},
+		})
+	}
+
+	// Scroll up
+	m.scrollOffset = 3
+
+	// New entry arrives while scrolled up → newBelow increments
+	entry := logEntryMsg(loop.LogEntry{
+		Kind:      loop.LogInfo,
+		Timestamp: time.Now(),
+		Message:   "new message",
+	})
+
+	updated, _ := m.Update(entry)
+	m = updated.(Model)
+	if m.newBelow != 1 {
+		t.Errorf("expected newBelow 1, got %d", m.newBelow)
+	}
+
+	// Another entry → newBelow increments again
+	updated, _ = m.Update(entry)
+	m = updated.(Model)
+	if m.newBelow != 2 {
+		t.Errorf("expected newBelow 2, got %d", m.newBelow)
+	}
+}
+
+func TestNewBelowNoIncrementAtBottom(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "")
+
+	// At bottom (scrollOffset 0): newBelow should not increment
+	entry := logEntryMsg(loop.LogEntry{
+		Kind:      loop.LogInfo,
+		Timestamp: time.Now(),
+		Message:   "message at bottom",
+	})
+
+	updated, _ := m.Update(entry)
+	m = updated.(Model)
+	if m.newBelow != 0 {
+		t.Errorf("expected newBelow 0 at bottom, got %d", m.newBelow)
+	}
+}
+
+func TestNewBelowResetsOnScrollToBottom(t *testing.T) {
+	tests := []struct {
+		name string
+		key  tea.Msg
+	}{
+		{"end_key", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")}},
+		{"j_to_zero", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")}},
+		{"pgdown_to_zero", tea.KeyMsg{Type: tea.KeyPgDown}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ch := make(chan loop.LogEntry, 1)
+			m := New(ch, "")
+			m.height = 5
+
+			for i := 0; i < 10; i++ {
+				m.lines = append(m.lines, logLine{
+					entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("line %d", i)},
+				})
+			}
+
+			// Set up scrolled-up state with new messages
+			m.scrollOffset = 1
+			m.newBelow = 4
+
+			// Scroll to bottom
+			updated, _ := m.Update(tt.key)
+			model := updated.(Model)
+
+			if model.scrollOffset != 0 {
+				t.Errorf("expected scrollOffset 0, got %d", model.scrollOffset)
+			}
+			if model.newBelow != 0 {
+				t.Errorf("expected newBelow 0 after scrolling to bottom, got %d", model.newBelow)
+			}
+		})
+	}
+}
+
+func TestNewBelowPersistsWhenStillScrolledUp(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "")
+	m.height = 5
+
+	for i := 0; i < 10; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("line %d", i)},
+		})
+	}
+
+	// Scrolled up by 3, with 5 new messages
+	m.scrollOffset = 3
+	m.newBelow = 5
+
+	// Scroll down by 1 (still scrolled up)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	model := updated.(Model)
+
+	if model.scrollOffset != 2 {
+		t.Errorf("expected scrollOffset 2, got %d", model.scrollOffset)
+	}
+	// newBelow should persist since we're still scrolled up
+	if model.newBelow != 5 {
+		t.Errorf("expected newBelow 5 while still scrolled up, got %d", model.newBelow)
+	}
+}
+
 func TestScrollHelpers(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
 	m := New(ch, "")

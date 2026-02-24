@@ -21,6 +21,7 @@ type Model struct {
 	width        int
 	height       int
 	scrollOffset int // 0 = at bottom (auto-scroll), >0 = scrolled up N lines
+	newBelow     int // count of new messages that arrived while scrolled up
 
 	// Accent-dependent styles (configured per instance)
 	accentHeaderStyle lipgloss.Style

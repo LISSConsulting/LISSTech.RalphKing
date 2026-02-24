@@ -59,7 +59,9 @@ func (m Model) renderFooter() string {
 
 	left := fmt.Sprintf("[⬆ pull] [⬇ push]  last commit: %s", commit)
 	right := "q to quit"
-	if m.scrollOffset > 0 {
+	if m.scrollOffset > 0 && m.newBelow > 0 {
+		right = fmt.Sprintf("↓%d new  ↑%d  j/k scroll  q to quit", m.newBelow, m.scrollOffset)
+	} else if m.scrollOffset > 0 {
 		right = fmt.Sprintf("↑%d  j/k scroll  q to quit", m.scrollOffset)
 	}
 

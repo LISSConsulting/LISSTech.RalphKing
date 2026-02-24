@@ -56,6 +56,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "end", "G":
 		m.scrollOffset = 0
 	}
+	// Reset new-messages counter when scrolled back to bottom
+	if m.scrollOffset == 0 {
+		m.newBelow = 0
+	}
 	return m, nil
 }
 
@@ -82,7 +86,10 @@ func (m Model) handleLogEntry(msg logEntryMsg) (tea.Model, tea.Cmd) {
 		m.lastCommit = entry.Commit
 	}
 
-	// Add to visible log
+	// Add to visible log; track if user is scrolled up
+	if m.scrollOffset > 0 {
+		m.newBelow++
+	}
 	m.lines = append(m.lines, logLine{entry: entry})
 
 	// Continue listening
