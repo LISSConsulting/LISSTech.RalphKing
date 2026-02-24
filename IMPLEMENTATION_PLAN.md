@@ -15,7 +15,7 @@
 | Scaffolding | `ralph init` creates ralph.toml + PROMPT_plan.md + PROMPT_build.md + specs/ (idempotent) | v0.0.28 |
 | CI/CD | Go 1.24, version injection, race detection, release workflow (cross-compiled binaries on tag push), golangci-lint (go-critic + gofmt) in CI & release | 0.0.7, 0.0.19, v0.0.30 |
 | Test coverage | Git 94.7%, TUI 100%, loop 97.7%, claude 97.8%, regent 96.0%, config 92.5%, spec 95.5% | 0.0.6, 0.0.14, 0.0.16, v0.0.32 |
-| Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, prompt files, extract `classifyResult`/`needsPlanPhase` pure functions with table-driven tests (cmd/ralph 8.8% → 11.8%) | 0.0.9, v0.0.21, v0.0.33 |
+| Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, prompt files, extract `classifyResult`/`needsPlanPhase`/`formatStatus` pure functions with table-driven tests (cmd/ralph 8.8% → 21.2%) | 0.0.9, v0.0.21, v0.0.33–v0.0.34 |
 
 Specs implemented: `ralph-core.md`, `the-regent.md`.
 
@@ -52,6 +52,7 @@ Specs implemented: `ralph-core.md`, `the-regent.md`.
 - TUI truncates tool names >14 chars with `"…"` to preserve columnar log layout
 - `classifyResult(state)` is a pure function returning `statusResult` enum — six-state classification (no-state, running, pass, fail-with-errors, plain-fail) with documented priority order; `showStatus` delegates to it
 - `needsPlanPhase(info, statErr)` is a pure function encoding the plan-skip condition: file missing OR empty; used by `executeSmartRun`'s closure
+- `formatStatus(state, now)` is a pure function rendering status output as a string; `now` parameter pins time for deterministic tests; `showStatus` delegates to it
 
 ## Out of Scope (for now)
 
