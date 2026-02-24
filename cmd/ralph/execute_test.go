@@ -563,3 +563,45 @@ func TestExecuteSmartRun_SkipPlan_BuildPromptMissing(t *testing.T) {
 		t.Errorf("error should mention PROMPT_build.md, got: %v", err)
 	}
 }
+
+func TestExecuteSmartRun_ConfigInvalid(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// Empty plan.prompt_file triggers Validate() error.
+	writeExecTestFile(t, dir, "ralph.toml", "[plan]\nprompt_file = \"\"\n[build]\nprompt_file = \"b.md\"\n")
+
+	err := executeSmartRun(1, true)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "config validation") {
+		t.Errorf("error should mention config validation, got: %v", err)
+	}
+}
+
+func TestExecuteSmartRun_RegentEnabled_PromptMissing(t *testing.T) {
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+	t.Chdir(dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigWithRegent())
+	// No IMPLEMENTATION_PLAN.md → needsPlanPhase returns true.
+	// No PROMPT_plan.md → plan phase fails reading it.
+	// Regent gives up after 0 retries and returns max-retries error.
+
+	err := executeSmartRun(1, true)
+	if err == nil {
+		t.Fatal("expected error — Regent should give up (max_retries=0)")
+	}
+}
+
+func TestShowStatus_CorruptedStateFile(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// Write invalid JSON to the state file — LoadState should return a parse error.
+	writeExecTestFile(t, dir, ".ralph/regent-state.json", "not valid json {{{")
+
+	err := showStatus()
+	if err == nil {
+		t.Fatal("expected error for corrupted state file")
+	}
+}
