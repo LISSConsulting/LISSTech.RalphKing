@@ -48,7 +48,7 @@ func (m Model) renderHeader() string {
 	}
 
 	content := strings.Join(parts, "  │  ")
-	return headerStyle.Width(m.width).Render(content)
+	return m.accentHeaderStyle.Width(m.width).Render(content)
 }
 
 func (m Model) renderFooter() string {
@@ -133,10 +133,10 @@ func (m Model) renderLine(line logLine) string {
 		return fmt.Sprintf("%s  %s", ts, errorStyle.Render("❌ "+e.Message))
 
 	case loop.LogGitPull:
-		return fmt.Sprintf("%s  %s", ts, gitStyle.Render("⬆ "+e.Message))
+		return fmt.Sprintf("%s  %s", ts, m.accentGitStyle.Render("⬆ "+e.Message))
 
 	case loop.LogGitPush:
-		return fmt.Sprintf("%s  %s", ts, gitStyle.Render("⬇ "+e.Message))
+		return fmt.Sprintf("%s  %s", ts, m.accentGitStyle.Render("⬇ "+e.Message))
 
 	case loop.LogDone:
 		return fmt.Sprintf("%s  %s", ts, resultStyle.Render("✅ "+e.Message))

@@ -48,7 +48,7 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 		if noTUI {
 			return runWithStateTracking(ctx, lp, dir, gitRunner, string(mode), runFn)
 		}
-		return runWithTUIAndState(ctx, lp, dir, gitRunner, string(mode), runFn)
+		return runWithTUIAndState(ctx, lp, dir, gitRunner, string(mode), cfg.TUI.AccentColor, runFn)
 	}
 
 	if noTUI {
@@ -100,7 +100,7 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 		if noTUI {
 			return runWithStateTracking(ctx, lp, dir, gitRunner, "run", smartRunFn)
 		}
-		return runWithTUIAndState(ctx, lp, dir, gitRunner, "run", smartRunFn)
+		return runWithTUIAndState(ctx, lp, dir, gitRunner, "run", cfg.TUI.AccentColor, smartRunFn)
 	}
 
 	if noTUI {

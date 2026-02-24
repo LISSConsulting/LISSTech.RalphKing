@@ -29,6 +29,7 @@ func TestDefaults(t *testing.T) {
 		{"regent.hang_timeout_seconds", cfg.Regent.HangTimeoutSeconds, 300},
 		{"regent.rollback_on_test_failure", cfg.Regent.RollbackOnTestFailure, false},
 		{"regent.test_command", cfg.Regent.TestCommand, ""},
+		{"tui.accent_color", cfg.TUI.AccentColor, DefaultAccentColor},
 	}
 
 	for _, tt := range tests {
@@ -70,6 +71,9 @@ test_command = "go test ./..."
 max_retries = 5
 retry_backoff_seconds = 60
 hang_timeout_seconds = 600
+
+[tui]
+accent_color = "#FF0000"
 `
 		path := filepath.Join(dir, "ralph.toml")
 		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
@@ -101,6 +105,7 @@ hang_timeout_seconds = 600
 			{"regent.max_retries", cfg.Regent.MaxRetries, 5},
 			{"regent.retry_backoff_seconds", cfg.Regent.RetryBackoffSeconds, 60},
 			{"regent.hang_timeout_seconds", cfg.Regent.HangTimeoutSeconds, 600},
+			{"tui.accent_color", cfg.TUI.AccentColor, "#FF0000"},
 		}
 
 		for _, tt := range tests {
@@ -227,6 +232,9 @@ func TestInitFile(t *testing.T) {
 		if cfg.Claude.Model != "sonnet" {
 			t.Errorf("default model: got %q, want %q", cfg.Claude.Model, "sonnet")
 		}
+		if cfg.TUI.AccentColor != DefaultAccentColor {
+			t.Errorf("default accent color: got %q, want %q", cfg.TUI.AccentColor, DefaultAccentColor)
+		}
 	})
 
 	t.Run("refuses to overwrite existing", func(t *testing.T) {
@@ -342,6 +350,29 @@ func TestValidate(t *testing.T) {
 				c.Regent.Enabled = true
 				c.Regent.HangTimeoutSeconds = 0
 			},
+		},
+		{
+			name:    "invalid tui.accent_color",
+			modify:  func(c *Config) { c.TUI.AccentColor = "not-a-color" },
+			wantErr: "tui.accent_color must be a hex color",
+		},
+		{
+			name:    "tui.accent_color missing hash",
+			modify:  func(c *Config) { c.TUI.AccentColor = "FF0000" },
+			wantErr: "tui.accent_color must be a hex color",
+		},
+		{
+			name:    "tui.accent_color too short",
+			modify:  func(c *Config) { c.TUI.AccentColor = "#FFF" },
+			wantErr: "tui.accent_color must be a hex color",
+		},
+		{
+			name:   "valid tui.accent_color",
+			modify: func(c *Config) { c.TUI.AccentColor = "#FF0000" },
+		},
+		{
+			name:   "empty tui.accent_color uses default (valid)",
+			modify: func(c *Config) { c.TUI.AccentColor = "" },
 		},
 	}
 

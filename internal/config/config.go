@@ -6,9 +6,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/BurntSushi/toml"
 )
+
+// DefaultAccentColor is the default TUI accent color (indigo).
+const DefaultAccentColor = "#7D56F4"
+
+// hexColorRe matches a 6-digit hex color string like "#7D56F4".
+var hexColorRe = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 
 // Config is the top-level ralph.toml configuration.
 type Config struct {
@@ -18,6 +25,12 @@ type Config struct {
 	Build   BuildConfig   `toml:"build"`
 	Git     GitConfig     `toml:"git"`
 	Regent  RegentConfig  `toml:"regent"`
+	TUI     TUIConfig     `toml:"tui"`
+}
+
+// TUIConfig controls the terminal UI appearance.
+type TUIConfig struct {
+	AccentColor string `toml:"accent_color"`
 }
 
 // ProjectConfig identifies the project.
@@ -93,6 +106,10 @@ func (c *Config) Validate() error {
 		errs = append(errs, fmt.Errorf("regent.test_command must be set when regent.rollback_on_test_failure is true"))
 	}
 
+	if c.TUI.AccentColor != "" && !hexColorRe.MatchString(c.TUI.AccentColor) {
+		errs = append(errs, fmt.Errorf("tui.accent_color must be a hex color (e.g. \"#7D56F4\")"))
+	}
+
 	return errors.Join(errs...)
 }
 
@@ -123,6 +140,9 @@ func Defaults() Config {
 			MaxRetries:            3,
 			RetryBackoffSeconds:   30,
 			HangTimeoutSeconds:    300,
+		},
+		TUI: TUIConfig{
+			AccentColor: DefaultAccentColor,
 		},
 	}
 }
@@ -202,6 +222,9 @@ test_command = ""
 max_retries = 3
 retry_backoff_seconds = 30
 hang_timeout_seconds = 300
+
+[tui]
+accent_color = "#7D56F4"  # hex color for header/accent elements
 `
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return "", fmt.Errorf("config: write %s: %w", path, err)

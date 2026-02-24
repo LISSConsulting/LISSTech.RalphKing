@@ -59,7 +59,7 @@ func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gi
 	rgt := regent.New(cfg.Regent, dir, gitRunner, tuiEvents)
 	lp.PostIteration = rgt.RunPostIterationTests
 
-	model := tui.New(tuiEvents)
+	model := tui.New(tuiEvents, cfg.TUI.AccentColor)
 	program := tea.NewProgram(model, tea.WithAltScreen())
 
 	// Forward loop events → regent state update → TUI
@@ -150,7 +150,7 @@ func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRun
 
 // runWithTUIAndState runs the loop without Regent supervision with TUI display,
 // forwarding events through a state tracker so `ralph status` works.
-func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, run regent.RunFunc) error {
+func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, accentColor string, run regent.RunFunc) error {
 	loopEvents := make(chan loop.LogEntry, 128)
 	tuiEvents := make(chan loop.LogEntry, 128)
 
@@ -159,7 +159,7 @@ func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunne
 	st := newStateTracker(dir, mode, gitRunner)
 	st.save()
 
-	model := tui.New(tuiEvents)
+	model := tui.New(tuiEvents, accentColor)
 	program := tea.NewProgram(model, tea.WithAltScreen())
 
 	// Forward loop events → state tracking → TUI

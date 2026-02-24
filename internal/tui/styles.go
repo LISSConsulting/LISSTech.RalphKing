@@ -3,9 +3,11 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
+// defaultAccentColor is the default accent color (indigo).
+const defaultAccentColor = "#7D56F4"
+
 // Color palette matching the spec.
 var (
-	colorIndigo = lipgloss.Color("#7D56F4")
 	colorWhite  = lipgloss.Color("#FAFAFA")
 	colorGray   = lipgloss.Color("#888888")
 	colorBlue   = lipgloss.Color("#5B9BD5")
@@ -15,14 +17,9 @@ var (
 	colorOrange = lipgloss.Color("#FFA54F")
 )
 
-// Styles used across the TUI.
+// Styles used across the TUI. Accent-dependent styles (header, git) live
+// on the Model and are computed from the configured accent color at creation.
 var (
-	headerStyle = lipgloss.NewStyle().
-			Background(colorIndigo).
-			Foreground(colorWhite).
-			Bold(true).
-			Padding(0, 1)
-
 	footerStyle = lipgloss.NewStyle().
 			Foreground(colorGray)
 
@@ -45,9 +42,6 @@ var (
 	resultStyle = lipgloss.NewStyle().
 			Foreground(colorGreen).
 			Bold(true)
-
-	gitStyle = lipgloss.NewStyle().
-			Foreground(colorIndigo)
 
 	regentStyle = lipgloss.NewStyle().
 			Foreground(colorOrange)

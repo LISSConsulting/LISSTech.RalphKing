@@ -2,6 +2,7 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 )
@@ -20,6 +21,10 @@ type Model struct {
 	width        int
 	height       int
 	scrollOffset int // 0 = at bottom (auto-scroll), >0 = scrolled up N lines
+
+	// Accent-dependent styles (configured per instance)
+	accentHeaderStyle lipgloss.Style
+	accentGitStyle    lipgloss.Style
 
 	// Loop state
 	mode       string
@@ -42,11 +47,24 @@ type loopDoneMsg struct{}
 type loopErrMsg struct{ err error }
 
 // New creates a new TUI Model that consumes events from the given channel.
-func New(events <-chan loop.LogEntry) Model {
+// accentColor is a hex color string (e.g. "#7D56F4") for the header and
+// accent elements. If empty, the default indigo is used.
+func New(events <-chan loop.LogEntry, accentColor string) Model {
+	accent := lipgloss.Color(defaultAccentColor)
+	if accentColor != "" {
+		accent = lipgloss.Color(accentColor)
+	}
 	return Model{
 		events: events,
 		width:  80,
 		height: 24,
+		accentHeaderStyle: lipgloss.NewStyle().
+			Background(accent).
+			Foreground(colorWhite).
+			Bold(true).
+			Padding(0, 1),
+		accentGitStyle: lipgloss.NewStyle().
+			Foreground(accent),
 	}
 }
 

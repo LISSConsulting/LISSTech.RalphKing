@@ -27,3 +27,6 @@ test_command = ""                  # e.g. "go test ./..."
 max_retries = 3
 retry_backoff_seconds = 30
 hang_timeout_seconds = 300        # kill Ralph if no output for 5 min
+
+[tui]
+accent_color = "#7D56F4"          # hex color for header/accent elements
