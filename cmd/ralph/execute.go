@@ -43,10 +43,9 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 
 	if !cfg.Regent.Enabled {
 		if noTUI {
-			lp.Log = os.Stdout
-			return runFn(ctx)
+			return runWithStateTracking(ctx, lp, dir, gitRunner, string(mode), runFn)
 		}
-		return runWithTUI(ctx, lp, runFn)
+		return runWithTUIAndState(ctx, lp, dir, gitRunner, string(mode), runFn)
 	}
 
 	if noTUI {
@@ -97,10 +96,9 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 
 	if !cfg.Regent.Enabled {
 		if noTUI {
-			lp.Log = os.Stdout
-			return smartRunFn(ctx)
+			return runWithStateTracking(ctx, lp, dir, gitRunner, "run", smartRunFn)
 		}
-		return runWithTUI(ctx, lp, smartRunFn)
+		return runWithTUIAndState(ctx, lp, dir, gitRunner, "run", smartRunFn)
 	}
 
 	if noTUI {
@@ -123,7 +121,7 @@ func showStatus() error {
 	}
 
 	if state.RalphPID == 0 && state.Iteration == 0 {
-		fmt.Println("No Regent state found. Run 'ralph build' or 'ralph run' first.")
+		fmt.Println("No state found. Run 'ralph build' or 'ralph run' first.")
 		return nil
 	}
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -14,39 +15,6 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui"
 )
-
-// runWithTUI creates an event channel, wires it to the loop and TUI, and
-// runs the bubbletea program without Regent supervision.
-func runWithTUI(ctx context.Context, lp *loop.Loop, runFn regent.RunFunc) error {
-	events := make(chan loop.LogEntry, 128)
-	lp.Events = events
-
-	model := tui.New(events)
-	program := tea.NewProgram(model, tea.WithAltScreen())
-
-	errCh := make(chan error, 1)
-	go func() {
-		defer close(events)
-		errCh <- runFn(ctx)
-	}()
-
-	tuiErr := finishTUI(program)
-	if tuiErr != nil {
-		return tuiErr
-	}
-
-	// Collect loop error if available. When the TUI exited because the loop
-	// finished (channel closed), the error is already in errCh. When the user
-	// quit manually (pressed 'q'), the loop may still be running.
-	select {
-	case loopErr := <-errCh:
-		if loopErr != nil && !errors.Is(loopErr, context.Canceled) {
-			return loopErr
-		}
-	default:
-	}
-	return nil
-}
 
 // runWithRegent runs the loop under Regent supervision without TUI.
 // Events are drained to stdout.
@@ -150,4 +118,136 @@ func finishTUI(program *tea.Program) error {
 	}
 
 	return nil
+}
+
+// runWithStateTracking runs the loop without Regent supervision in no-TUI mode,
+// draining events to stdout and persisting state to .ralph/regent-state.json
+// so that `ralph status` works even when the Regent is disabled.
+func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, run regent.RunFunc) error {
+	events := make(chan loop.LogEntry, 128)
+	lp.Events = events
+
+	st := newStateTracker(dir, mode, gitRunner)
+	st.save()
+
+	drainDone := make(chan struct{})
+	go func() {
+		defer close(drainDone)
+		for entry := range events {
+			ts := entry.Timestamp.Format("15:04:05")
+			fmt.Fprintf(os.Stdout, "[%s]  %s\n", ts, entry.Message)
+			st.trackEntry(entry)
+		}
+	}()
+
+	runErr := run(ctx)
+	close(events)
+	<-drainDone
+
+	st.finish(runErr)
+	return runErr
+}
+
+// runWithTUIAndState runs the loop without Regent supervision with TUI display,
+// forwarding events through a state tracker so `ralph status` works.
+func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, run regent.RunFunc) error {
+	loopEvents := make(chan loop.LogEntry, 128)
+	tuiEvents := make(chan loop.LogEntry, 128)
+
+	lp.Events = loopEvents
+
+	st := newStateTracker(dir, mode, gitRunner)
+	st.save()
+
+	model := tui.New(tuiEvents)
+	program := tea.NewProgram(model, tea.WithAltScreen())
+
+	// Forward loop events → state tracking → TUI
+	forwardDone := make(chan struct{})
+	go func() {
+		defer close(forwardDone)
+		for entry := range loopEvents {
+			st.trackEntry(entry)
+			select {
+			case tuiEvents <- entry:
+			default:
+			}
+		}
+	}()
+
+	errCh := make(chan error, 1)
+	go func() {
+		defer close(tuiEvents)
+		runErr := run(ctx)
+		close(loopEvents)
+		<-forwardDone
+		errCh <- runErr
+	}()
+
+	tuiErr := finishTUI(program)
+	if tuiErr != nil {
+		return tuiErr
+	}
+
+	select {
+	case loopErr := <-errCh:
+		st.finish(loopErr)
+		if loopErr != nil && !errors.Is(loopErr, context.Canceled) {
+			return loopErr
+		}
+	default:
+		st.finish(nil)
+	}
+	return nil
+}
+
+// stateTracker persists loop state to .ralph/regent-state.json for `ralph status`.
+// Used in non-Regent paths where the Regent is not available to track state.
+type stateTracker struct {
+	state regent.State
+	dir   string
+}
+
+func newStateTracker(dir, mode string, gitRunner *git.Runner) *stateTracker {
+	branch, _ := gitRunner.CurrentBranch()
+	now := time.Now()
+	return &stateTracker{
+		dir: dir,
+		state: regent.State{
+			RalphPID:     os.Getpid(),
+			Branch:       branch,
+			Mode:         mode,
+			StartedAt:    now,
+			LastOutputAt: now,
+		},
+	}
+}
+
+func (s *stateTracker) trackEntry(entry loop.LogEntry) {
+	if entry.Iteration > 0 {
+		s.state.Iteration = entry.Iteration
+	}
+	if entry.TotalCost > 0 {
+		s.state.TotalCostUSD = entry.TotalCost
+	}
+	if entry.Commit != "" {
+		s.state.LastCommit = entry.Commit
+	}
+	if entry.Branch != "" {
+		s.state.Branch = entry.Branch
+	}
+	if entry.Mode != "" {
+		s.state.Mode = entry.Mode
+	}
+	s.state.LastOutputAt = time.Now()
+}
+
+func (s *stateTracker) save() {
+	_ = regent.SaveState(s.dir, s.state)
+}
+
+func (s *stateTracker) finish(err error) {
+	s.state.FinishedAt = time.Now()
+	s.state.Passed = err == nil || errors.Is(err, context.Canceled)
+	s.save()
 }
