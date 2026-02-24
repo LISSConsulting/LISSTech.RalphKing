@@ -39,7 +39,7 @@ func TestBuildArgs(t *testing.T) {
 				"--output-format", "stream-json",
 				"--verbose",
 			},
-			excludes: []string{"--model", "--dangerously-skip-permissions"},
+			excludes: []string{"--model", "--dangerously-skip-permissions", "--max-turns"},
 		},
 		{
 			name:   "with model",
@@ -48,6 +48,20 @@ func TestBuildArgs(t *testing.T) {
 			contains: []string{
 				"--model", "opus",
 			},
+		},
+		{
+			name:   "with max turns",
+			prompt: "test",
+			opts:   claude.RunOptions{MaxTurns: 25},
+			contains: []string{
+				"--max-turns", "25",
+			},
+		},
+		{
+			name:     "zero max turns omitted",
+			prompt:   "test",
+			opts:     claude.RunOptions{MaxTurns: 0},
+			excludes: []string{"--max-turns"},
 		},
 		{
 			name:   "with danger skip permissions",
@@ -60,12 +74,13 @@ func TestBuildArgs(t *testing.T) {
 		{
 			name:   "all options",
 			prompt: "full test",
-			opts:   claude.RunOptions{Model: "sonnet", DangerSkipPermissions: true},
+			opts:   claude.RunOptions{Model: "sonnet", MaxTurns: 50, DangerSkipPermissions: true},
 			contains: []string{
 				"-p", "full test",
 				"--output-format", "stream-json",
 				"--verbose",
 				"--model", "sonnet",
+				"--max-turns", "50",
 				"--dangerously-skip-permissions",
 			},
 		},

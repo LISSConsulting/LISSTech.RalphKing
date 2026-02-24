@@ -6,6 +6,7 @@ name = "RalphKing"
 
 [claude]
 model = "sonnet"
+max_turns = 0                     # 0 = unlimited agentic turns per iteration
 danger_skip_permissions = true
 
 [plan]

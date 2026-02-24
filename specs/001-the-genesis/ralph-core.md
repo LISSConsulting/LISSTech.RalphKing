@@ -83,6 +83,7 @@ name = "MyProject"
 
 [claude]
 model = "sonnet"
+max_turns = 0                    # 0 = unlimited agentic turns per iteration
 danger_skip_permissions = true
 # future: agent = "claude" | "openai" | "gemini"
 

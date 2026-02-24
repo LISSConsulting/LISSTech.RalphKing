@@ -158,6 +158,7 @@ func (l *Loop) iteration(ctx context.Context, n, maxIter int, prompt, branch str
 	})
 	events, err := l.Agent.Run(ctx, prompt, claude.RunOptions{
 		Model:                 l.Config.Claude.Model,
+		MaxTurns:              l.Config.Claude.MaxTurns,
 		DangerSkipPermissions: l.Config.Claude.DangerSkipPermissions,
 	})
 	if err != nil {

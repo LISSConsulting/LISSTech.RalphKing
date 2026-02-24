@@ -40,7 +40,8 @@ type ProjectConfig struct {
 
 // ClaudeConfig controls the Claude CLI invocation.
 type ClaudeConfig struct {
-	Model                string `toml:"model"`
+	Model                 string `toml:"model"`
+	MaxTurns              int    `toml:"max_turns"`
 	DangerSkipPermissions bool   `toml:"danger_skip_permissions"`
 }
 
@@ -88,6 +89,10 @@ func (c *Config) Validate() error {
 	}
 	if c.Build.MaxIterations < 0 {
 		errs = append(errs, fmt.Errorf("build.max_iterations must be >= 0 (0 = unlimited)"))
+	}
+
+	if c.Claude.MaxTurns < 0 {
+		errs = append(errs, fmt.Errorf("claude.max_turns must be >= 0 (0 = unlimited)"))
 	}
 
 	if c.Regent.Enabled {
@@ -201,6 +206,7 @@ name = ""
 
 [claude]
 model = "sonnet"
+max_turns = 0  # 0 = unlimited agentic turns per iteration
 danger_skip_permissions = true
 
 [plan]

@@ -4,7 +4,8 @@ import "context"
 
 // RunOptions configures a Claude CLI invocation.
 type RunOptions struct {
-	Model                string
+	Model                 string
+	MaxTurns              int
 	DangerSkipPermissions bool
 }
 

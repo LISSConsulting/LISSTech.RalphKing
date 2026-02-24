@@ -16,6 +16,7 @@ func TestDefaults(t *testing.T) {
 		want any
 	}{
 		{"claude.model", cfg.Claude.Model, "sonnet"},
+		{"claude.max_turns", cfg.Claude.MaxTurns, 0},
 		{"claude.danger_skip_permissions", cfg.Claude.DangerSkipPermissions, true},
 		{"plan.prompt_file", cfg.Plan.PromptFile, "PROMPT_plan.md"},
 		{"plan.max_iterations", cfg.Plan.MaxIterations, 3},
@@ -50,6 +51,7 @@ name = "TestProject"
 
 [claude]
 model = "opus"
+max_turns = 25
 danger_skip_permissions = false
 
 [plan]
@@ -92,6 +94,7 @@ accent_color = "#FF0000"
 		}{
 			{"project.name", cfg.Project.Name, "TestProject"},
 			{"claude.model", cfg.Claude.Model, "opus"},
+			{"claude.max_turns", cfg.Claude.MaxTurns, 25},
 			{"claude.danger_skip_permissions", cfg.Claude.DangerSkipPermissions, false},
 			{"plan.prompt_file", cfg.Plan.PromptFile, "MY_PLAN.md"},
 			{"plan.max_iterations", cfg.Plan.MaxIterations, 5},
@@ -235,6 +238,9 @@ func TestInitFile(t *testing.T) {
 		if cfg.TUI.AccentColor != DefaultAccentColor {
 			t.Errorf("default accent color: got %q, want %q", cfg.TUI.AccentColor, DefaultAccentColor)
 		}
+		if cfg.Claude.MaxTurns != 0 {
+			t.Errorf("default max_turns: got %d, want 0", cfg.Claude.MaxTurns)
+		}
 	})
 
 	t.Run("refuses to overwrite existing", func(t *testing.T) {
@@ -280,6 +286,19 @@ func TestValidate(t *testing.T) {
 			name:   "negative build.max_iterations",
 			modify: func(c *Config) { c.Build.MaxIterations = -1 },
 			wantErr: "build.max_iterations must be >= 0",
+		},
+		{
+			name:   "negative claude.max_turns",
+			modify: func(c *Config) { c.Claude.MaxTurns = -1 },
+			wantErr: "claude.max_turns must be >= 0",
+		},
+		{
+			name:   "zero claude.max_turns is valid (unlimited)",
+			modify: func(c *Config) { c.Claude.MaxTurns = 0 },
+		},
+		{
+			name:   "positive claude.max_turns is valid",
+			modify: func(c *Config) { c.Claude.MaxTurns = 50 },
 		},
 		{
 			name: "negative regent.max_retries when enabled",

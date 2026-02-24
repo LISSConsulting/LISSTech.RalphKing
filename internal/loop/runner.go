@@ -79,6 +79,9 @@ func (a *ClaudeAgent) buildArgs(prompt string, opts claude.RunOptions) []string 
 	if opts.Model != "" {
 		args = append(args, "--model", opts.Model)
 	}
+	if opts.MaxTurns > 0 {
+		args = append(args, "--max-turns", fmt.Sprintf("%d", opts.MaxTurns))
+	}
 	if opts.DangerSkipPermissions {
 		args = append(args, "--dangerously-skip-permissions")
 	}
