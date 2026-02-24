@@ -20,6 +20,7 @@
 | TUI polish | "New messages below" indicator (`↓N new`) in footer when scrolled up and events arrive | v0.0.23 |
 | State tracking | stateTracker live persistence: save to disk on meaningful state changes so `ralph status` works mid-loop without Regent | v0.0.24 |
 | Spec detection | `detectStatus` fallback: specs mentioned anywhere in plan text (not just section headers) show as in-progress instead of not-started | v0.0.25 |
+| Cost control | `claude.max_turns` config: limits agentic turns per iteration via `--max-turns` CLI flag (0 = unlimited) | v0.0.26 |
 | Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, removed dead TUI code | 0.0.9 |
 
 Specs implemented: `ralph-core.md`, `the-regent.md`.
@@ -45,6 +46,7 @@ Specs implemented: `ralph-core.md`, `the-regent.md`.
 - `git diff --quiet` exit 128 + "fatal:" = error; exit 1 = real diff; `pushIfNeeded` pushes on error
 - Accent-dependent TUI styles (header, git) live on Model as instance fields; non-accent styles remain package vars
 - TUI `newBelow` counter tracks events arriving while scrolled up; resets when `scrollOffset` returns to 0
+- `claude.max_turns` (0 = unlimited) passes `--max-turns N` to Claude CLI; complements Regent hang detection with explicit turn limits
 
 ## Out of Scope (for now)
 
