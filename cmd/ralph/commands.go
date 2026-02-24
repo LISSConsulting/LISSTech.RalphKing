@@ -66,17 +66,23 @@ func statusCmd() *cobra.Command {
 func initCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
-		Short: "Create ralph.toml in the current directory",
+		Short: "Scaffold ralph project (config, prompts, specs dir)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir, err := os.Getwd()
 			if err != nil {
 				return fmt.Errorf("get working directory: %w", err)
 			}
-			path, err := config.InitFile(dir)
+			created, err := config.ScaffoldProject(dir)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Created %s\n", path)
+			if len(created) == 0 {
+				fmt.Println("All files already exist — nothing to create.")
+				return nil
+			}
+			for _, path := range created {
+				fmt.Printf("Created %s\n", path)
+			}
 			return nil
 		},
 	}
