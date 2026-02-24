@@ -161,28 +161,39 @@ func (r *Regent) NotifyOutput() {
 	r.touchOutput()
 }
 
-// UpdateState updates tracked state fields from a log entry and resets the
-// hang detection timer.
+// UpdateState updates tracked state fields from a log entry, resets the
+// hang detection timer, and persists state to disk so `ralph status` shows
+// current progress during a running loop.
 func (r *Regent) UpdateState(entry loop.LogEntry) {
 	r.touchOutput()
 
 	r.mu.Lock()
+	changed := false
 	if entry.Iteration > 0 {
 		r.state.Iteration = entry.Iteration
+		changed = true
 	}
 	if entry.TotalCost > 0 {
 		r.state.TotalCostUSD = entry.TotalCost
+		changed = true
 	}
 	if entry.Commit != "" {
 		r.state.LastCommit = entry.Commit
+		changed = true
 	}
 	if entry.Branch != "" {
 		r.state.Branch = entry.Branch
+		changed = true
 	}
 	if entry.Mode != "" {
 		r.state.Mode = entry.Mode
+		changed = true
 	}
 	r.mu.Unlock()
+
+	if changed {
+		r.saveState()
+	}
 }
 
 // RunPostIterationTests runs the configured test command and reverts the last

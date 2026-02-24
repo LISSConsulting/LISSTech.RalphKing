@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -395,6 +396,259 @@ func TestLogScrolling(t *testing.T) {
 	if len(lines) != 3 {
 		t.Errorf("expected 3 visible lines, got %d", len(lines))
 	}
+}
+
+func TestScrollUpDown(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch)
+	m.height = 5 // header(1) + log(3) + footer(1)
+
+	// Add 10 lines (more than log can display)
+	for i := 0; i < 10; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{
+				Kind:      loop.LogInfo,
+				Timestamp: time.Now(),
+				Message:   fmt.Sprintf("line %d", i),
+			},
+		})
+	}
+
+	// Initially at bottom
+	if m.scrollOffset != 0 {
+		t.Fatalf("expected scrollOffset 0, got %d", m.scrollOffset)
+	}
+
+	// Scroll up
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	m = updated.(Model)
+	if m.scrollOffset != 1 {
+		t.Errorf("expected scrollOffset 1 after scroll up, got %d", m.scrollOffset)
+	}
+
+	// Scroll down
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m = updated.(Model)
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset 0 after scroll down, got %d", m.scrollOffset)
+	}
+
+	// Can't scroll below 0
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m = updated.(Model)
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset to stay 0, got %d", m.scrollOffset)
+	}
+}
+
+func TestScrollUpBound(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch)
+	m.height = 5 // log height = 3
+
+	// Add 10 lines; max scroll offset = 10 - 3 = 7
+	for i := 0; i < 10; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("line %d", i)},
+		})
+	}
+
+	// Scroll up beyond max
+	for i := 0; i < 20; i++ {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+		m = updated.(Model)
+	}
+
+	if m.scrollOffset != 7 {
+		t.Errorf("expected scrollOffset clamped to 7, got %d", m.scrollOffset)
+	}
+}
+
+func TestScrollPageUpDown(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch)
+	m.height = 5 // log height = 3
+
+	for i := 0; i < 20; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("line %d", i)},
+		})
+	}
+
+	// Page up (scroll offset increases by log height = 3)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	m = updated.(Model)
+	if m.scrollOffset != 3 {
+		t.Errorf("expected scrollOffset 3 after pgup, got %d", m.scrollOffset)
+	}
+
+	// Page down (scroll offset decreases by log height = 3)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	m = updated.(Model)
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset 0 after pgdown, got %d", m.scrollOffset)
+	}
+
+	// Page down below 0 should clamp
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	m = updated.(Model)
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset clamped to 0, got %d", m.scrollOffset)
+	}
+}
+
+func TestScrollHomeEnd(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch)
+	m.height = 5 // log height = 3
+
+	for i := 0; i < 10; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("line %d", i)},
+		})
+	}
+
+	// Home should scroll to top (max offset = 7)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
+	m = updated.(Model)
+	if m.scrollOffset != 7 {
+		t.Errorf("expected scrollOffset 7 (top) after home, got %d", m.scrollOffset)
+	}
+
+	// End should scroll to bottom
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
+	m = updated.(Model)
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset 0 (bottom) after end, got %d", m.scrollOffset)
+	}
+}
+
+func TestScrollNoEffectWhenFewLines(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch)
+	m.height = 10 // log height = 8, but only 3 lines
+
+	for i := 0; i < 3; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("line %d", i)},
+		})
+	}
+
+	// Scroll up should have no effect (all lines visible)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	m = updated.(Model)
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset 0 when all lines fit, got %d", m.scrollOffset)
+	}
+}
+
+func TestScrollRenderShowsCorrectLines(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch)
+	m.height = 4 // log height = 2
+
+	for i := 0; i < 5; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("msg-%d", i)},
+		})
+	}
+
+	// At bottom (offset 0): should show lines 3 and 4 (last 2)
+	log := m.renderLog(2)
+	if !strings.Contains(log, "msg-3") || !strings.Contains(log, "msg-4") {
+		t.Errorf("at bottom should show msg-3 and msg-4, got: %s", log)
+	}
+
+	// Scroll up 2: should show lines 1 and 2
+	m.scrollOffset = 2
+	log = m.renderLog(2)
+	if !strings.Contains(log, "msg-1") || !strings.Contains(log, "msg-2") {
+		t.Errorf("scrolled up 2 should show msg-1 and msg-2, got: %s", log)
+	}
+
+	// Scroll to top (offset 3): should show lines 0 and 1
+	m.scrollOffset = 3
+	log = m.renderLog(2)
+	if !strings.Contains(log, "msg-0") || !strings.Contains(log, "msg-1") {
+		t.Errorf("scrolled to top should show msg-0 and msg-1, got: %s", log)
+	}
+}
+
+func TestScrollFooterIndicator(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch)
+
+	// At bottom: no scroll indicator
+	footer := m.renderFooter()
+	if strings.Contains(footer, "j/k scroll") {
+		t.Error("footer should not show scroll hint when at bottom")
+	}
+
+	// Scrolled up: show indicator
+	m.scrollOffset = 5
+	footer = m.renderFooter()
+	if !strings.Contains(footer, "↑5") {
+		t.Errorf("footer should show scroll offset, got: %s", footer)
+	}
+	if !strings.Contains(footer, "j/k scroll") {
+		t.Errorf("footer should show scroll hint, got: %s", footer)
+	}
+}
+
+func TestScrollHelpers(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch)
+	m.height = 5 // log height = 3
+
+	t.Run("logHeight", func(t *testing.T) {
+		if m.logHeight() != 3 {
+			t.Errorf("expected logHeight 3, got %d", m.logHeight())
+		}
+	})
+
+	t.Run("logHeight_minimum", func(t *testing.T) {
+		m2 := m
+		m2.height = 1
+		if m2.logHeight() != 1 {
+			t.Errorf("expected minimum logHeight 1, got %d", m2.logHeight())
+		}
+	})
+
+	t.Run("maxScrollOffset_empty", func(t *testing.T) {
+		if m.maxScrollOffset() != 0 {
+			t.Errorf("expected maxScrollOffset 0 for empty lines, got %d", m.maxScrollOffset())
+		}
+	})
+
+	t.Run("maxScrollOffset_with_lines", func(t *testing.T) {
+		m2 := m
+		for i := 0; i < 10; i++ {
+			m2.lines = append(m2.lines, logLine{
+				entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now()},
+			})
+		}
+		if m2.maxScrollOffset() != 7 {
+			t.Errorf("expected maxScrollOffset 7, got %d", m2.maxScrollOffset())
+		}
+	})
+
+	t.Run("clampScroll_too_high", func(t *testing.T) {
+		m2 := m
+		m2.scrollOffset = 100
+		m2.clampScroll()
+		if m2.scrollOffset != 0 {
+			t.Errorf("expected clamped to 0 (no lines), got %d", m2.scrollOffset)
+		}
+	})
+
+	t.Run("clampScroll_negative", func(t *testing.T) {
+		m2 := m
+		m2.scrollOffset = -5
+		m2.clampScroll()
+		if m2.scrollOffset != 0 {
+			t.Errorf("expected clamped to 0, got %d", m2.scrollOffset)
+		}
+	})
 }
 
 func TestWaitForEventClosedChannel(t *testing.T) {

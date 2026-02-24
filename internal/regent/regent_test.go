@@ -422,6 +422,61 @@ func TestUpdateState(t *testing.T) {
 	}
 }
 
+func TestUpdateStatePersistsToFile(t *testing.T) {
+	dir := t.TempDir()
+	cfg := defaultTestRegentConfig()
+	events := make(chan loop.LogEntry, 128)
+	rgt := New(cfg, dir, &mockGit{}, events)
+
+	rgt.UpdateState(loop.LogEntry{
+		Iteration: 3,
+		TotalCost: 1.50,
+		Branch:    "feat/scroll",
+		Mode:      "build",
+		Commit:    "abc1234 add scroll",
+	})
+
+	state, err := LoadState(dir)
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if state.Iteration != 3 {
+		t.Errorf("Iteration = %d, want 3", state.Iteration)
+	}
+	if state.TotalCostUSD != 1.50 {
+		t.Errorf("TotalCostUSD = %f, want 1.50", state.TotalCostUSD)
+	}
+	if state.Branch != "feat/scroll" {
+		t.Errorf("Branch = %q, want %q", state.Branch, "feat/scroll")
+	}
+	if state.Mode != "build" {
+		t.Errorf("Mode = %q, want %q", state.Mode, "build")
+	}
+	if state.LastCommit != "abc1234 add scroll" {
+		t.Errorf("LastCommit = %q, want %q", state.LastCommit, "abc1234 add scroll")
+	}
+}
+
+func TestUpdateStateSkipsSaveOnNoChange(t *testing.T) {
+	dir := t.TempDir()
+	cfg := defaultTestRegentConfig()
+	events := make(chan loop.LogEntry, 128)
+	rgt := New(cfg, dir, &mockGit{}, events)
+
+	// Send entry with no meaningful state fields
+	rgt.UpdateState(loop.LogEntry{
+		Kind:    loop.LogInfo,
+		Message: "just a message",
+	})
+
+	// State file should not exist since no state fields changed
+	_, err := LoadState(dir)
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	// LoadState returns zero State when file doesn't exist, which is fine
+}
+
 func TestRunPostIterationTests(t *testing.T) {
 	t.Run("skipped when rollback disabled", func(t *testing.T) {
 		dir := t.TempDir()

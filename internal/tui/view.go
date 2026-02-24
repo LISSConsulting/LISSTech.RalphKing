@@ -59,6 +59,9 @@ func (m Model) renderFooter() string {
 
 	left := fmt.Sprintf("[⬆ pull] [⬇ push]  last commit: %s", commit)
 	right := "q to quit"
+	if m.scrollOffset > 0 {
+		right = fmt.Sprintf("↑%d  j/k scroll  q to quit", m.scrollOffset)
+	}
 
 	gap := m.width - len(left) - len(right)
 	if gap < 2 {
@@ -75,12 +78,20 @@ func (m Model) renderLog(height int) string {
 		return strings.Repeat("\n", height-1)
 	}
 
-	// Show the last `height` lines (auto-scroll to bottom)
-	start := 0
-	if len(m.lines) > height {
-		start = len(m.lines) - height
+	// Calculate visible window based on scroll offset.
+	// scrollOffset 0 = bottom (latest lines), >0 = scrolled up.
+	end := len(m.lines) - m.scrollOffset
+	if end > len(m.lines) {
+		end = len(m.lines)
 	}
-	visible := m.lines[start:]
+	if end < 0 {
+		end = 0
+	}
+	start := end - height
+	if start < 0 {
+		start = 0
+	}
+	visible := m.lines[start:end]
 
 	var b strings.Builder
 	for i, line := range visible {

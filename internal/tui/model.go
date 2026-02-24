@@ -16,9 +16,10 @@ type Model struct {
 	events <-chan loop.LogEntry
 
 	// Display state
-	lines []logLine
-	width int
-	height int
+	lines        []logLine
+	width        int
+	height       int
+	scrollOffset int // 0 = at bottom (auto-scroll), >0 = scrolled up N lines
 
 	// Loop state
 	mode       string
@@ -57,6 +58,35 @@ func (m Model) Init() tea.Cmd {
 // Err returns any error that occurred during the loop.
 func (m Model) Err() error {
 	return m.err
+}
+
+// logHeight returns the number of lines available for the log panel.
+func (m Model) logHeight() int {
+	h := m.height - 2 // 1 header + 1 footer
+	if h < 1 {
+		h = 1
+	}
+	return h
+}
+
+// maxScrollOffset returns the maximum valid scroll offset.
+func (m Model) maxScrollOffset() int {
+	max := len(m.lines) - m.logHeight()
+	if max < 0 {
+		return 0
+	}
+	return max
+}
+
+// clampScroll ensures scrollOffset is within valid bounds.
+func (m *Model) clampScroll() {
+	max := m.maxScrollOffset()
+	if m.scrollOffset > max {
+		m.scrollOffset = max
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
 }
 
 // waitForEvent returns a command that blocks on the event channel.
