@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -153,7 +154,8 @@ func Defaults() Config {
 }
 
 // Load reads ralph.toml from the given path. If path is empty, it walks up
-// from the current working directory looking for ralph.toml.
+// from the current working directory looking for ralph.toml. Returns an error
+// if the file contains unknown keys (likely typos).
 func Load(path string) (*Config, error) {
 	if path == "" {
 		found, err := findConfig()
@@ -164,10 +166,25 @@ func Load(path string) (*Config, error) {
 	}
 
 	cfg := Defaults()
-	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+	meta, err := toml.DecodeFile(path, &cfg)
+	if err != nil {
 		return nil, fmt.Errorf("config: decode %s: %w", path, err)
 	}
+
+	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
+		keys := make([]string, len(undecoded))
+		for i, k := range undecoded {
+			keys[i] = k.String()
+		}
+		return nil, fmt.Errorf("config: unknown keys in %s: %s (possible typos?)", path, joinKeys(keys))
+	}
+
 	return &cfg, nil
+}
+
+// joinKeys formats a slice of key names for display.
+func joinKeys(keys []string) string {
+	return strings.Join(keys, ", ")
 }
 
 // findConfig walks up from the current directory looking for ralph.toml.

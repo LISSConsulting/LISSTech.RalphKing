@@ -257,6 +257,111 @@ func TestInitFile(t *testing.T) {
 	})
 }
 
+func TestLoadUnknownKeys(t *testing.T) {
+	tests := []struct {
+		name    string
+		toml    string
+		wantErr string
+	}{
+		{
+			name: "single unknown key",
+			toml: `[project]
+name = "Test"
+unknown_key = true
+`,
+			wantErr: "unknown keys",
+		},
+		{
+			name: "unknown key in section",
+			toml: `[claude]
+model = "sonnet"
+typo_field = "oops"
+`,
+			wantErr: "typo_field",
+		},
+		{
+			name: "unknown section",
+			toml: `[notasection]
+foo = "bar"
+`,
+			wantErr: "notasection",
+		},
+		{
+			name: "multiple unknown keys",
+			toml: `[project]
+name = "Test"
+[plan]
+promptfile = "missing_underscore.md"
+maxiterations = 5
+`,
+			wantErr: "possible typos?",
+		},
+		{
+			name: "all valid keys accepted",
+			toml: `[project]
+name = "Test"
+[claude]
+model = "opus"
+max_turns = 10
+danger_skip_permissions = false
+[plan]
+prompt_file = "p.md"
+max_iterations = 3
+[build]
+prompt_file = "b.md"
+max_iterations = 0
+[git]
+auto_pull_rebase = true
+auto_push = true
+[regent]
+enabled = true
+rollback_on_test_failure = false
+test_command = ""
+max_retries = 3
+retry_backoff_seconds = 30
+hang_timeout_seconds = 300
+[tui]
+accent_color = "#FF0000"
+`,
+		},
+		{
+			name: "empty file accepted",
+			toml: "",
+		},
+		{
+			name: "comments only accepted",
+			toml: `# This is a comment
+# Another comment
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "ralph.toml")
+			if err := os.WriteFile(path, []byte(tt.toml), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			_, err := Load(path)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("expected no error, got: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Errorf("expected error containing %q, got nil", tt.wantErr)
+				return
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error %q does not contain %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestValidate(t *testing.T) {
 	tests := []struct {
 		name    string
