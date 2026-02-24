@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
@@ -123,52 +124,59 @@ func showStatus() error {
 		return err
 	}
 
+	fmt.Print(formatStatus(state, time.Now()))
+	return nil
+}
+
+// formatStatus renders a Regent state snapshot as a human-readable status
+// string. The now parameter pins the current time for deterministic output.
+func formatStatus(state regent.State, now time.Time) string {
 	result := classifyResult(state)
 	if result == statusNoState {
-		fmt.Println("No state found. Run 'ralph build' or 'ralph run' first.")
-		return nil
+		return "No state found. Run 'ralph build' or 'ralph run' first.\n"
 	}
 
-	fmt.Println("Ralph Status")
-	fmt.Println("────────────")
+	var b strings.Builder
+	b.WriteString("Ralph Status\n")
+	b.WriteString("────────────\n")
 
 	if state.Branch != "" {
-		fmt.Printf("  %-20s %s\n", "Branch:", state.Branch)
+		fmt.Fprintf(&b, "  %-20s %s\n", "Branch:", state.Branch)
 	}
 	if state.Mode != "" {
-		fmt.Printf("  %-20s %s\n", "Mode:", state.Mode)
+		fmt.Fprintf(&b, "  %-20s %s\n", "Mode:", state.Mode)
 	}
 	if state.LastCommit != "" {
-		fmt.Printf("  %-20s %s\n", "Last commit:", state.LastCommit)
+		fmt.Fprintf(&b, "  %-20s %s\n", "Last commit:", state.LastCommit)
 	}
-	fmt.Printf("  %-20s %d\n", "Iteration:", state.Iteration)
-	fmt.Printf("  %-20s $%.2f\n", "Total cost:", state.TotalCostUSD)
+	fmt.Fprintf(&b, "  %-20s %d\n", "Iteration:", state.Iteration)
+	fmt.Fprintf(&b, "  %-20s $%.2f\n", "Total cost:", state.TotalCostUSD)
 
 	if result == statusRunning {
-		elapsed := time.Since(state.StartedAt).Round(time.Second)
-		fmt.Printf("  %-20s %s (running)\n", "Duration:", elapsed)
+		elapsed := now.Sub(state.StartedAt).Round(time.Second)
+		fmt.Fprintf(&b, "  %-20s %s (running)\n", "Duration:", elapsed)
 	} else if !state.StartedAt.IsZero() && !state.FinishedAt.IsZero() {
 		dur := state.FinishedAt.Sub(state.StartedAt).Round(time.Second)
-		fmt.Printf("  %-20s %s\n", "Duration:", dur)
+		fmt.Fprintf(&b, "  %-20s %s\n", "Duration:", dur)
 	}
 
 	if result == statusRunning && !state.LastOutputAt.IsZero() {
-		ago := time.Since(state.LastOutputAt).Round(time.Second)
-		fmt.Printf("  %-20s %s ago\n", "Last output:", ago)
+		ago := now.Sub(state.LastOutputAt).Round(time.Second)
+		fmt.Fprintf(&b, "  %-20s %s ago\n", "Last output:", ago)
 	}
 
 	switch result {
 	case statusRunning:
-		fmt.Printf("  %-20s %s\n", "Result:", "running")
+		fmt.Fprintf(&b, "  %-20s %s\n", "Result:", "running")
 	case statusPass:
-		fmt.Printf("  %-20s %s\n", "Result:", "pass")
+		fmt.Fprintf(&b, "  %-20s %s\n", "Result:", "pass")
 	case statusFailWithErrors:
-		fmt.Printf("  %-20s fail (%d consecutive errors)\n", "Result:", state.ConsecutiveErrs)
+		fmt.Fprintf(&b, "  %-20s fail (%d consecutive errors)\n", "Result:", state.ConsecutiveErrs)
 	case statusFail:
-		fmt.Printf("  %-20s %s\n", "Result:", "fail")
+		fmt.Fprintf(&b, "  %-20s %s\n", "Result:", "fail")
 	}
 
-	return nil
+	return b.String()
 }
 
 // statusResult represents the outcome classification for ralph status display.
