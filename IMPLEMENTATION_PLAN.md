@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **All core features complete (P1–P6) + production polish.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 89–97% test coverage across all packages.
+> Current state: **All core features complete (P1–P6) + production polish.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 94–99% test coverage across all internal packages.
 
 ## Completed Work
 
@@ -44,6 +44,8 @@
 | Fix TUI error propagation — `runWithTUI` and `runWithRegentTUI` now capture and return loop/Regent errors via buffered error channel instead of silently swallowing them | ralph-core.md, the-regent.md | 0.0.12 |
 | ClaudeAgent stderr capture — includes stderr text in error events when Claude CLI exits non-zero, replacing opaque "exit status 1" | ralph-core.md | 0.0.13 |
 | `ralph status` running state — detects mid-run processes (StartedAt set, FinishedAt zero), shows elapsed time, last output, and "running" result | ralph-core.md, the-regent.md | 0.0.13 |
+| `stateTracker` for non-Regent paths — `runWithStateTracking` / `runWithTUIAndState` persist `.ralph/regent-state.json` so `ralph status` works when `regent.enabled = false` | ralph-core.md | 0.0.14 |
+| Test coverage push — tui 94%→99%, loop 90%→98%, regent 90%→94%; added mockGit error injection, stash/push/pull/revert error paths, renderLine LogRegent, toolStyle all branches | — | 0.0.14 |
 
 ## Key Learnings
 
@@ -69,6 +71,8 @@
 - TUI wiring error propagation uses buffered error channel (`errCh := make(chan error, 1)`) + non-blocking `select/default` to safely collect errors without blocking when user quits early; `context.Canceled` is suppressed as normal shutdown
 - ClaudeAgent captures stderr via `bytes.Buffer` on `cmd.Stderr`; on non-zero exit, stderr text is appended to the error event for diagnostics (e.g. "claude exited: exit status 1: API rate limit exceeded")
 - `ralph status` running detection uses `!StartedAt.IsZero() && FinishedAt.IsZero()` — when the process crashes without cleanup, `FinishedAt` stays zero, so status shows "running" until the next loop overwrites state
+- `stateTracker` pattern: a lightweight struct in `cmd/ralph/wiring.go` that tracks loop state and persists to `.ralph/regent-state.json` — used in non-Regent paths; mirrors what Regent.UpdateState() does for Regent paths
+- Coverage gaps hard to test: `renderLog` defensive guards (`end < 0`, `end > len`) require out-of-bounds scrollOffset; `cmd/ralph` CLI wiring has 0% coverage (integration-only); these are acceptable gaps
 
 ## Out of Scope (for now)
 
