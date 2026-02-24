@@ -91,7 +91,7 @@ func setupTestLoop(t *testing.T, agent claude.Agent, git GitOps, cfg *config.Con
 func TestRun(t *testing.T) {
 	t.Run("plan mode runs configured iterations", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.10, 2.5)},
+			events: []claude.Event{claude.ResultEvent(0.10, 2.5, "success")},
 		}
 		git := &mockGit{branch: "main", lastCommit: "abc123 initial"}
 		cfg := defaultTestConfig()
@@ -110,7 +110,7 @@ func TestRun(t *testing.T) {
 
 	t.Run("build mode with max override", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.05, 1.0)},
+			events: []claude.Event{claude.ResultEvent(0.05, 1.0, "success")},
 		}
 		git := &mockGit{branch: "feat/test", lastCommit: "def456 test"}
 		cfg := defaultTestConfig()
@@ -148,7 +148,7 @@ func TestRun(t *testing.T) {
 
 	t.Run("context cancellation stops loop", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
 		git := &mockGit{branch: "main", lastCommit: "abc123 test"}
 		cfg := defaultTestConfig()
@@ -189,7 +189,7 @@ func TestRun(t *testing.T) {
 func TestIteration(t *testing.T) {
 	t.Run("pulls before running claude", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
 		git := &mockGit{branch: "main", lastCommit: "abc test"}
 		cfg := defaultTestConfig()
@@ -209,7 +209,7 @@ func TestIteration(t *testing.T) {
 
 	t.Run("skips pull when auto_pull_rebase is false", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
 		git := &mockGit{branch: "main", lastCommit: "abc test"}
 		cfg := defaultTestConfig()
@@ -229,7 +229,7 @@ func TestIteration(t *testing.T) {
 
 	t.Run("stashes dirty working tree", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
 		git := &mockGit{branch: "main", dirty: true, lastCommit: "abc test"}
 		cfg := defaultTestConfig()
@@ -251,7 +251,7 @@ func TestIteration(t *testing.T) {
 
 	t.Run("skips stash when working tree is clean", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
 		git := &mockGit{branch: "main", dirty: false, lastCommit: "abc test"}
 		cfg := defaultTestConfig()
@@ -273,7 +273,7 @@ func TestIteration(t *testing.T) {
 
 	t.Run("pushes when there are new local commits", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
 		git := &mockGit{
 			branch:         "main",
@@ -297,7 +297,7 @@ func TestIteration(t *testing.T) {
 
 	t.Run("skips push when no new commits", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
 		git := &mockGit{
 			branch:         "main",
@@ -321,7 +321,7 @@ func TestIteration(t *testing.T) {
 
 	t.Run("skips push when auto_push is false", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
 		git := &mockGit{
 			branch:         "main",
@@ -349,7 +349,7 @@ func TestLogOutput(t *testing.T) {
 		agent := &mockAgent{
 			events: []claude.Event{
 				claude.ToolUseEvent("read_file", map[string]any{"file_path": "main.go"}),
-				claude.ResultEvent(0.10, 1.0),
+				claude.ResultEvent(0.10, 1.0, "success"),
 			},
 		}
 		git := &mockGit{branch: "main", lastCommit: "abc test"}
@@ -375,7 +375,7 @@ func TestLogOutput(t *testing.T) {
 		agent := &mockAgent{
 			events: []claude.Event{
 				claude.ErrorEvent("something went wrong"),
-				claude.ResultEvent(0.00, 0.5),
+				claude.ResultEvent(0.00, 0.5, "success"),
 			},
 		}
 		git := &mockGit{branch: "main", lastCommit: "abc test"}
@@ -393,6 +393,101 @@ func TestLogOutput(t *testing.T) {
 			t.Error("log should contain error message")
 		}
 	})
+}
+
+func TestSubtypeInLogOutput(t *testing.T) {
+	t.Run("subtype included in iteration complete message", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.14, 4.2, "success")},
+		}
+		git := &mockGit{branch: "main", lastCommit: "abc test"}
+		cfg := defaultTestConfig()
+		cfg.Plan.MaxIterations = 1
+
+		lp, buf := setupTestLoop(t, agent, git, cfg)
+		err := lp.Run(context.Background(), ModePlan, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(buf.String(), "success") {
+			t.Errorf("log should contain subtype 'success', got: %s", buf.String())
+		}
+	})
+
+	t.Run("error_max_turns subtype in log", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.30, 5.0, "error_max_turns")},
+		}
+		git := &mockGit{branch: "main", lastCommit: "abc test"}
+		cfg := defaultTestConfig()
+		cfg.Plan.MaxIterations = 1
+
+		lp, buf := setupTestLoop(t, agent, git, cfg)
+		err := lp.Run(context.Background(), ModePlan, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(buf.String(), "error_max_turns") {
+			t.Errorf("log should contain subtype 'error_max_turns', got: %s", buf.String())
+		}
+	})
+
+	t.Run("empty subtype omitted from message", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "")},
+		}
+		git := &mockGit{branch: "main", lastCommit: "abc test"}
+		cfg := defaultTestConfig()
+		cfg.Plan.MaxIterations = 1
+
+		lp, buf := setupTestLoop(t, agent, git, cfg)
+		err := lp.Run(context.Background(), ModePlan, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		output := buf.String()
+		if !strings.Contains(output, "Iteration 1 complete") {
+			t.Errorf("should contain iteration complete, got: %s", output)
+		}
+		// Should not have trailing separator for empty subtype
+		if strings.Contains(output, "1.0s —") {
+			t.Errorf("should not show trailing separator for empty subtype, got: %s", output)
+		}
+	})
+}
+
+func TestSubtypeInEventChannel(t *testing.T) {
+	ch := make(chan LogEntry, 16)
+	agent := &mockAgent{
+		events: []claude.Event{claude.ResultEvent(0.14, 4.2, "success")},
+	}
+	git := &mockGit{branch: "main", lastCommit: "abc test"}
+	cfg := defaultTestConfig()
+	cfg.Plan.MaxIterations = 1
+
+	lp, _ := setupTestLoop(t, agent, git, cfg)
+	lp.Events = ch
+
+	err := lp.Run(context.Background(), ModePlan, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	close(ch)
+	var iterComplete *LogEntry
+	for e := range ch {
+		if e.Kind == LogIterComplete {
+			iterComplete = &e
+			break
+		}
+	}
+
+	if iterComplete == nil {
+		t.Fatal("expected an IterComplete event")
+	}
+	if iterComplete.Subtype != "success" {
+		t.Errorf("expected Subtype 'success', got %q", iterComplete.Subtype)
+	}
 }
 
 func TestModeConfig(t *testing.T) {
@@ -452,7 +547,7 @@ func TestSummarizeInput(t *testing.T) {
 func TestPostIteration(t *testing.T) {
 	t.Run("hook called after each iteration", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
 		git := &mockGit{branch: "main", lastCommit: "abc test"}
 		cfg := defaultTestConfig()
@@ -473,7 +568,7 @@ func TestPostIteration(t *testing.T) {
 
 	t.Run("hook not called when not set", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
 		git := &mockGit{branch: "main", lastCommit: "abc test"}
 		cfg := defaultTestConfig()
@@ -491,7 +586,7 @@ func TestPostIteration(t *testing.T) {
 
 	t.Run("hook called after push", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
 		git := &mockGit{
 			branch:         "main",
@@ -545,7 +640,7 @@ func TestIterLabel(t *testing.T) {
 func TestStashIfDirtyErrors(t *testing.T) {
 	t.Run("HasUncommittedChanges error propagates", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
 		git := &mockGit{
 			branch:   "main",
@@ -590,7 +685,7 @@ func TestStashIfDirtyErrors(t *testing.T) {
 func TestPushIfNeededErrors(t *testing.T) {
 	t.Run("DiffFromRemote error pushes anyway and logs", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
 		git := &mockGit{
 			branch:     "main",
@@ -617,7 +712,7 @@ func TestPushIfNeededErrors(t *testing.T) {
 
 	t.Run("Push error logged but does not abort loop", func(t *testing.T) {
 		agent := &mockAgent{
-			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
 		git := &mockGit{
 			branch:         "main",
@@ -643,7 +738,7 @@ func TestPushIfNeededErrors(t *testing.T) {
 
 func TestIterationContinuesOnPullError(t *testing.T) {
 	agent := &mockAgent{
-		events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+		events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 	}
 	git := &mockGit{
 		branch:     "main",
@@ -671,7 +766,7 @@ func TestIterationContinuesOnPullError(t *testing.T) {
 
 func TestIterationContinuesOnStashPopError(t *testing.T) {
 	agent := &mockAgent{
-		events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+		events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 	}
 	git := &mockGit{
 		branch:      "main",
@@ -700,7 +795,7 @@ func TestIterationContinuesOnStashPopError(t *testing.T) {
 func TestEmitNilLog(t *testing.T) {
 	// When Events is nil and Log is nil, emit should fall back to os.Stdout without panic.
 	agent := &mockAgent{
-		events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+		events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 	}
 	git := &mockGit{branch: "main", lastCommit: "abc test"}
 	cfg := defaultTestConfig()

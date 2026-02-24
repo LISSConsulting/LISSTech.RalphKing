@@ -28,6 +28,7 @@ type Event struct {
 	// Result fields
 	CostUSD  float64
 	Duration float64 // seconds
+	Subtype  string  // result subtype: "success", "error_max_turns", etc.
 
 	// Error fields
 	Error string
@@ -52,13 +53,14 @@ func TextEvent(text string) Event {
 	}
 }
 
-// ResultEvent creates a result event with cost and duration.
-func ResultEvent(costUSD, duration float64) Event {
+// ResultEvent creates a result event with cost, duration, and exit subtype.
+func ResultEvent(costUSD, duration float64, subtype string) Event {
 	return Event{
 		Type:      EventResult,
 		Timestamp: time.Now(),
 		CostUSD:   costUSD,
 		Duration:  duration,
+		Subtype:   subtype,
 	}
 }
 

@@ -14,7 +14,7 @@ import (
 func TestEmitToChannel(t *testing.T) {
 	ch := make(chan LogEntry, 8)
 	agent := &mockAgent{
-		events: []claude.Event{claude.ResultEvent(0.10, 2.0)},
+		events: []claude.Event{claude.ResultEvent(0.10, 2.0, "success")},
 	}
 	git := &mockGit{branch: "main", lastCommit: "abc test"}
 	cfg := defaultTestConfig()
@@ -61,7 +61,7 @@ func TestEmitToChannelWithToolUse(t *testing.T) {
 	agent := &mockAgent{
 		events: []claude.Event{
 			claude.ToolUseEvent("read_file", map[string]any{"file_path": "main.go"}),
-			claude.ResultEvent(0.05, 1.0),
+			claude.ResultEvent(0.05, 1.0, "success"),
 		},
 	}
 	git := &mockGit{branch: "main", lastCommit: "abc test"}
@@ -97,7 +97,7 @@ func TestEmitToChannelWithToolUse(t *testing.T) {
 
 func TestEmitFallsBackToWriter(t *testing.T) {
 	agent := &mockAgent{
-		events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+		events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 	}
 	git := &mockGit{branch: "main", lastCommit: "abc test"}
 	cfg := defaultTestConfig()
@@ -123,7 +123,7 @@ func TestEmitFallsBackToWriter(t *testing.T) {
 func TestEmitDoesNotWriteToLogWhenChannelSet(t *testing.T) {
 	ch := make(chan LogEntry, 16)
 	agent := &mockAgent{
-		events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+		events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 	}
 	git := &mockGit{branch: "main", lastCommit: "abc test"}
 	cfg := defaultTestConfig()
@@ -208,7 +208,7 @@ func TestEmitPreservesExistingTimestamp(t *testing.T) {
 func TestEmitBranchAndIterationInEvents(t *testing.T) {
 	ch := make(chan LogEntry, 16)
 	agent := &mockAgent{
-		events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+		events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 	}
 	git := &mockGit{branch: "feat/tui", lastCommit: "abc test"}
 	cfg := defaultTestConfig()

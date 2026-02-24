@@ -127,9 +127,11 @@ func (m Model) renderLine(line logLine) string {
 		return fmt.Sprintf("%s  ── iteration %d ──", ts, e.Iteration)
 
 	case loop.LogIterComplete:
-		return fmt.Sprintf("%s  %s", ts,
-			resultStyle.Render(fmt.Sprintf("✅ iteration %d complete  —  $%.2f  —  %.1fs",
-				e.Iteration, e.CostUSD, e.Duration)))
+		iterMsg := fmt.Sprintf("✅ iteration %d complete  —  $%.2f  —  %.1fs", e.Iteration, e.CostUSD, e.Duration)
+		if e.Subtype != "" {
+			iterMsg += fmt.Sprintf("  —  %s", e.Subtype)
+		}
+		return fmt.Sprintf("%s  %s", ts, resultStyle.Render(iterMsg))
 
 	case loop.LogError:
 		return fmt.Sprintf("%s  %s", ts, errorStyle.Render("❌ "+e.Message))

@@ -75,7 +75,7 @@ func parseLine(line []byte) []Event {
 			}
 			events = append(events, ErrorEvent(errText))
 		}
-		events = append(events, ResultEvent(msg.CostUSD, msg.Duration/1000))
+		events = append(events, ResultEvent(msg.CostUSD, msg.Duration/1000, msg.Subtype))
 		return events
 	case "system":
 		if msg.Subtype == "error" {

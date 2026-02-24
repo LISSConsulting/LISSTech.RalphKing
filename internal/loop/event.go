@@ -34,6 +34,7 @@ type LogEntry struct {
 	CostUSD   float64
 	Duration  float64
 	TotalCost float64
+	Subtype   string // result exit subtype: "success", "error_max_turns", etc.
 
 	// Iteration state
 	Iteration int

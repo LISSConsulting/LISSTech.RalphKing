@@ -15,6 +15,7 @@ func TestParseStream(t *testing.T) {
 			text     string
 			costUSD  float64
 			errMsg   string
+			subtype  string
 		}
 	}{
 		{
@@ -26,6 +27,7 @@ func TestParseStream(t *testing.T) {
 				text     string
 				costUSD  float64
 				errMsg   string
+				subtype  string
 			}{
 				{typ: EventToolUse, toolName: "write_file"},
 			},
@@ -39,6 +41,7 @@ func TestParseStream(t *testing.T) {
 				text     string
 				costUSD  float64
 				errMsg   string
+				subtype  string
 			}{
 				{typ: EventText, text: "Hello world"},
 			},
@@ -52,6 +55,7 @@ func TestParseStream(t *testing.T) {
 				text     string
 				costUSD  float64
 				errMsg   string
+				subtype  string
 			}{
 				{typ: EventResult, costUSD: 0.14},
 			},
@@ -65,6 +69,7 @@ func TestParseStream(t *testing.T) {
 				text     string
 				costUSD  float64
 				errMsg   string
+				subtype  string
 			}{
 				{typ: EventError, errMsg: "something broke"},
 			},
@@ -78,6 +83,7 @@ func TestParseStream(t *testing.T) {
 				text     string
 				costUSD  float64
 				errMsg   string
+				subtype  string
 			}{
 				{typ: EventText, text: "analyzing"},
 				{typ: EventToolUse, toolName: "bash"},
@@ -92,6 +98,7 @@ func TestParseStream(t *testing.T) {
 				text     string
 				costUSD  float64
 				errMsg   string
+				subtype  string
 			}{},
 		},
 		{
@@ -103,6 +110,7 @@ func TestParseStream(t *testing.T) {
 				text     string
 				costUSD  float64
 				errMsg   string
+				subtype  string
 			}{},
 		},
 		{
@@ -114,6 +122,7 @@ func TestParseStream(t *testing.T) {
 				text     string
 				costUSD  float64
 				errMsg   string
+				subtype  string
 			}{},
 		},
 		{
@@ -125,6 +134,7 @@ func TestParseStream(t *testing.T) {
 				text     string
 				costUSD  float64
 				errMsg   string
+				subtype  string
 			}{},
 		},
 		{
@@ -136,6 +146,7 @@ func TestParseStream(t *testing.T) {
 				text     string
 				costUSD  float64
 				errMsg   string
+				subtype  string
 			}{
 				{typ: EventError, errMsg: "API rate limit exceeded"},
 				{typ: EventResult, costUSD: 0.08},
@@ -150,13 +161,14 @@ func TestParseStream(t *testing.T) {
 				text     string
 				costUSD  float64
 				errMsg   string
+				subtype  string
 			}{
 				{typ: EventError, errMsg: "claude run failed"},
 				{typ: EventResult, costUSD: 0.01},
 			},
 		},
 		{
-			name:  "result event with is_error false is normal result",
+			name:  "result event with is_error false is normal result with subtype",
 			input: `{"type":"result","cost_usd":0.14,"duration_ms":4200,"is_error":false,"subtype":"success"}`,
 			events: []struct {
 				typ      EventType
@@ -164,8 +176,24 @@ func TestParseStream(t *testing.T) {
 				text     string
 				costUSD  float64
 				errMsg   string
+				subtype  string
 			}{
-				{typ: EventResult, costUSD: 0.14},
+				{typ: EventResult, costUSD: 0.14, subtype: "success"},
+			},
+		},
+		{
+			name:  "result event with error_max_turns subtype",
+			input: `{"type":"result","cost_usd":0.30,"duration_ms":5000,"is_error":true,"subtype":"error_max_turns","result":"Hit maximum turns"}`,
+			events: []struct {
+				typ      EventType
+				toolName string
+				text     string
+				costUSD  float64
+				errMsg   string
+				subtype  string
+			}{
+				{typ: EventError, errMsg: "Hit maximum turns"},
+				{typ: EventResult, costUSD: 0.30, subtype: "error_max_turns"},
 			},
 		},
 		{
@@ -179,6 +207,7 @@ func TestParseStream(t *testing.T) {
 				text     string
 				costUSD  float64
 				errMsg   string
+				subtype  string
 			}{
 				{typ: EventToolUse, toolName: "read_file"},
 				{typ: EventToolUse, toolName: "write_file"},
@@ -216,6 +245,9 @@ func TestParseStream(t *testing.T) {
 				}
 				if want.errMsg != "" && ev.Error != want.errMsg {
 					t.Errorf("event[%d].Error = %q, want %q", i, ev.Error, want.errMsg)
+				}
+				if want.subtype != "" && ev.Subtype != want.subtype {
+					t.Errorf("event[%d].Subtype = %q, want %q", i, ev.Subtype, want.subtype)
 				}
 			}
 		})

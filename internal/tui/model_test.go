@@ -966,6 +966,56 @@ func TestRenderLogDefensiveScrollOffset(t *testing.T) {
 	}
 }
 
+func TestRenderIterCompleteWithSubtype(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "")
+	now := time.Date(2026, 2, 23, 14, 30, 0, 0, time.UTC)
+
+	tests := []struct {
+		name        string
+		subtype     string
+		wantContain string
+		wantAbsent  string
+	}{
+		{
+			name:        "success subtype shown",
+			subtype:     "success",
+			wantContain: "success",
+		},
+		{
+			name:        "error_max_turns subtype shown",
+			subtype:     "error_max_turns",
+			wantContain: "error_max_turns",
+		},
+		{
+			name:       "empty subtype omitted",
+			subtype:    "",
+			wantAbsent: "  —  \x1b", // no trailing separator before ANSI reset
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entry := loop.LogEntry{
+				Kind:      loop.LogIterComplete,
+				Timestamp: now,
+				Iteration: 1,
+				CostUSD:   0.14,
+				Duration:  4.2,
+				Subtype:   tt.subtype,
+			}
+			rendered := m.renderLine(logLine{entry: entry})
+
+			if !strings.Contains(rendered, "iteration 1 complete") {
+				t.Errorf("should contain 'iteration 1 complete', got: %s", rendered)
+			}
+			if tt.wantContain != "" && !strings.Contains(rendered, tt.wantContain) {
+				t.Errorf("should contain %q, got: %s", tt.wantContain, rendered)
+			}
+		})
+	}
+}
+
 func TestNewDefaultAccentColor(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
 	m := New(ch, "")
