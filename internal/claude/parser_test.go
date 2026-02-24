@@ -1,6 +1,8 @@
 package claude
 
 import (
+	"fmt"
+	"io"
 	"strings"
 	"testing"
 )
@@ -251,5 +253,56 @@ func TestParseStream(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// errAfterReader returns valid data first, then an error on the next read.
+type errAfterReader struct {
+	data io.Reader
+	err  error
+	done bool
+}
+
+func (r *errAfterReader) Read(p []byte) (int, error) {
+	if r.done {
+		return 0, r.err
+	}
+	n, err := r.data.Read(p)
+	if err == io.EOF {
+		r.done = true
+		if n > 0 {
+			return n, nil
+		}
+		return 0, r.err
+	}
+	return n, err
+}
+
+func TestParseStream_ScannerError(t *testing.T) {
+	validLine := `{"type":"result","cost_usd":0.05,"duration_ms":1000}` + "\n"
+	r := &errAfterReader{
+		data: strings.NewReader(validLine),
+		err:  fmt.Errorf("connection reset"),
+	}
+
+	ch := ParseStream(r)
+
+	var got []Event
+	for ev := range ch {
+		got = append(got, ev)
+	}
+
+	if len(got) != 2 {
+		t.Fatalf("got %d events, want 2 (result + error)", len(got))
+	}
+
+	if got[0].Type != EventResult {
+		t.Errorf("event[0].Type = %q, want %q", got[0].Type, EventResult)
+	}
+	if got[1].Type != EventError {
+		t.Errorf("event[1].Type = %q, want %q", got[1].Type, EventError)
+	}
+	if !strings.Contains(got[1].Error, "stream read error") {
+		t.Errorf("event[1].Error = %q, want it to contain %q", got[1].Error, "stream read error")
 	}
 }

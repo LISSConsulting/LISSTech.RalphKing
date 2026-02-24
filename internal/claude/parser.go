@@ -3,6 +3,7 @@ package claude
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
 )
 
@@ -26,6 +27,9 @@ func ParseStream(r io.Reader) <-chan Event {
 			for _, ev := range events {
 				ch <- ev
 			}
+		}
+		if err := scanner.Err(); err != nil {
+			ch <- ErrorEvent(fmt.Sprintf("stream read error: %v", err))
 		}
 	}()
 	return ch
