@@ -9,12 +9,12 @@
 | Foundation & core | Config (TOML, defaults, walk-up discovery, init, validation), Git (branch, pull/push, stash, revert, diff), Claude (Agent interface, events, stream-JSON parser), Loop (iteration cycle, ClaudeAgent subprocess, GitOps, smart run), Cobra CLI (plan/build/run/status/init/spec), signal handling | 0.0.1–0.0.3 |
 | TUI | Bubbletea model (header/log/footer), lipgloss styles, `--no-tui`, scrollable history (j/k/pgup/pgdown/g/G), configurable accent color, `↓N new` indicator | 0.0.4, 0.0.11, v0.0.22–v0.0.23 |
 | Regent supervisor | Crash detection + retry/backoff, hang detection (output timeout), state persistence, test-gated rollback (per-iteration), TUI integration, CLI wiring, graceful shutdown | 0.0.5, 0.0.10 |
-| Hardening | Stream-JSON `is_error`/`scanner.Err()` handling, `DiffFromRemote` error distinction, config validation, ClaudeAgent stderr capture, TUI error propagation, stale closure fix, result subtype surface | 0.0.12, 0.0.17–0.0.20, v0.0.27, v0.0.29 |
+| Hardening | Stream-JSON `is_error`/`scanner.Err()` handling, `DiffFromRemote` error distinction, config validation, ClaudeAgent stderr capture, TUI error propagation, stale closure fix, result subtype surface, unknown TOML key rejection | 0.0.12, 0.0.17–0.0.20, v0.0.27, v0.0.29, v0.0.31 |
 | State & status | Formatted status display, running-state detection, stateTracker live persistence (non-Regent paths), Regent context-cancel persistence, `detectStatus` fallback | 0.0.8, 0.0.13–0.0.16, v0.0.24–v0.0.25 |
 | Cost control | `claude.max_turns` config (0 = unlimited), `--max-turns` CLI passthrough | v0.0.26 |
 | Scaffolding | `ralph init` creates ralph.toml + PROMPT_plan.md + PROMPT_build.md + specs/ (idempotent) | v0.0.28 |
 | CI/CD | Go 1.24, version injection, race detection, release workflow (cross-compiled binaries on tag push), golangci-lint (go-critic + gofmt) in CI & release | 0.0.7, 0.0.19, v0.0.30 |
-| Test coverage | Git 96.4%, TUI 99.3%, loop 97.7%, claude 97.8%, regent 96.0%, config 91.8%, spec 95.5% | 0.0.6, 0.0.14, 0.0.16 |
+| Test coverage | Git 96.4%, TUI 99.3%, loop 97.7%, claude 97.8%, regent 96.0%, config 92.5%, spec 95.5% | 0.0.6, 0.0.14, 0.0.16 |
 | Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, prompt files | 0.0.9, v0.0.21 |
 
 Specs implemented: `ralph-core.md`, `the-regent.md`.
@@ -45,6 +45,7 @@ Specs implemented: `ralph-core.md`, `the-regent.md`.
 - `ScaffoldProject` creates all files referenced by ralph.toml defaults (prompt files, specs dir); `InitFile` still available for ralph.toml-only creation
 - `ParseStream` checks `scanner.Err()` after scan loop — surfaces I/O or buffer-overflow errors as error events rather than silently closing the channel
 - `.golangci.yml` enables gocritic, gofmt, gosimple, govet, ineffassign, unused, errcheck — CI enforces constitution's "go vet, go fmt, go-critic MUST pass" rule
+- `config.Load()` uses `toml.MetaData.Undecoded()` to reject unknown keys in ralph.toml — catches typos like `promptfile` instead of `prompt_file`
 
 ## Out of Scope (for now)
 
