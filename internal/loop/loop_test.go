@@ -44,7 +44,8 @@ type mockGit struct {
 	stashPopErr    error
 	dirtyErr       error // error returned by HasUncommittedChanges
 	diffErr        error // error returned by DiffFromRemote
-	lastCommit     string
+	lastCommit    string
+	lastCommitErr error
 
 	pullCalls     int
 	pushCalls     int
@@ -58,7 +59,7 @@ func (m *mockGit) Pull(_ string) error                   { m.pullCalls++; return
 func (m *mockGit) Push(_ string) error                   { m.pushCalls++; return m.pushErr }
 func (m *mockGit) Stash() error                          { m.stashCalls++; return m.stashErr }
 func (m *mockGit) StashPop() error                       { m.stashPopCalls++; return m.stashPopErr }
-func (m *mockGit) LastCommit() (string, error)           { return m.lastCommit, nil }
+func (m *mockGit) LastCommit() (string, error)           { return m.lastCommit, m.lastCommitErr }
 func (m *mockGit) DiffFromRemote(_ string) (bool, error) { return m.diffFromRemote, m.diffErr }
 
 func defaultTestConfig() *config.Config {
@@ -707,6 +708,30 @@ func TestPushIfNeededErrors(t *testing.T) {
 		}
 		if !strings.Contains(buf.String(), "Diff check failed") {
 			t.Errorf("should log diff failure, got: %s", buf.String())
+		}
+	})
+
+	t.Run("LastCommit error shows fallback in push message", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
+		}
+		git := &mockGit{
+			branch:         "main",
+			diffFromRemote: true,
+			lastCommitErr:  errors.New("no commits"),
+		}
+		cfg := defaultTestConfig()
+		cfg.Git.AutoPush = true
+		cfg.Plan.MaxIterations = 1
+
+		lp, buf := setupTestLoop(t, agent, git, cfg)
+		err := lp.Run(context.Background(), ModePlan, 0)
+
+		if err != nil {
+			t.Fatalf("LastCommit error should not abort loop, got: %v", err)
+		}
+		if !strings.Contains(buf.String(), "(unknown)") {
+			t.Errorf("should show fallback commit message, got: %s", buf.String())
 		}
 	})
 

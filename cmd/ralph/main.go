@@ -42,14 +42,20 @@ func rootCmd() *cobra.Command {
 }
 
 // signalContext returns a context that is cancelled on SIGINT or SIGTERM,
-// and a cancel function for cleanup.
+// and a cancel function for cleanup. The signal goroutine exits when the
+// context is cancelled (either by signal or by the returned cancel func),
+// preventing goroutine leaks.
 func signalContext() (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		<-sigs
-		cancel()
+		select {
+		case <-sigs:
+			cancel()
+		case <-ctx.Done():
+		}
+		signal.Stop(sigs)
 	}()
 	return ctx, cancel
 }

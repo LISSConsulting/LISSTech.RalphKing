@@ -890,6 +890,34 @@ func TestRenderLineAllKinds(t *testing.T) {
 	}
 }
 
+func TestRenderLineLongToolName(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "")
+	now := time.Date(2026, 2, 23, 14, 30, 0, 0, time.UTC)
+
+	// Tool name longer than 14 chars should be truncated with ellipsis
+	entry := loop.LogEntry{
+		Kind:      loop.LogToolUse,
+		Timestamp: now,
+		ToolName:  "VeryLongToolNameThatExceeds14",
+		ToolInput: "some-input",
+	}
+	rendered := m.renderLine(logLine{entry: entry})
+
+	// Should contain the truncated name (13 chars + ellipsis)
+	if !strings.Contains(rendered, "VeryLongToolN…") {
+		t.Errorf("long tool name should be truncated with ellipsis, got: %s", rendered)
+	}
+	// Should NOT contain the full untruncated name
+	if strings.Contains(rendered, "VeryLongToolNameThatExceeds14") {
+		t.Errorf("full tool name should not appear in output, got: %s", rendered)
+	}
+	// Should still contain the input
+	if !strings.Contains(rendered, "some-input") {
+		t.Errorf("tool input should still appear, got: %s", rendered)
+	}
+}
+
 func TestViewTinyHeight(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
 	m := New(ch, "")

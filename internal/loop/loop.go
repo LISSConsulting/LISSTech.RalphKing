@@ -252,7 +252,10 @@ func (l *Loop) pushIfNeeded(branch string) error {
 	if pushErr := l.Git.Push(branch); pushErr != nil {
 		return pushErr
 	}
-	commit, _ := l.Git.LastCommit()
+	commit, commitErr := l.Git.LastCommit()
+	if commitErr != nil {
+		commit = "(unknown)"
+	}
 	l.emit(LogEntry{
 		Kind:    LogGitPush,
 		Message: fmt.Sprintf("Pushed — last commit: %s", commit),

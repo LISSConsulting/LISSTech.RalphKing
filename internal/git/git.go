@@ -45,8 +45,11 @@ func (r *Runner) Pull(branch string) error {
 	}
 
 	// Rebase failed — abort and fall back to merge
-	_, _ = r.run("rebase", "--abort")
+	_, abortErr := r.run("rebase", "--abort")
 	if _, mergeErr := r.run("pull", "--no-rebase", "origin", branch); mergeErr != nil {
+		if abortErr != nil {
+			return fmt.Errorf("git pull (rebase failed, abort failed: %v, merge also failed): %w", abortErr, mergeErr)
+		}
 		return fmt.Errorf("git pull (rebase failed, merge also failed): %w", mergeErr)
 	}
 	return nil

@@ -83,9 +83,6 @@ func (m Model) renderLog(height int) string {
 	// Calculate visible window based on scroll offset.
 	// scrollOffset 0 = bottom (latest lines), >0 = scrolled up.
 	end := len(m.lines) - m.scrollOffset
-	if end > len(m.lines) {
-		end = len(m.lines)
-	}
 	if end < 0 {
 		end = 0
 	}
@@ -120,7 +117,11 @@ func (m Model) renderLine(line logLine) string {
 	case loop.LogToolUse:
 		icon := toolIcon(e.ToolName)
 		style := toolStyle(e.ToolName)
-		name := style.Render(fmt.Sprintf("%-14s", e.ToolName))
+		displayName := e.ToolName
+		if len(displayName) > 14 {
+			displayName = displayName[:13] + "…"
+		}
+		name := style.Render(fmt.Sprintf("%-14s", displayName))
 		return fmt.Sprintf("%s  %s %s %s", ts, icon, name, e.ToolInput)
 
 	case loop.LogIterStart:
