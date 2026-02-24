@@ -337,3 +337,60 @@ func TestSpecNewCmdWithEditor(t *testing.T) {
 		t.Errorf("expected spec file at %s: %v", path, err)
 	}
 }
+
+// ---- RunE handler tests for plan / build / run commands ----
+//
+// These exercise the RunE closures (currently at 50%) by running them
+// in a temp dir with no ralph.toml, which causes config.Load to fail
+// immediately before any TUI or Claude invocation.
+
+func TestPlanCmdRunE_NoConfig(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	cmd := planCmd()
+	if err := cmd.Flags().Set("max", "1"); err != nil {
+		t.Fatalf("set --max flag: %v", err)
+	}
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when ralph.toml not found")
+	}
+	if !strings.Contains(err.Error(), "ralph.toml") {
+		t.Errorf("error should mention ralph.toml, got: %v", err)
+	}
+}
+
+func TestBuildCmdRunE_NoConfig(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	cmd := buildCmd()
+	if err := cmd.Flags().Set("max", "1"); err != nil {
+		t.Fatalf("set --max flag: %v", err)
+	}
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when ralph.toml not found")
+	}
+	if !strings.Contains(err.Error(), "ralph.toml") {
+		t.Errorf("error should mention ralph.toml, got: %v", err)
+	}
+}
+
+func TestRunCmdRunE_NoConfig(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	cmd := runCmd()
+	if err := cmd.Flags().Set("max", "1"); err != nil {
+		t.Fatalf("set --max flag: %v", err)
+	}
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when ralph.toml not found")
+	}
+	if !strings.Contains(err.Error(), "ralph.toml") {
+		t.Errorf("error should mention ralph.toml, got: %v", err)
+	}
+}

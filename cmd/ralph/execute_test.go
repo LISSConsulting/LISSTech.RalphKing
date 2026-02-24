@@ -2,6 +2,8 @@ package main
 
 import (
 	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -389,5 +391,175 @@ func TestFormatStatus(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// ---- Integration tests for executeLoop and executeSmartRun ----
+//
+// These tests exercise the full orchestration path through config loading,
+// wiring, and loop setup. They fail before any claude invocation
+// (config not found, invalid config, or prompt file missing), so they
+// work without a real Claude binary installed.
+
+// testConfigNoRegent returns a minimal ralph.toml with regent disabled and
+// git ops turned off so tests don't attempt network operations.
+func testConfigNoRegent() string {
+	return `[plan]
+prompt_file = "PROMPT_plan.md"
+max_iterations = 1
+
+[build]
+prompt_file = "PROMPT_build.md"
+max_iterations = 1
+
+[git]
+auto_pull_rebase = false
+auto_push = false
+
+[regent]
+enabled = false
+`
+}
+
+// testConfigWithRegent returns a ralph.toml with regent enabled but
+// max_retries=0 so it fails fast after one error without backoff.
+func testConfigWithRegent() string {
+	return `[plan]
+prompt_file = "PROMPT_plan.md"
+max_iterations = 1
+
+[build]
+prompt_file = "PROMPT_build.md"
+max_iterations = 1
+
+[git]
+auto_pull_rebase = false
+auto_push = false
+
+[regent]
+enabled = true
+max_retries = 0
+retry_backoff_seconds = 0
+hang_timeout_seconds = 0
+rollback_on_test_failure = false
+`
+}
+
+// writeExecTestFile writes content to dir/name, creating parent directories.
+func writeExecTestFile(t *testing.T, dir, name, content string) {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatalf("MkdirAll %s: %v", name, err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("WriteFile %s: %v", name, err)
+	}
+}
+
+func TestExecuteLoop_ConfigNotFound(t *testing.T) {
+	// Isolated temp dir with no ralph.toml anywhere in its ancestor tree.
+	t.Chdir(t.TempDir())
+
+	err := executeLoop(loop.ModePlan, 1, true)
+	if err == nil {
+		t.Fatal("expected error when ralph.toml not found")
+	}
+	if !strings.Contains(err.Error(), "ralph.toml") {
+		t.Errorf("error should mention ralph.toml, got: %v", err)
+	}
+}
+
+func TestExecuteLoop_ConfigInvalid(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// Empty plan.prompt_file fails Validate()
+	writeExecTestFile(t, dir, "ralph.toml", "[plan]\nprompt_file = \"\"\n[build]\nprompt_file = \"b.md\"\n")
+
+	err := executeLoop(loop.ModePlan, 1, true)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "config validation") {
+		t.Errorf("error should mention config validation, got: %v", err)
+	}
+}
+
+func TestExecuteLoop_RegentDisabled_PromptMissing(t *testing.T) {
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+	t.Chdir(dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+	// PROMPT_plan.md intentionally absent — loop.Run fails reading it.
+
+	err := executeLoop(loop.ModePlan, 1, true)
+	if err == nil {
+		t.Fatal("expected error when prompt file missing")
+	}
+	if !strings.Contains(err.Error(), "PROMPT_plan.md") {
+		t.Errorf("error should mention PROMPT_plan.md, got: %v", err)
+	}
+}
+
+func TestExecuteLoop_RegentEnabled_PromptMissing(t *testing.T) {
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+	t.Chdir(dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigWithRegent())
+	// PROMPT_plan.md intentionally absent.
+	// Regent gives up after 0 retries and returns max-retries error.
+
+	err := executeLoop(loop.ModePlan, 1, true)
+	if err == nil {
+		t.Fatal("expected error — Regent should give up (max_retries=0)")
+	}
+}
+
+// ---- executeSmartRun integration tests ----
+
+func TestExecuteSmartRun_ConfigNotFound(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	err := executeSmartRun(1, true)
+	if err == nil {
+		t.Fatal("expected error when ralph.toml not found")
+	}
+	if !strings.Contains(err.Error(), "ralph.toml") {
+		t.Errorf("error should mention ralph.toml, got: %v", err)
+	}
+}
+
+func TestExecuteSmartRun_NeedsPlan_PromptMissing(t *testing.T) {
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+	t.Chdir(dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+	// No IMPLEMENTATION_PLAN.md → needsPlanPhase returns true.
+	// No PROMPT_plan.md → plan phase fails reading it.
+
+	err := executeSmartRun(1, true)
+	if err == nil {
+		t.Fatal("expected error when plan prompt file missing")
+	}
+	if !strings.Contains(err.Error(), "PROMPT_plan.md") {
+		t.Errorf("error should mention PROMPT_plan.md, got: %v", err)
+	}
+}
+
+func TestExecuteSmartRun_SkipPlan_BuildPromptMissing(t *testing.T) {
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+	t.Chdir(dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+	// Non-empty IMPLEMENTATION_PLAN.md → needsPlanPhase returns false.
+	writeExecTestFile(t, dir, "IMPLEMENTATION_PLAN.md", "# Plan\n\nSome content.\n")
+	// PROMPT_build.md absent → build loop fails reading it.
+
+	err := executeSmartRun(1, true)
+	if err == nil {
+		t.Fatal("expected error when build prompt file missing")
+	}
+	if !strings.Contains(err.Error(), "PROMPT_build.md") {
+		t.Errorf("error should mention PROMPT_build.md, got: %v", err)
 	}
 }
