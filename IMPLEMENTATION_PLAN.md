@@ -50,6 +50,7 @@
 | `stateTracker` unit tests — table-driven tests for init, trackEntry, zero-value preservation, save, finish (success/cancel/error), lastOutputAt | — | 0.0.15 |
 | Regent context-cancel state persistence — `finishGraceful()` sets `FinishedAt`/`Passed=true` on all three cancel paths (pre-loop, post-failure, backoff) so `ralph status` no longer shows stale "running" after SIGINT | the-regent.md | 0.0.16 |
 | `RevertLastCommit` error path tests — `LastCommit` failure, `CurrentBranch` failure; `mockGit` gains `currentBranchErr` field; regent coverage 94% → 96% | the-regent.md | 0.0.16 |
+| Fix `ralph run` stale closure bug — `needsPlan` check moved inside `smartRunFn` closure so Regent retries re-evaluate whether `IMPLEMENTATION_PLAN.md` exists instead of using a stale captured value from startup | ralph-core.md | 0.0.17 |
 
 ## Key Learnings
 
@@ -79,6 +80,7 @@
 - Coverage gaps hard to test: `renderLog` defensive guards (`end < 0`, `end > len`) require out-of-bounds scrollOffset; CLI command handlers in `cmd/ralph` are integration-only (cobra + real deps); `stateTracker` now has unit tests
 - `showStatus` result display has four tiers: running → pass → fail (N errors) → fail; the last fallback handles non-Regent runs where `Passed=false` and `ConsecutiveErrs=0`
 - Regent `finishGraceful()` mirrors `stateTracker.finish()` semantics: context cancellation = user-initiated stop = `Passed=true`. All three cancel paths (pre-loop select, post-run ctx check, backoff select) now persist state before returning
+- **Closures passed to Regent must re-evaluate state**: any `RunFunc` closure that checks filesystem state (e.g., file existence) must do so *inside* the closure body, not capture a variable computed outside. The Regent calls the closure multiple times on retry, so stale captured values cause incorrect behavior
 
 ## Out of Scope (for now)
 
