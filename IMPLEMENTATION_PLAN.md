@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **All core features complete (P1–P6) + production polish.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 94–99% test coverage across all internal packages.
+> Current state: **All core features complete (P1–P6) + production polish.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 96–99% test coverage across all internal packages.
 
 ## Completed Work
 
@@ -48,6 +48,8 @@
 | Test coverage push — tui 94%→99%, loop 90%→98%, regent 90%→94%; added mockGit error injection, stash/push/pull/revert error paths, renderLine LogRegent, toolStyle all branches | — | 0.0.14 |
 | `showStatus` fail result fallback — non-Regent runs that fail now show "fail" instead of empty result (ConsecutiveErrs=0 path) | ralph-core.md | 0.0.15 |
 | `stateTracker` unit tests — table-driven tests for init, trackEntry, zero-value preservation, save, finish (success/cancel/error), lastOutputAt | — | 0.0.15 |
+| Regent context-cancel state persistence — `finishGraceful()` sets `FinishedAt`/`Passed=true` on all three cancel paths (pre-loop, post-failure, backoff) so `ralph status` no longer shows stale "running" after SIGINT | the-regent.md | 0.0.16 |
+| `RevertLastCommit` error path tests — `LastCommit` failure, `CurrentBranch` failure; `mockGit` gains `currentBranchErr` field; regent coverage 94% → 96% | the-regent.md | 0.0.16 |
 
 ## Key Learnings
 
@@ -76,6 +78,7 @@
 - `stateTracker` pattern: a lightweight struct in `cmd/ralph/wiring.go` that tracks loop state and persists to `.ralph/regent-state.json` — used in non-Regent paths; mirrors what Regent.UpdateState() does for Regent paths
 - Coverage gaps hard to test: `renderLog` defensive guards (`end < 0`, `end > len`) require out-of-bounds scrollOffset; CLI command handlers in `cmd/ralph` are integration-only (cobra + real deps); `stateTracker` now has unit tests
 - `showStatus` result display has four tiers: running → pass → fail (N errors) → fail; the last fallback handles non-Regent runs where `Passed=false` and `ConsecutiveErrs=0`
+- Regent `finishGraceful()` mirrors `stateTracker.finish()` semantics: context cancellation = user-initiated stop = `Passed=true`. All three cancel paths (pre-loop select, post-run ctx check, backoff select) now persist state before returning
 
 ## Out of Scope (for now)
 
