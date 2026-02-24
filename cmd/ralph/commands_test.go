@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,6 +11,16 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
 )
+
+// findNoop returns a no-op command that accepts any args and exits 0.
+// Returns ("", false) if no such command is available (e.g. Windows).
+func findNoop() (string, bool) {
+	path, err := exec.LookPath("true")
+	if err != nil {
+		return "", false
+	}
+	return path, true
+}
 
 func TestFormatSpecList(t *testing.T) {
 	tests := []struct {
@@ -298,6 +309,30 @@ func TestSpecNewCmdExecution(t *testing.T) {
 	}
 
 	path := filepath.Join(dir, "specs", "my-feature.md")
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("expected spec file at %s: %v", path, err)
+	}
+}
+
+func TestSpecNewCmdWithEditor(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping editor launch in short mode")
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// Use "true" which accepts any args and exits 0 (Unix only; skip on Windows).
+	editor, ok := findNoop()
+	if !ok {
+		t.Skip("no no-op editor command available on this platform")
+	}
+	t.Setenv("EDITOR", editor)
+
+	cmd := specNewCmd()
+	if err := cmd.RunE(cmd, []string{"editor-test"}); err != nil {
+		t.Fatalf("specNewCmd RunE with EDITOR=%q: %v", editor, err)
+	}
+
+	path := filepath.Join(dir, "specs", "editor-test.md")
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("expected spec file at %s: %v", path, err)
 	}
