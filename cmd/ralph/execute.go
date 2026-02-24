@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -88,7 +89,7 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 		// the plan file exists (it may have been created by a prior attempt).
 		planPath := filepath.Join(dir, "IMPLEMENTATION_PLAN.md")
 		info, statErr := os.Stat(planPath)
-		if statErr != nil || info.Size() == 0 {
+		if needsPlanPhase(info, statErr) {
 			if planErr := lp.Run(ctx, loop.ModePlan, 0); planErr != nil {
 				return fmt.Errorf("plan phase: %w", planErr)
 			}
@@ -122,7 +123,8 @@ func showStatus() error {
 		return err
 	}
 
-	if state.RalphPID == 0 && state.Iteration == 0 {
+	result := classifyResult(state)
+	if result == statusNoState {
 		fmt.Println("No state found. Run 'ralph build' or 'ralph run' first.")
 		return nil
 	}
@@ -142,9 +144,7 @@ func showStatus() error {
 	fmt.Printf("  %-20s %d\n", "Iteration:", state.Iteration)
 	fmt.Printf("  %-20s $%.2f\n", "Total cost:", state.TotalCostUSD)
 
-	running := !state.StartedAt.IsZero() && state.FinishedAt.IsZero()
-
-	if running {
+	if result == statusRunning {
 		elapsed := time.Since(state.StartedAt).Round(time.Second)
 		fmt.Printf("  %-20s %s (running)\n", "Duration:", elapsed)
 	} else if !state.StartedAt.IsZero() && !state.FinishedAt.IsZero() {
@@ -152,23 +152,62 @@ func showStatus() error {
 		fmt.Printf("  %-20s %s\n", "Duration:", dur)
 	}
 
-	if running && !state.LastOutputAt.IsZero() {
+	if result == statusRunning && !state.LastOutputAt.IsZero() {
 		ago := time.Since(state.LastOutputAt).Round(time.Second)
 		fmt.Printf("  %-20s %s ago\n", "Last output:", ago)
 	}
 
-	switch {
-	case running:
+	switch result {
+	case statusRunning:
 		fmt.Printf("  %-20s %s\n", "Result:", "running")
-	case state.Passed:
+	case statusPass:
 		fmt.Printf("  %-20s %s\n", "Result:", "pass")
-	case state.ConsecutiveErrs > 0:
+	case statusFailWithErrors:
 		fmt.Printf("  %-20s fail (%d consecutive errors)\n", "Result:", state.ConsecutiveErrs)
-	case !state.FinishedAt.IsZero():
+	case statusFail:
 		fmt.Printf("  %-20s %s\n", "Result:", "fail")
 	}
 
 	return nil
+}
+
+// statusResult represents the outcome classification for ralph status display.
+type statusResult int
+
+const (
+	statusNoState statusResult = iota
+	statusRunning
+	statusPass
+	statusFailWithErrors
+	statusFail
+)
+
+// classifyResult determines the result label from a Regent state snapshot.
+// The priority order is: no-state, running, pass, fail-with-errors, plain-fail.
+func classifyResult(state regent.State) statusResult {
+	if state.RalphPID == 0 && state.Iteration == 0 {
+		return statusNoState
+	}
+	running := !state.StartedAt.IsZero() && state.FinishedAt.IsZero()
+	switch {
+	case running:
+		return statusRunning
+	case state.Passed:
+		return statusPass
+	case state.ConsecutiveErrs > 0:
+		return statusFailWithErrors
+	case !state.FinishedAt.IsZero():
+		return statusFail
+	default:
+		return statusNoState
+	}
+}
+
+// needsPlanPhase reports whether the plan phase should run based on the
+// result of os.Stat on IMPLEMENTATION_PLAN.md. Returns true if the file
+// does not exist or is empty.
+func needsPlanPhase(info fs.FileInfo, statErr error) bool {
+	return statErr != nil || info == nil || info.Size() == 0
 }
 
 // openEditor launches the given editor with the file path, connecting stdio.

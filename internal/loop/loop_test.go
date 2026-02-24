@@ -44,8 +44,8 @@ type mockGit struct {
 	stashPopErr    error
 	dirtyErr       error // error returned by HasUncommittedChanges
 	diffErr        error // error returned by DiffFromRemote
-	lastCommit    string
-	lastCommitErr error
+	lastCommit     string
+	lastCommitErr  error
 
 	pullCalls     int
 	pushCalls     int
