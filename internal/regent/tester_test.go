@@ -1,22 +1,24 @@
 package regent
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
 
 // mockGit is a test double for GitOps.
 type mockGit struct {
-	lastCommit string
-	branch     string
-	revertErr  error
-	pushErr    error
+	lastCommit    string
+	lastCommitErr error // error returned by LastCommit
+	branch        string
+	revertErr     error
+	pushErr       error
 
 	revertCalls []string
 	pushCalls   []string
 }
 
-func (m *mockGit) LastCommit() (string, error) { return m.lastCommit, nil }
+func (m *mockGit) LastCommit() (string, error) { return m.lastCommit, m.lastCommitErr }
 func (m *mockGit) CurrentBranch() (string, error) { return m.branch, nil }
 
 func (m *mockGit) Revert(sha string) error {
@@ -89,6 +91,43 @@ func TestRevertLastCommit(t *testing.T) {
 		sha, err := RevertLastCommit(g)
 		if err != nil {
 			t.Fatalf("RevertLastCommit error: %v", err)
+		}
+		if sha != "abc1234" {
+			t.Errorf("sha = %q, want %q", sha, "abc1234")
+		}
+	})
+
+	t.Run("revert error propagates", func(t *testing.T) {
+		g := &mockGit{
+			lastCommit: "abc1234 bad commit",
+			branch:     "main",
+			revertErr:  errors.New("revert conflict"),
+		}
+		sha, err := RevertLastCommit(g)
+		if err == nil {
+			t.Fatal("expected error when Revert fails")
+		}
+		if !strings.Contains(err.Error(), "revert conflict") {
+			t.Errorf("error should contain cause, got: %v", err)
+		}
+		// sha is still returned even on revert error
+		if sha != "abc1234" {
+			t.Errorf("sha = %q, want %q", sha, "abc1234")
+		}
+	})
+
+	t.Run("push error propagates", func(t *testing.T) {
+		g := &mockGit{
+			lastCommit: "abc1234 bad commit",
+			branch:     "main",
+			pushErr:    errors.New("push rejected"),
+		}
+		sha, err := RevertLastCommit(g)
+		if err == nil {
+			t.Fatal("expected error when Push fails")
+		}
+		if !strings.Contains(err.Error(), "push rejected") {
+			t.Errorf("error should contain cause, got: %v", err)
 		}
 		if sha != "abc1234" {
 			t.Errorf("sha = %q, want %q", sha, "abc1234")

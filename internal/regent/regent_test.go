@@ -587,4 +587,40 @@ func TestRunPostIterationTests(t *testing.T) {
 			t.Errorf("expected 'Tests passed' message, got: %v", regentMsgs)
 		}
 	})
+
+	t.Run("revert failure emits event and continues", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := defaultTestRegentConfig()
+		cfg.RollbackOnTestFailure = true
+		cfg.TestCommand = "false" // tests fail → triggers revert
+		events := make(chan loop.LogEntry, 128)
+		g := &mockGit{
+			branch:     "main",
+			lastCommit: "abc1234 bad commit",
+			revertErr:  errors.New("revert conflict"),
+		}
+		rgt := New(cfg, dir, g, events)
+
+		go func() {
+			for range events {
+			}
+		}()
+
+		// Should not panic; emits "Failed to revert" event
+		rgt.RunPostIterationTests()
+	})
+}
+
+func TestSupervisWithNilEvents(t *testing.T) {
+	// When events channel is nil, Regent should still work (emit becomes a no-op).
+	dir := t.TempDir()
+	cfg := defaultTestRegentConfig()
+	rgt := New(cfg, dir, &mockGit{branch: "main"}, nil)
+
+	err := rgt.Supervise(context.Background(), func(_ context.Context) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Supervise with nil events should succeed, got: %v", err)
+	}
 }

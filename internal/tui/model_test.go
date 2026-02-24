@@ -678,3 +678,124 @@ func TestWaitForEventWithEntry(t *testing.T) {
 		t.Errorf("expected message 'test', got %s", entry.Message)
 	}
 }
+
+func TestRenderLineAllKinds(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch)
+	now := time.Date(2026, 2, 23, 14, 30, 0, 0, time.UTC)
+
+	tests := []struct {
+		name     string
+		entry    loop.LogEntry
+		contains string
+	}{
+		{
+			"tool_use_write",
+			loop.LogEntry{Kind: loop.LogToolUse, Timestamp: now, ToolName: "Write", ToolInput: "main.go"},
+			"Write",
+		},
+		{
+			"tool_use_edit",
+			loop.LogEntry{Kind: loop.LogToolUse, Timestamp: now, ToolName: "Edit", ToolInput: "config.go"},
+			"Edit",
+		},
+		{
+			"tool_use_webfetch",
+			loop.LogEntry{Kind: loop.LogToolUse, Timestamp: now, ToolName: "WebFetch", ToolInput: "https://example.com"},
+			"WebFetch",
+		},
+		{
+			"tool_use_task",
+			loop.LogEntry{Kind: loop.LogToolUse, Timestamp: now, ToolName: "Task", ToolInput: "explore codebase"},
+			"Task",
+		},
+		{
+			"regent",
+			loop.LogEntry{Kind: loop.LogRegent, Timestamp: now, Message: "Restarting Ralph..."},
+			"Regent:",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rendered := m.renderLine(logLine{entry: tt.entry})
+			if !strings.Contains(rendered, tt.contains) {
+				t.Errorf("renderLine(%s) should contain %q, got: %s", tt.name, tt.contains, rendered)
+			}
+		})
+	}
+}
+
+func TestViewTinyHeight(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch)
+	m.height = 1 // logHeight would be -1, should clamp to 1
+
+	view := m.View()
+	if view == "" {
+		t.Error("View should return non-empty string even with tiny height")
+	}
+	if !strings.Contains(view, "RalphKing") {
+		t.Error("View with tiny height should still render header")
+	}
+}
+
+func TestRenderFooterNarrowWidth(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch)
+	m.width = 5 // too narrow; gap clamps to 2
+
+	footer := m.renderFooter()
+	if footer == "" {
+		t.Error("renderFooter should not return empty string for narrow width")
+	}
+}
+
+func TestRenderLogEmpty(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch)
+
+	// Empty lines → returns newline-padded string
+	log := m.renderLog(3)
+	lines := strings.Split(log, "\n")
+	if len(lines) != 3 {
+		t.Errorf("empty renderLog(3) should return 3 lines of padding, got %d", len(lines))
+	}
+}
+
+func TestUpdateUnknownMsg(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch)
+
+	// Unknown message type → no-op
+	updated, cmd := m.Update("unknown message type")
+	model := updated.(Model)
+
+	if cmd != nil {
+		t.Error("unknown message should not produce a command")
+	}
+	if model.done {
+		t.Error("unknown message should not change done state")
+	}
+}
+
+func TestRenderLogDefensiveScrollOffset(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch)
+	now := time.Now()
+
+	// Add 5 lines
+	for i := 0; i < 5; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: now, Message: fmt.Sprintf("msg-%d", i)},
+		})
+	}
+
+	// scrollOffset larger than line count: end = 5 - 100 = -95 → clamped to 0
+	// This exercises the `if end < 0 { end = 0 }` guard.
+	m.scrollOffset = 100
+	log := m.renderLog(2)
+	if log == "" {
+		t.Error("renderLog should not return empty string with out-of-bounds scrollOffset")
+	}
+}

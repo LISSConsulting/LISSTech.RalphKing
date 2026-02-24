@@ -42,6 +42,8 @@ type mockGit struct {
 	pushErr        error
 	stashErr       error
 	stashPopErr    error
+	dirtyErr       error // error returned by HasUncommittedChanges
+	diffErr        error // error returned by DiffFromRemote
 	lastCommit     string
 
 	pullCalls     int
@@ -51,13 +53,13 @@ type mockGit struct {
 }
 
 func (m *mockGit) CurrentBranch() (string, error)       { return m.branch, nil }
-func (m *mockGit) HasUncommittedChanges() (bool, error)  { return m.dirty, nil }
+func (m *mockGit) HasUncommittedChanges() (bool, error)  { return m.dirty, m.dirtyErr }
 func (m *mockGit) Pull(_ string) error                   { m.pullCalls++; return m.pullErr }
 func (m *mockGit) Push(_ string) error                   { m.pushCalls++; return m.pushErr }
 func (m *mockGit) Stash() error                          { m.stashCalls++; return m.stashErr }
 func (m *mockGit) StashPop() error                       { m.stashPopCalls++; return m.stashPopErr }
 func (m *mockGit) LastCommit() (string, error)           { return m.lastCommit, nil }
-func (m *mockGit) DiffFromRemote(_ string) (bool, error) { return m.diffFromRemote, nil }
+func (m *mockGit) DiffFromRemote(_ string) (bool, error) { return m.diffFromRemote, m.diffErr }
 
 func defaultTestConfig() *config.Config {
 	cfg := config.Defaults()
@@ -537,5 +539,190 @@ func TestIterLabel(t *testing.T) {
 				t.Errorf("iterLabel(%d) = %q, want %q", tt.max, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestStashIfDirtyErrors(t *testing.T) {
+	t.Run("HasUncommittedChanges error propagates", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+		}
+		git := &mockGit{
+			branch:   "main",
+			dirtyErr: errors.New("git status failed"),
+		}
+		cfg := defaultTestConfig()
+		cfg.Plan.MaxIterations = 1
+
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+		err := lp.Run(context.Background(), ModePlan, 0)
+
+		if err == nil {
+			t.Fatal("expected error when HasUncommittedChanges fails")
+		}
+		if !strings.Contains(err.Error(), "git status failed") {
+			t.Errorf("error should contain cause, got: %v", err)
+		}
+	})
+
+	t.Run("Stash error propagates", func(t *testing.T) {
+		agent := &mockAgent{}
+		git := &mockGit{
+			branch:   "main",
+			dirty:    true,
+			stashErr: errors.New("stash failed"),
+		}
+		cfg := defaultTestConfig()
+		cfg.Plan.MaxIterations = 1
+
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+		err := lp.Run(context.Background(), ModePlan, 0)
+
+		if err == nil {
+			t.Fatal("expected error when Stash fails")
+		}
+		if !strings.Contains(err.Error(), "stash failed") {
+			t.Errorf("error should contain cause, got: %v", err)
+		}
+	})
+}
+
+func TestPushIfNeededErrors(t *testing.T) {
+	t.Run("DiffFromRemote error skips push and logs", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+		}
+		git := &mockGit{
+			branch:  "main",
+			diffErr: errors.New("diff failed"),
+		}
+		cfg := defaultTestConfig()
+		cfg.Git.AutoPush = true
+		cfg.Plan.MaxIterations = 1
+
+		lp, buf := setupTestLoop(t, agent, git, cfg)
+		err := lp.Run(context.Background(), ModePlan, 0)
+
+		if err != nil {
+			t.Fatalf("DiffFromRemote error should not abort loop, got: %v", err)
+		}
+		if git.pushCalls != 0 {
+			t.Errorf("should not push when diff check fails, got %d push calls", git.pushCalls)
+		}
+		if !strings.Contains(buf.String(), "Diff check failed") {
+			t.Errorf("should log diff failure, got: %s", buf.String())
+		}
+	})
+
+	t.Run("Push error logged but does not abort loop", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+		}
+		git := &mockGit{
+			branch:         "main",
+			diffFromRemote: true,
+			pushErr:        errors.New("push rejected"),
+			lastCommit:     "abc new",
+		}
+		cfg := defaultTestConfig()
+		cfg.Git.AutoPush = true
+		cfg.Plan.MaxIterations = 1
+
+		lp, buf := setupTestLoop(t, agent, git, cfg)
+		err := lp.Run(context.Background(), ModePlan, 0)
+
+		if err != nil {
+			t.Fatalf("push error should not abort loop, got: %v", err)
+		}
+		if !strings.Contains(buf.String(), "Push error") {
+			t.Errorf("should log push error, got: %s", buf.String())
+		}
+	})
+}
+
+func TestIterationContinuesOnPullError(t *testing.T) {
+	agent := &mockAgent{
+		events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+	}
+	git := &mockGit{
+		branch:     "main",
+		lastCommit: "abc test",
+		pullErr:    errors.New("network error"),
+	}
+	cfg := defaultTestConfig()
+	cfg.Git.AutoPullRebase = true
+	cfg.Plan.MaxIterations = 1
+
+	lp, buf := setupTestLoop(t, agent, git, cfg)
+	err := lp.Run(context.Background(), ModePlan, 0)
+
+	// Pull error is logged but loop continues
+	if err != nil {
+		t.Fatalf("pull error should not abort loop, got: %v", err)
+	}
+	if agent.calls != 1 {
+		t.Errorf("expected 1 agent call despite pull error, got %d", agent.calls)
+	}
+	if !strings.Contains(buf.String(), "Pull failed") {
+		t.Errorf("log should mention pull failure, got: %s", buf.String())
+	}
+}
+
+func TestIterationContinuesOnStashPopError(t *testing.T) {
+	agent := &mockAgent{
+		events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+	}
+	git := &mockGit{
+		branch:      "main",
+		dirty:       true,
+		lastCommit:  "abc test",
+		stashPopErr: errors.New("stash pop conflict"),
+	}
+	cfg := defaultTestConfig()
+	cfg.Plan.MaxIterations = 1
+
+	lp, buf := setupTestLoop(t, agent, git, cfg)
+	err := lp.Run(context.Background(), ModePlan, 0)
+
+	// Stash pop error is logged but loop continues
+	if err != nil {
+		t.Fatalf("stash pop error should not abort loop, got: %v", err)
+	}
+	if agent.calls != 1 {
+		t.Errorf("expected 1 agent call despite stash pop error, got %d", agent.calls)
+	}
+	if !strings.Contains(buf.String(), "Stash pop failed") {
+		t.Errorf("log should mention stash pop failure, got: %s", buf.String())
+	}
+}
+
+func TestEmitNilLog(t *testing.T) {
+	// When Events is nil and Log is nil, emit should fall back to os.Stdout without panic.
+	agent := &mockAgent{
+		events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+	}
+	git := &mockGit{branch: "main", lastCommit: "abc test"}
+	cfg := defaultTestConfig()
+	cfg.Plan.MaxIterations = 1
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, cfg.Plan.PromptFile), []byte("plan prompt"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, cfg.Build.PromptFile), []byte("build prompt"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	lp := &Loop{
+		Agent:  agent,
+		Git:    git,
+		Config: cfg,
+		Dir:    dir,
+		// Log is nil, Events is nil — emit should use os.Stdout
+	}
+
+	err := lp.Run(context.Background(), ModePlan, 0)
+	if err != nil {
+		t.Fatalf("nil Log should fall back to stdout without error, got: %v", err)
 	}
 }

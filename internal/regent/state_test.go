@@ -114,3 +114,40 @@ func TestLoadState_InvalidJSON(t *testing.T) {
 		t.Fatal("expected error for invalid JSON")
 	}
 }
+
+func TestLoadState_ReadError(t *testing.T) {
+	dir := t.TempDir()
+	stateDir := filepath.Join(dir, stateDirName)
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create state path as a directory so ReadFile returns a non-NotExist error
+	statePath := filepath.Join(stateDir, stateFileName)
+	if err := os.MkdirAll(statePath, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadState(dir)
+	if err == nil {
+		t.Fatal("expected error when state path is a directory")
+	}
+}
+
+func TestSaveState_MkdirError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("cannot test permission errors as root")
+	}
+
+	dir := t.TempDir()
+	// Block the state directory by placing a regular file where it should be
+	blockPath := filepath.Join(dir, stateDirName)
+	if err := os.WriteFile(blockPath, []byte("block"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := SaveState(dir, State{RalphPID: 1})
+	if err == nil {
+		t.Fatal("expected error when state dir is blocked by a regular file")
+	}
+}
