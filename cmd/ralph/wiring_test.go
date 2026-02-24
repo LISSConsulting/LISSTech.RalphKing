@@ -106,6 +106,42 @@ func TestStateTrackerSave(t *testing.T) {
 	}
 }
 
+func TestStateTrackerLivePersistence(t *testing.T) {
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+	runner := git.NewRunner(dir)
+	st := newStateTracker(dir, "build", runner)
+	st.save()
+
+	// trackEntry with meaningful fields auto-saves to disk
+	st.trackEntry(loop.LogEntry{Iteration: 3, TotalCost: 1.25, Branch: "feat/live"})
+
+	state, err := regent.LoadState(dir)
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if state.Iteration != 3 {
+		t.Errorf("live Iteration = %d, want 3", state.Iteration)
+	}
+	if state.TotalCostUSD != 1.25 {
+		t.Errorf("live TotalCostUSD = %f, want 1.25", state.TotalCostUSD)
+	}
+	if state.Branch != "feat/live" {
+		t.Errorf("live Branch = %q, want %q", state.Branch, "feat/live")
+	}
+
+	// trackEntry with no meaningful changes does not overwrite disk state
+	st.trackEntry(loop.LogEntry{Message: "just a log line"})
+
+	state2, err := regent.LoadState(dir)
+	if err != nil {
+		t.Fatalf("LoadState after no-op: %v", err)
+	}
+	if state2.Iteration != 3 {
+		t.Errorf("after no-op Iteration = %d, want 3", state2.Iteration)
+	}
+}
+
 func TestStateTrackerFinish(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		dir := t.TempDir()

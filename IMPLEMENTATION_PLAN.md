@@ -18,6 +18,7 @@
 | Prompt files | `PROMPT_build.md` (build loop instructions), `PROMPT_plan.md` (plan loop instructions) | 0.0.21 |
 | TUI config | Configurable accent color via `[tui] accent_color` in ralph.toml (spec: "configurable, default indigo") | v0.0.22 |
 | TUI polish | "New messages below" indicator (`↓N new`) in footer when scrolled up and events arrive | v0.0.23 |
+| State tracking | stateTracker live persistence: save to disk on meaningful state changes so `ralph status` works mid-loop without Regent | v0.0.24 |
 | Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, removed dead TUI code | 0.0.9 |
 
 ## Key Learnings
@@ -34,7 +35,7 @@
 - Regent hang detection: ticker goroutine checks `lastOutputAt` every `hangTimeout/4`
 - Per-iteration rollback via `Loop.PostIteration` hook wired to `Regent.RunPostIterationTests`
 - TUI scroll: `scrollOffset` 0 = bottom; auto-scroll only when at bottom
-- `stateTracker` mirrors Regent.UpdateState() for non-Regent paths
+- `stateTracker` mirrors Regent.UpdateState() for non-Regent paths, including live persistence on meaningful changes
 - Closures passed to Regent must re-evaluate filesystem state inside the closure body (not capture stale values)
 - `Config.Validate()` is pure (no I/O) — prompt file existence checked at runtime by `os.ReadFile`
 - Claude result events with `is_error: true` emit ErrorEvent then ResultEvent (preserves cost tracking)

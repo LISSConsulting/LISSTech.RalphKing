@@ -224,22 +224,31 @@ func newStateTracker(dir, mode string, gitRunner *git.Runner) *stateTracker {
 }
 
 func (s *stateTracker) trackEntry(entry loop.LogEntry) {
+	changed := false
 	if entry.Iteration > 0 {
 		s.state.Iteration = entry.Iteration
+		changed = true
 	}
 	if entry.TotalCost > 0 {
 		s.state.TotalCostUSD = entry.TotalCost
+		changed = true
 	}
 	if entry.Commit != "" {
 		s.state.LastCommit = entry.Commit
+		changed = true
 	}
 	if entry.Branch != "" {
 		s.state.Branch = entry.Branch
+		changed = true
 	}
 	if entry.Mode != "" {
 		s.state.Mode = entry.Mode
+		changed = true
 	}
 	s.state.LastOutputAt = time.Now()
+	if changed {
+		s.save()
+	}
 }
 
 func (s *stateTracker) save() {
