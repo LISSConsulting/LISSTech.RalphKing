@@ -20,6 +20,9 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 	if err != nil {
 		return err
 	}
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("config validation: %w", err)
+	}
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -59,6 +62,9 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 	cfg, err := config.Load("")
 	if err != nil {
 		return err
+	}
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("config validation: %w", err)
 	}
 
 	dir, err := os.Getwd()

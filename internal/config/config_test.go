@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -240,4 +241,144 @@ func TestInitFile(t *testing.T) {
 			t.Error("expected error when ralph.toml already exists")
 		}
 	})
+}
+
+func TestValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		modify  func(*Config)
+		wantErr string
+	}{
+		{
+			name:   "defaults are valid",
+			modify: func(c *Config) {},
+		},
+		{
+			name:   "empty plan.prompt_file",
+			modify: func(c *Config) { c.Plan.PromptFile = "" },
+			wantErr: "plan.prompt_file must not be empty",
+		},
+		{
+			name:   "empty build.prompt_file",
+			modify: func(c *Config) { c.Build.PromptFile = "" },
+			wantErr: "build.prompt_file must not be empty",
+		},
+		{
+			name:   "negative plan.max_iterations",
+			modify: func(c *Config) { c.Plan.MaxIterations = -1 },
+			wantErr: "plan.max_iterations must be >= 0",
+		},
+		{
+			name:   "negative build.max_iterations",
+			modify: func(c *Config) { c.Build.MaxIterations = -1 },
+			wantErr: "build.max_iterations must be >= 0",
+		},
+		{
+			name: "negative regent.max_retries when enabled",
+			modify: func(c *Config) {
+				c.Regent.Enabled = true
+				c.Regent.MaxRetries = -1
+			},
+			wantErr: "regent.max_retries must be >= 0",
+		},
+		{
+			name: "negative regent.retry_backoff_seconds when enabled",
+			modify: func(c *Config) {
+				c.Regent.Enabled = true
+				c.Regent.RetryBackoffSeconds = -1
+			},
+			wantErr: "regent.retry_backoff_seconds must be >= 0",
+		},
+		{
+			name: "negative regent.hang_timeout_seconds when enabled",
+			modify: func(c *Config) {
+				c.Regent.Enabled = true
+				c.Regent.HangTimeoutSeconds = -1
+			},
+			wantErr: "regent.hang_timeout_seconds must be >= 0",
+		},
+		{
+			name: "regent numeric checks skipped when disabled",
+			modify: func(c *Config) {
+				c.Regent.Enabled = false
+				c.Regent.MaxRetries = -1
+				c.Regent.RetryBackoffSeconds = -1
+				c.Regent.HangTimeoutSeconds = -1
+			},
+		},
+		{
+			name: "rollback_on_test_failure without test_command",
+			modify: func(c *Config) {
+				c.Regent.RollbackOnTestFailure = true
+				c.Regent.TestCommand = ""
+			},
+			wantErr: "regent.test_command must be set",
+		},
+		{
+			name: "rollback_on_test_failure with test_command",
+			modify: func(c *Config) {
+				c.Regent.RollbackOnTestFailure = true
+				c.Regent.TestCommand = "go test ./..."
+			},
+		},
+		{
+			name: "zero max_iterations is valid (unlimited)",
+			modify: func(c *Config) {
+				c.Plan.MaxIterations = 0
+				c.Build.MaxIterations = 0
+			},
+		},
+		{
+			name: "zero hang_timeout is valid (no hang detection)",
+			modify: func(c *Config) {
+				c.Regent.Enabled = true
+				c.Regent.HangTimeoutSeconds = 0
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Defaults()
+			tt.modify(&cfg)
+			err := cfg.Validate()
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("expected no error, got: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Errorf("expected error containing %q, got nil", tt.wantErr)
+				return
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error %q does not contain %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateMultipleErrors(t *testing.T) {
+	cfg := Defaults()
+	cfg.Plan.PromptFile = ""
+	cfg.Build.PromptFile = ""
+	cfg.Plan.MaxIterations = -1
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	msg := err.Error()
+	expected := []string{
+		"plan.prompt_file must not be empty",
+		"build.prompt_file must not be empty",
+		"plan.max_iterations must be >= 0",
+	}
+	for _, want := range expected {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error %q does not contain %q", msg, want)
+		}
+	}
 }

@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -56,6 +57,43 @@ type RegentConfig struct {
 	MaxRetries            int    `toml:"max_retries"`
 	RetryBackoffSeconds   int    `toml:"retry_backoff_seconds"`
 	HangTimeoutSeconds    int    `toml:"hang_timeout_seconds"`
+}
+
+// Validate checks the configuration for issues that would cause confusing
+// runtime failures. It returns all found issues joined together.
+func (c *Config) Validate() error {
+	var errs []error
+
+	if c.Plan.PromptFile == "" {
+		errs = append(errs, fmt.Errorf("plan.prompt_file must not be empty"))
+	}
+	if c.Build.PromptFile == "" {
+		errs = append(errs, fmt.Errorf("build.prompt_file must not be empty"))
+	}
+	if c.Plan.MaxIterations < 0 {
+		errs = append(errs, fmt.Errorf("plan.max_iterations must be >= 0 (0 = unlimited)"))
+	}
+	if c.Build.MaxIterations < 0 {
+		errs = append(errs, fmt.Errorf("build.max_iterations must be >= 0 (0 = unlimited)"))
+	}
+
+	if c.Regent.Enabled {
+		if c.Regent.MaxRetries < 0 {
+			errs = append(errs, fmt.Errorf("regent.max_retries must be >= 0"))
+		}
+		if c.Regent.RetryBackoffSeconds < 0 {
+			errs = append(errs, fmt.Errorf("regent.retry_backoff_seconds must be >= 0"))
+		}
+		if c.Regent.HangTimeoutSeconds < 0 {
+			errs = append(errs, fmt.Errorf("regent.hang_timeout_seconds must be >= 0 (0 = no hang detection)"))
+		}
+	}
+
+	if c.Regent.RollbackOnTestFailure && c.Regent.TestCommand == "" {
+		errs = append(errs, fmt.Errorf("regent.test_command must be set when regent.rollback_on_test_failure is true"))
+	}
+
+	return errors.Join(errs...)
 }
 
 // Defaults returns a Config with sensible defaults matching the spec.
