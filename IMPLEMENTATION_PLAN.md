@@ -1,29 +1,21 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **All core features complete + production polish.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 96-99% test coverage across all internal packages.
+> Current state: **All core features complete + hardened.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 96-99% test coverage across all internal packages.
 
 ## Completed Work
 
-| Milestone | Features | Tags |
-|-----------|----------|------|
-| Foundation | Config (TOML parsing, defaults, walk-up discovery, init, validation), Git (branch, pull/push, stash, revert, diff), Claude (Agent interface, events, stream-JSON parser), Cobra CLI skeleton | 0.0.1 |
-| Core loop | Loop (Run, iteration cycle: stash/pull/claude/push), ClaudeAgent (spawns `claude -p`), GitOps interface, CLI wiring, smart run, signal handling, status command | 0.0.2 |
-| Spec management | Spec discovery, status detection, `ralph spec list`, `ralph spec new <name>` | 0.0.3 |
-| TUI | Bubbletea model (header, scrollable log, footer), event system, lipgloss styles, `--no-tui` flag, scrollable history (j/k, pgup/pgdown, g/G) | 0.0.4, 0.0.11 |
-| Regent supervisor | Crash detection + retry with backoff, hang detection (output timeout), state persistence, test-gated rollback (per-iteration), TUI integration, CLI wiring | 0.0.5, 0.0.10 |
-| Test coverage | Git error paths (96.2%), TUI (99.3%), loop (97.6%), regent (96.0%), stateTracker unit tests | 0.0.6, 0.0.14, 0.0.16 |
+| Phase | Features | Tags |
+|-------|----------|------|
+| Foundation & core | Config (TOML, defaults, walk-up discovery, init, validation), Git (branch, pull/push, stash, revert, diff), Claude (Agent interface, events, stream-JSON parser), Loop (iteration cycle, ClaudeAgent subprocess, GitOps, smart run), Cobra CLI (plan/build/run/status/init/spec), signal handling | 0.0.1–0.0.3 |
+| TUI | Bubbletea model (header/log/footer), lipgloss styles, `--no-tui`, scrollable history (j/k/pgup/pgdown/g/G), configurable accent color, `↓N new` indicator | 0.0.4, 0.0.11, v0.0.22–v0.0.23 |
+| Regent supervisor | Crash detection + retry/backoff, hang detection (output timeout), state persistence, test-gated rollback (per-iteration), TUI integration, CLI wiring, graceful shutdown | 0.0.5, 0.0.10 |
+| Hardening | Stream-JSON `is_error`/`scanner.Err()` handling, `DiffFromRemote` error distinction, config validation, ClaudeAgent stderr capture, TUI error propagation, stale closure fix, result subtype surface | 0.0.12, 0.0.17–0.0.20, v0.0.27, v0.0.29 |
+| State & status | Formatted status display, running-state detection, stateTracker live persistence (non-Regent paths), Regent context-cancel persistence, `detectStatus` fallback | 0.0.8, 0.0.13–0.0.16, v0.0.24–v0.0.25 |
+| Cost control | `claude.max_turns` config (0 = unlimited), `--max-turns` CLI passthrough | v0.0.26 |
+| Scaffolding | `ralph init` creates ralph.toml + PROMPT_plan.md + PROMPT_build.md + specs/ (idempotent) | v0.0.28 |
 | CI/CD | Go 1.24, version injection, race detection, release workflow (cross-compiled binaries on tag push) | 0.0.7, 0.0.19 |
-| Status & state | Formatted status display, running-state detection, stateTracker for non-Regent paths, Regent context-cancel persistence | 0.0.8, 0.0.13-0.0.16 |
-| Hardening | Stream-JSON `is_error` handling, `DiffFromRemote` error distinction, config validation gating, stale closure fix, ClaudeAgent stderr capture, TUI error propagation | 0.0.12, 0.0.17-0.0.20 |
-| Prompt files | `PROMPT_build.md` (build loop instructions), `PROMPT_plan.md` (plan loop instructions) | 0.0.21 |
-| TUI config | Configurable accent color via `[tui] accent_color` in ralph.toml (spec: "configurable, default indigo") | v0.0.22 |
-| TUI polish | "New messages below" indicator (`↓N new`) in footer when scrolled up and events arrive | v0.0.23 |
-| State tracking | stateTracker live persistence: save to disk on meaningful state changes so `ralph status` works mid-loop without Regent | v0.0.24 |
-| Spec detection | `detectStatus` fallback: specs mentioned anywhere in plan text (not just section headers) show as in-progress instead of not-started | v0.0.25 |
-| Cost control | `claude.max_turns` config: limits agentic turns per iteration via `--max-turns` CLI flag (0 = unlimited) | v0.0.26 |
-| Result subtype | Surface `subtype` from stream-JSON result events (success, error_max_turns) in TUI and log output — closes spec gap: `type=result → display cost, duration, exit` | v0.0.27 |
-| Init scaffolding | `ralph init` now scaffolds full project structure: ralph.toml, PROMPT_plan.md, PROMPT_build.md, specs/ directory. Idempotent — skips existing files | v0.0.28 |
-| Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, removed dead TUI code | 0.0.9 |
+| Test coverage | Git 96.4%, TUI 99.3%, loop 97.7%, claude 97.8%, regent 96.0%, config 91.8%, spec 95.5% | 0.0.6, 0.0.14, 0.0.16 |
+| Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, prompt files | 0.0.9, v0.0.21 |
 
 Specs implemented: `ralph-core.md`, `the-regent.md`.
 
@@ -51,6 +43,7 @@ Specs implemented: `ralph-core.md`, `the-regent.md`.
 - `claude.max_turns` (0 = unlimited) passes `--max-turns N` to Claude CLI; complements Regent hang detection with explicit turn limits
 - Result `subtype` (success, error_max_turns, etc.) threads through `Event.Subtype` → `LogEntry.Subtype` → TUI/log display; empty subtype omitted from output
 - `ScaffoldProject` creates all files referenced by ralph.toml defaults (prompt files, specs dir); `InitFile` still available for ralph.toml-only creation
+- `ParseStream` checks `scanner.Err()` after scan loop — surfaces I/O or buffer-overflow errors as error events rather than silently closing the channel
 
 ## Out of Scope (for now)
 
