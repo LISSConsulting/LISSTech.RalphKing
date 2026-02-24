@@ -16,6 +16,7 @@
 | Status & state | Formatted status display, running-state detection, stateTracker for non-Regent paths, Regent context-cancel persistence | 0.0.8, 0.0.13-0.0.16 |
 | Hardening | Stream-JSON `is_error` handling, `DiffFromRemote` error distinction, config validation gating, stale closure fix, ClaudeAgent stderr capture, TUI error propagation | 0.0.12, 0.0.17-0.0.20 |
 | Prompt files | `PROMPT_build.md` (build loop instructions), `PROMPT_plan.md` (plan loop instructions) | 0.0.21 |
+| TUI config | Configurable accent color via `[tui] accent_color` in ralph.toml (spec: "configurable, default indigo") | v0.0.22 |
 | Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, removed dead TUI code | 0.0.9 |
 
 ## Key Learnings
@@ -37,6 +38,7 @@
 - `Config.Validate()` is pure (no I/O) — prompt file existence checked at runtime by `os.ReadFile`
 - Claude result events with `is_error: true` emit ErrorEvent then ResultEvent (preserves cost tracking)
 - `git diff --quiet` exit 128 + "fatal:" = error; exit 1 = real diff; `pushIfNeeded` pushes on error
+- Accent-dependent TUI styles (header, git) live on Model as instance fields; non-accent styles remain package vars
 
 ## Out of Scope (for now)
 
