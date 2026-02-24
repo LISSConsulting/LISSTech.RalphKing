@@ -77,16 +77,12 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 		Dir:    dir,
 	}
 
-	// Check if plan is needed
-	planPath := filepath.Join(dir, "IMPLEMENTATION_PLAN.md")
-	needsPlan := false
-	info, statErr := os.Stat(planPath)
-	if statErr != nil || info.Size() == 0 {
-		needsPlan = true
-	}
-
 	smartRunFn := func(ctx context.Context) error {
-		if needsPlan {
+		// Check inside the closure so Regent retries re-evaluate whether
+		// the plan file exists (it may have been created by a prior attempt).
+		planPath := filepath.Join(dir, "IMPLEMENTATION_PLAN.md")
+		info, statErr := os.Stat(planPath)
+		if statErr != nil || info.Size() == 0 {
 			if planErr := lp.Run(ctx, loop.ModePlan, 0); planErr != nil {
 				return fmt.Errorf("plan phase: %w", planErr)
 			}
