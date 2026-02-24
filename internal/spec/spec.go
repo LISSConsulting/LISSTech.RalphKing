@@ -116,6 +116,12 @@ func detectStatus(filename, plan string) Status {
 	case inCompleted:
 		return StatusDone
 	default:
+		// Fallback: if the filename appears anywhere in the plan text
+		// (e.g., in an intro or summary outside recognized sections),
+		// treat it as in-progress rather than incorrectly "not started".
+		if strings.Contains(plan, filename) {
+			return StatusInProgress
+		}
 		return StatusNotStarted
 	}
 }

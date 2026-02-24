@@ -89,6 +89,24 @@ func TestList(t *testing.T) {
 			},
 		},
 		{
+			name:      "spec referenced outside sections (intro/summary)",
+			specFiles: []string{"core.md", "regent.md", "future.md"},
+			planContent: `# Plan
+> Both specs (core.md, regent.md) fully implemented.
+
+## Completed Work
+| Feature | Notes |
+|---------|-------|
+| Config | done |
+`,
+			wantCount: 3,
+			wantSpecs: map[string]Status{
+				"core":   StatusInProgress,
+				"regent": StatusInProgress,
+				"future": StatusNotStarted,
+			},
+		},
+		{
 			name:      "non-md files are ignored",
 			specFiles: []string{"readme.txt", "notes.md", ".hidden.md"},
 			wantCount: 1,
@@ -178,6 +196,18 @@ func TestDetectStatus(t *testing.T) {
 			name:     "only in remaining",
 			filename: "future.md",
 			plan:     "## Completed Work\n| Config | core.md |\n## Remaining Work\n- Stuff — future.md",
+			want:     StatusInProgress,
+		},
+		{
+			name:     "mentioned outside sections (fallback)",
+			filename: "core.md",
+			plan:     "> Both specs (core.md) fully implemented.\n\n## Completed Work\n| Config | done |",
+			want:     StatusInProgress,
+		},
+		{
+			name:     "mentioned outside sections with no sections at all",
+			filename: "core.md",
+			plan:     "# Plan\nWe reference core.md here but no section headers.",
 			want:     StatusInProgress,
 		},
 	}

@@ -19,7 +19,10 @@
 | TUI config | Configurable accent color via `[tui] accent_color` in ralph.toml (spec: "configurable, default indigo") | v0.0.22 |
 | TUI polish | "New messages below" indicator (`↓N new`) in footer when scrolled up and events arrive | v0.0.23 |
 | State tracking | stateTracker live persistence: save to disk on meaningful state changes so `ralph status` works mid-loop without Regent | v0.0.24 |
+| Spec detection | `detectStatus` fallback: specs mentioned anywhere in plan text (not just section headers) show as in-progress instead of not-started | v0.0.25 |
 | Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, removed dead TUI code | 0.0.9 |
+
+Specs implemented: `ralph-core.md`, `the-regent.md`.
 
 ## Key Learnings
 
