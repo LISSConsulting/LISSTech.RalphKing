@@ -54,6 +54,9 @@
 | Config validation — `Config.Validate()` catches empty prompt files, negative iteration counts, invalid Regent settings (max_retries, backoff, hang_timeout), and `rollback_on_test_failure` without `test_command` before loop starts; reports all issues joined; config coverage 92.9% → 95.7% | ralph-core.md, the-regent.md | 0.0.18 |
 | CI race detection — `-race` flag added to CI test step; catches concurrency bugs in Regent/loop goroutine code | — | 0.0.19 |
 | Release workflow — `release.yml` creates GitHub Releases with cross-compiled binaries when version tags (`v*`) are pushed; runs tests with race detection before building | — | 0.0.19 |
+| Stream-JSON parser `is_error` handling — result events with `is_error: true` now emit `ErrorEvent` before `ResultEvent`, so failed Claude runs are logged as errors while still tracking cost; fallback message when `result` field is empty | ralph-core.md | 0.0.20 |
+| `DiffFromRemote` error distinction — `git diff --quiet` fatal errors (e.g., missing remote ref) now return errors instead of being silently promoted to "has changes"; `pushIfNeeded` pushes anyway on diff errors (handles new branches) | ralph-core.md | 0.0.20 |
+| Config validation gating — `rollback_on_test_failure` without `test_command` check now gated on `regent.enabled`, preventing spurious validation errors for disabled Regent configs | the-regent.md | 0.0.20 |
 
 ## Key Learnings
 
@@ -84,7 +87,9 @@
 - `showStatus` result display has four tiers: running → pass → fail (N errors) → fail; the last fallback handles non-Regent runs where `Passed=false` and `ConsecutiveErrs=0`
 - Regent `finishGraceful()` mirrors `stateTracker.finish()` semantics: context cancellation = user-initiated stop = `Passed=true`. All three cancel paths (pre-loop select, post-run ctx check, backoff select) now persist state before returning
 - **Closures passed to Regent must re-evaluate state**: any `RunFunc` closure that checks filesystem state (e.g., file existence) must do so *inside* the closure body, not capture a variable computed outside. The Regent calls the closure multiple times on retry, so stale captured values cause incorrect behavior
-- `Config.Validate()` is pure (no I/O) — checks structural correctness of values. Prompt file existence is still checked at runtime by `os.ReadFile` in `loop.Run`, which gives a clear error. Regent numeric checks are gated on `Regent.Enabled` since disabled Regent values are never used. `errors.Join` collects all issues into a single error for user-friendly reporting
+- `Config.Validate()` is pure (no I/O) — checks structural correctness of values. Prompt file existence is still checked at runtime by `os.ReadFile` in `loop.Run`, which gives a clear error. All Regent checks (numeric + rollback) gated on `Regent.Enabled` since disabled Regent values are never used. `errors.Join` collects all issues into a single error for user-friendly reporting
+- Claude CLI result events include `is_error` (bool) and `result` (string) fields — when `is_error` is true, the parser emits `ErrorEvent` (with result text) followed by `ResultEvent` (to preserve cost tracking). This handles rate limits, auth failures, and other structured error results that the CLI wraps in a result event
+- `git diff --quiet` returns exit 1 for real diffs, but exit 128 + "fatal:" stderr for errors like missing remote refs. `DiffFromRemote` now checks for "fatal:" to distinguish the two; `pushIfNeeded` pushes on error (safe: `Push` handles `-u` fallback for new branches)
 
 ## Out of Scope (for now)
 
