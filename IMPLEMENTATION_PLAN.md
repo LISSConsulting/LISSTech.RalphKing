@@ -52,6 +52,8 @@
 | `RevertLastCommit` error path tests — `LastCommit` failure, `CurrentBranch` failure; `mockGit` gains `currentBranchErr` field; regent coverage 94% → 96% | the-regent.md | 0.0.16 |
 | Fix `ralph run` stale closure bug — `needsPlan` check moved inside `smartRunFn` closure so Regent retries re-evaluate whether `IMPLEMENTATION_PLAN.md` exists instead of using a stale captured value from startup | ralph-core.md | 0.0.17 |
 | Config validation — `Config.Validate()` catches empty prompt files, negative iteration counts, invalid Regent settings (max_retries, backoff, hang_timeout), and `rollback_on_test_failure` without `test_command` before loop starts; reports all issues joined; config coverage 92.9% → 95.7% | ralph-core.md, the-regent.md | 0.0.18 |
+| CI race detection — `-race` flag added to CI test step; catches concurrency bugs in Regent/loop goroutine code | — | 0.0.19 |
+| Release workflow — `release.yml` creates GitHub Releases with cross-compiled binaries when version tags (`v*`) are pushed; runs tests with race detection before building | — | 0.0.19 |
 
 ## Key Learnings
 
@@ -89,4 +91,3 @@
 - OpenAI / Gemini agent implementations
 - Daemon mode (`ralph regent start`)
 - Webhook notifications from Regent
-- CI release pipeline (exists already in `.github/`)
