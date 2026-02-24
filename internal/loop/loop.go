@@ -35,12 +35,13 @@ type GitOps interface {
 
 // Loop orchestrates the prompt -> claude -> parse -> git iteration cycle.
 type Loop struct {
-	Agent  claude.Agent
-	Git    GitOps
-	Config *config.Config
-	Log    io.Writer      // output destination; defaults to os.Stdout
-	Events chan<- LogEntry // optional: structured event sink for TUI
-	Dir    string         // working directory for prompt file resolution
+	Agent         claude.Agent
+	Git           GitOps
+	Config        *config.Config
+	Log           io.Writer      // output destination; defaults to os.Stdout
+	Events        chan<- LogEntry // optional: structured event sink for TUI
+	Dir           string         // working directory for prompt file resolution
+	PostIteration func()         // optional: called after each iteration (e.g., test-gated rollback)
 }
 
 // Run executes the loop in the given mode. It runs iterations until the
@@ -88,6 +89,12 @@ func (l *Loop) Run(ctx context.Context, mode Mode, maxOverride int) error {
 			return fmt.Errorf("loop: iteration %d: %w", i, iterErr)
 		}
 		totalCost += cost
+
+		// Run post-iteration hook (e.g., test-gated rollback from Regent)
+		if l.PostIteration != nil {
+			l.PostIteration()
+		}
+
 		l.emit(LogEntry{
 			Kind:      LogInfo,
 			Message:   fmt.Sprintf("Running total: $%.2f", totalCost),

@@ -422,7 +422,7 @@ func TestUpdateState(t *testing.T) {
 	}
 }
 
-func TestPostIterationTests(t *testing.T) {
+func TestRunPostIterationTests(t *testing.T) {
 	t.Run("skipped when rollback disabled", func(t *testing.T) {
 		dir := t.TempDir()
 		cfg := defaultTestRegentConfig()
@@ -431,10 +431,7 @@ func TestPostIterationTests(t *testing.T) {
 		g := &mockGit{branch: "main", lastCommit: "abc test"}
 		rgt := New(cfg, dir, g, events)
 
-		err := rgt.runPostIterationTests()
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		rgt.RunPostIterationTests()
 		if len(g.revertCalls) != 0 {
 			t.Error("should not revert when rollback is disabled")
 		}
@@ -449,13 +446,14 @@ func TestPostIterationTests(t *testing.T) {
 		g := &mockGit{branch: "main", lastCommit: "abc test"}
 		rgt := New(cfg, dir, g, events)
 
-		err := rgt.runPostIterationTests()
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		rgt.RunPostIterationTests()
+		// No panic, no revert = success
+		if len(g.revertCalls) != 0 {
+			t.Error("should not revert when test command is empty")
 		}
 	})
 
-	t.Run("passes test keeps commit", func(t *testing.T) {
+	t.Run("passing tests keep commit", func(t *testing.T) {
 		dir := t.TempDir()
 		cfg := defaultTestRegentConfig()
 		cfg.RollbackOnTestFailure = true
@@ -469,16 +467,13 @@ func TestPostIterationTests(t *testing.T) {
 			}
 		}()
 
-		err := rgt.runPostIterationTests()
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		rgt.RunPostIterationTests()
 		if len(g.revertCalls) != 0 {
 			t.Error("should not revert when tests pass")
 		}
 	})
 
-	t.Run("failed test triggers revert", func(t *testing.T) {
+	t.Run("failing tests trigger revert", func(t *testing.T) {
 		dir := t.TempDir()
 		cfg := defaultTestRegentConfig()
 		cfg.RollbackOnTestFailure = true
@@ -492,10 +487,7 @@ func TestPostIterationTests(t *testing.T) {
 			}
 		}()
 
-		err := rgt.runPostIterationTests()
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		rgt.RunPostIterationTests()
 		if len(g.revertCalls) != 1 {
 			t.Fatalf("expected 1 revert call, got %d", len(g.revertCalls))
 		}
@@ -504,6 +496,40 @@ func TestPostIterationTests(t *testing.T) {
 		}
 		if len(g.pushCalls) != 1 {
 			t.Errorf("expected 1 push call after revert, got %d", len(g.pushCalls))
+		}
+	})
+
+	t.Run("emits events instead of returning errors", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := defaultTestRegentConfig()
+		cfg.RollbackOnTestFailure = true
+		cfg.TestCommand = "true"
+		events := make(chan loop.LogEntry, 128)
+		g := &mockGit{branch: "main", lastCommit: "abc commit"}
+		rgt := New(cfg, dir, g, events)
+
+		rgt.RunPostIterationTests()
+
+		// Drain events and verify regent messages were emitted
+		close(events)
+		var regentMsgs []string
+		for entry := range events {
+			if entry.Kind == loop.LogRegent {
+				regentMsgs = append(regentMsgs, entry.Message)
+			}
+		}
+		if len(regentMsgs) == 0 {
+			t.Error("expected at least one regent event from RunPostIterationTests")
+		}
+
+		foundTests := false
+		for _, msg := range regentMsgs {
+			if strings.Contains(msg, "Tests passed") {
+				foundTests = true
+			}
+		}
+		if !foundTests {
+			t.Errorf("expected 'Tests passed' message, got: %v", regentMsgs)
 		}
 	})
 }

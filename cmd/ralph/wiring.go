@@ -39,6 +39,7 @@ func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRu
 	lp.Events = events
 
 	rgt := regent.New(cfg.Regent, dir, gitRunner, events)
+	lp.PostIteration = rgt.RunPostIterationTests
 
 	// Drain events to stdout and update regent state
 	drainDone := make(chan struct{})
@@ -72,6 +73,7 @@ func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gi
 
 	lp.Events = loopEvents
 	rgt := regent.New(cfg.Regent, dir, gitRunner, tuiEvents)
+	lp.PostIteration = rgt.RunPostIterationTests
 
 	model := tui.New(tuiEvents)
 	program := tea.NewProgram(model, tea.WithAltScreen())

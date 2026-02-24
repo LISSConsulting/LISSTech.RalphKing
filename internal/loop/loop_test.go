@@ -447,6 +447,80 @@ func TestSummarizeInput(t *testing.T) {
 	}
 }
 
+func TestPostIteration(t *testing.T) {
+	t.Run("hook called after each iteration", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+		}
+		git := &mockGit{branch: "main", lastCommit: "abc test"}
+		cfg := defaultTestConfig()
+		cfg.Plan.MaxIterations = 3
+
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+		var hookCalls int
+		lp.PostIteration = func() { hookCalls++ }
+
+		err := lp.Run(context.Background(), ModePlan, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if hookCalls != 3 {
+			t.Errorf("expected PostIteration called 3 times, got %d", hookCalls)
+		}
+	})
+
+	t.Run("hook not called when not set", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+		}
+		git := &mockGit{branch: "main", lastCommit: "abc test"}
+		cfg := defaultTestConfig()
+		cfg.Plan.MaxIterations = 1
+
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+		// PostIteration is nil by default
+
+		err := lp.Run(context.Background(), ModePlan, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// No panic = success
+	})
+
+	t.Run("hook called after push", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
+		}
+		git := &mockGit{
+			branch:         "main",
+			diffFromRemote: true,
+			lastCommit:     "abc new",
+		}
+		cfg := defaultTestConfig()
+		cfg.Git.AutoPush = true
+		cfg.Plan.MaxIterations = 1
+
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+		var hookCalled bool
+		var pushCountAtHook int
+		lp.PostIteration = func() {
+			hookCalled = true
+			pushCountAtHook = git.pushCalls
+		}
+
+		err := lp.Run(context.Background(), ModePlan, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !hookCalled {
+			t.Fatal("PostIteration was not called")
+		}
+		if pushCountAtHook != 1 {
+			t.Errorf("expected push to happen before hook, pushCalls at hook time = %d", pushCountAtHook)
+		}
+	})
+}
+
 func TestIterLabel(t *testing.T) {
 	tests := []struct {
 		max  int

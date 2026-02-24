@@ -38,6 +38,7 @@
 | SIGQUIT immediate kill — platform-specific handler (unix/windows build tags) | the-regent.md | 0.0.8 |
 | Refactor `cmd/ralph/main.go` — split 468-line monolith into `main.go` (55), `commands.go` (151), `execute.go` (166), `wiring.go` (120) | — | 0.0.9 |
 | Remove dead code — `tui.RunLoop`, `tui.RunSmartLoop` replaced by direct `RunFunc` wiring | — | 0.0.9 |
+| Per-iteration test-gated rollback — `Loop.PostIteration` hook, `Regent.RunPostIterationTests` called after each iteration instead of after loop completion | the-regent.md | 0.0.10 |
 
 ## Key Learnings
 
@@ -57,6 +58,7 @@
 - Regent hang detection uses a ticker goroutine checking `lastOutputAt` every `hangTimeout/4`; cancelled when the loop context is done
 - Regent TUI wiring uses two channels: loopEvents → forwarding goroutine (updates state) → tuiEvents; Regent emits directly to tuiEvents
 - Regent no-TUI wiring uses a single shared channel with a drain goroutine; both loop and Regent write non-blocking
+- Per-iteration test-gated rollback uses `Loop.PostIteration` hook (wired to `Regent.RunPostIterationTests` in CLI wiring layer); errors are emitted as events, not returned, so the loop continues to the next iteration per spec
 
 ## Out of Scope (for now)
 

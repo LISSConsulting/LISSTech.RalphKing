@@ -40,8 +40,9 @@ func New(cfg config.RegentConfig, dir string, git GitOps, events chan<- loop.Log
 }
 
 // Supervise runs the given function under Regent supervision. It handles crash
-// detection with retry/backoff, hang detection via output timeout, and optional
-// test-gated rollback after each successful run.
+// detection with retry/backoff and hang detection via output timeout. Test-gated
+// rollback is handled per-iteration via Loop.PostIteration (wired to
+// RunPostIterationTests).
 func (r *Regent) Supervise(ctx context.Context, run RunFunc) error {
 	now := time.Now()
 	r.mu.Lock()
@@ -74,10 +75,6 @@ func (r *Regent) Supervise(ctx context.Context, run RunFunc) error {
 			r.state.FinishedAt = time.Now()
 			r.state.Passed = true
 			r.mu.Unlock()
-
-			if testErr := r.runPostIterationTests(); testErr != nil {
-				r.emit(fmt.Sprintf("Post-iteration test error: %v", testErr))
-			}
 
 			r.saveState()
 			return nil
@@ -188,30 +185,36 @@ func (r *Regent) UpdateState(entry loop.LogEntry) {
 	r.mu.Unlock()
 }
 
-func (r *Regent) runPostIterationTests() error {
+// RunPostIterationTests runs the configured test command and reverts the last
+// commit if tests fail. Designed to be called via Loop.PostIteration after each
+// iteration for per-iteration test-gated rollback per the Regent spec. Errors
+// are emitted as events rather than returned, so the loop continues to the
+// next iteration.
+func (r *Regent) RunPostIterationTests() {
 	if !r.cfg.RollbackOnTestFailure || r.cfg.TestCommand == "" {
-		return nil
+		return
 	}
 
 	r.emit("Running tests: " + r.cfg.TestCommand)
 	result, err := RunTests(r.dir, r.cfg.TestCommand)
 	if err != nil {
-		return fmt.Errorf("regent: start test command: %w", err)
+		r.emit(fmt.Sprintf("Failed to start tests: %v", err))
+		return
 	}
 
 	if result.Passed {
 		commit, _ := r.git.LastCommit()
-		r.emit(fmt.Sprintf("Tests passed — commit %s kept", commit))
-		return nil
+		r.emit(fmt.Sprintf("Tests passed ✅ — commit %s kept", commit))
+		return
 	}
 
-	r.emit("Tests failed — reverting last commit")
+	r.emit("Tests failed ❌ — reverting last commit")
 	sha, revertErr := RevertLastCommit(r.git)
 	if revertErr != nil {
-		return fmt.Errorf("regent: revert after test failure: %w", revertErr)
+		r.emit(fmt.Sprintf("Failed to revert: %v", revertErr))
+		return
 	}
 	r.emit(fmt.Sprintf("Reverted commit %s — pushed revert", sha))
-	return nil
 }
 
 func (r *Regent) touchOutput() {
