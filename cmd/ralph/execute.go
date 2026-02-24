@@ -218,6 +218,16 @@ func needsPlanPhase(info fs.FileInfo, statErr error) bool {
 	return statErr != nil || info == nil || info.Size() == 0
 }
 
+// formatLogLine renders a log entry as a timestamped line for plain-text output.
+// Regent entries get a shield prefix; all others display the message directly.
+func formatLogLine(entry loop.LogEntry) string {
+	ts := entry.Timestamp.Format("15:04:05")
+	if entry.Kind == loop.LogRegent {
+		return fmt.Sprintf("[%s]  🛡️  Regent: %s", ts, entry.Message)
+	}
+	return fmt.Sprintf("[%s]  %s", ts, entry.Message)
+}
+
 // openEditor launches the given editor with the file path, connecting stdio.
 func openEditor(editor, path string) error {
 	cmd := exec.Command(editor, path)

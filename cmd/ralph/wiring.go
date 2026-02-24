@@ -33,12 +33,7 @@ func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRu
 			if entry.Kind != loop.LogRegent {
 				rgt.UpdateState(entry)
 			}
-			ts := entry.Timestamp.Format("15:04:05")
-			if entry.Kind == loop.LogRegent {
-				fmt.Fprintf(os.Stdout, "[%s]  🛡️  Regent: %s\n", ts, entry.Message)
-			} else {
-				fmt.Fprintf(os.Stdout, "[%s]  %s\n", ts, entry.Message)
-			}
+			fmt.Fprintln(os.Stdout, formatLogLine(entry))
 		}
 	}()
 
@@ -134,8 +129,7 @@ func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRun
 	go func() {
 		defer close(drainDone)
 		for entry := range events {
-			ts := entry.Timestamp.Format("15:04:05")
-			fmt.Fprintf(os.Stdout, "[%s]  %s\n", ts, entry.Message)
+			fmt.Fprintln(os.Stdout, formatLogLine(entry))
 			st.trackEntry(entry)
 		}
 	}()

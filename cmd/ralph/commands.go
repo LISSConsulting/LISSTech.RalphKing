@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -76,13 +77,7 @@ func initCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if len(created) == 0 {
-				fmt.Println("All files already exist — nothing to create.")
-				return nil
-			}
-			for _, path := range created {
-				fmt.Printf("Created %s\n", path)
-			}
+			fmt.Print(formatScaffoldResult(created))
 			return nil
 		},
 	}
@@ -112,17 +107,7 @@ func specListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-
-			if len(specs) == 0 {
-				fmt.Println("No specs found in specs/")
-				return nil
-			}
-
-			fmt.Println("Specs")
-			fmt.Println("─────")
-			for _, s := range specs {
-				fmt.Printf("  %s  %-30s  %s\n", s.Status.Symbol(), s.Path, s.Status)
-			}
+			fmt.Print(formatSpecList(specs))
 			return nil
 		},
 	}
@@ -154,4 +139,32 @@ func specNewCmd() *cobra.Command {
 			return openEditor(editor, path)
 		},
 	}
+}
+
+// formatSpecList renders a list of spec files as a formatted string with
+// status symbols. Returns a "no specs" message for empty input.
+func formatSpecList(specs []spec.SpecFile) string {
+	if len(specs) == 0 {
+		return "No specs found in specs/\n"
+	}
+	var b strings.Builder
+	b.WriteString("Specs\n")
+	b.WriteString("─────\n")
+	for _, s := range specs {
+		fmt.Fprintf(&b, "  %s  %-30s  %s\n", s.Status.Symbol(), s.Path, s.Status)
+	}
+	return b.String()
+}
+
+// formatScaffoldResult renders the output of a scaffold operation listing
+// created files. Returns an "already exists" message when nothing was created.
+func formatScaffoldResult(created []string) string {
+	if len(created) == 0 {
+		return "All files already exist — nothing to create.\n"
+	}
+	var b strings.Builder
+	for _, path := range created {
+		fmt.Fprintf(&b, "Created %s\n", path)
+	}
+	return b.String()
 }

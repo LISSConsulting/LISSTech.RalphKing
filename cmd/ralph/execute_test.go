@@ -6,8 +6,83 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
 )
+
+func TestFormatLogLine(t *testing.T) {
+	ts := time.Date(2026, 2, 23, 14, 23, 1, 0, time.UTC)
+
+	tests := []struct {
+		name string
+		entry loop.LogEntry
+		want  string
+	}{
+		{
+			name: "info entry — timestamp and message",
+			entry: loop.LogEntry{
+				Kind:      loop.LogInfo,
+				Timestamp: ts,
+				Message:   "starting iteration 3",
+			},
+			want: "[14:23:01]  starting iteration 3",
+		},
+		{
+			name: "tool use entry — no special prefix",
+			entry: loop.LogEntry{
+				Kind:      loop.LogToolUse,
+				Timestamp: ts,
+				Message:   "📖  read_file      app/main.go",
+			},
+			want: "[14:23:01]  📖  read_file      app/main.go",
+		},
+		{
+			name: "regent entry — shield prefix",
+			entry: loop.LogEntry{
+				Kind:      loop.LogRegent,
+				Timestamp: ts,
+				Message:   "Ralph exited (exit 1) — retrying in 30s",
+			},
+			want: "[14:23:01]  🛡️  Regent: Ralph exited (exit 1) — retrying in 30s",
+		},
+		{
+			name: "error entry — no special prefix",
+			entry: loop.LogEntry{
+				Kind:      loop.LogError,
+				Timestamp: ts,
+				Message:   "claude exited with error",
+			},
+			want: "[14:23:01]  claude exited with error",
+		},
+		{
+			name: "git push entry — no special prefix",
+			entry: loop.LogEntry{
+				Kind:      loop.LogGitPush,
+				Timestamp: ts,
+				Message:   "⬇ pushed to origin/main",
+			},
+			want: "[14:23:01]  ⬇ pushed to origin/main",
+		},
+		{
+			name: "done entry — no special prefix",
+			entry: loop.LogEntry{
+				Kind:      loop.LogDone,
+				Timestamp: ts,
+				Message:   "loop finished (5 iterations, $1.42)",
+			},
+			want: "[14:23:01]  loop finished (5 iterations, $1.42)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatLogLine(tt.entry)
+			if got != tt.want {
+				t.Errorf("formatLogLine() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestClassifyResult(t *testing.T) {
 	now := time.Now()
