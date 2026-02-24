@@ -1,9 +1,6 @@
 package tui
 
 import (
-	"context"
-	"fmt"
-
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
@@ -60,34 +57,6 @@ func (m Model) Init() tea.Cmd {
 // Err returns any error that occurred during the loop.
 func (m Model) Err() error {
 	return m.err
-}
-
-// RunLoop starts the loop in a goroutine and returns a tea.Cmd that reports
-// the loop's completion. The events channel should be writable by the loop
-// and readable by the model.
-func RunLoop(ctx context.Context, lp *loop.Loop, mode loop.Mode, max int) tea.Cmd {
-	return func() tea.Msg {
-		err := lp.Run(ctx, mode, max)
-		if err != nil {
-			return loopErrMsg{err: err}
-		}
-		return nil
-	}
-}
-
-// RunSmartLoop runs plan-if-needed then build, reporting completion.
-func RunSmartLoop(ctx context.Context, lp *loop.Loop, maxOverride int, needsPlan bool) tea.Cmd {
-	return func() tea.Msg {
-		if needsPlan {
-			if err := lp.Run(ctx, loop.ModePlan, 0); err != nil {
-				return loopErrMsg{err: fmt.Errorf("plan phase: %w", err)}
-			}
-		}
-		if err := lp.Run(ctx, loop.ModeBuild, maxOverride); err != nil {
-			return loopErrMsg{err: fmt.Errorf("build phase: %w", err)}
-		}
-		return nil
-	}
 }
 
 // waitForEvent returns a command that blocks on the event channel.

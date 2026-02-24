@@ -36,6 +36,8 @@
 | `ralph status` — proper formatted display (branch, commit, iteration, cost, duration, pass/fail) | ralph-core.md | 0.0.8 |
 | Regent state — added Branch, Mode, StartedAt, FinishedAt, Passed fields | the-regent.md | 0.0.8 |
 | SIGQUIT immediate kill — platform-specific handler (unix/windows build tags) | the-regent.md | 0.0.8 |
+| Refactor `cmd/ralph/main.go` — split 468-line monolith into `main.go` (55), `commands.go` (151), `execute.go` (166), `wiring.go` (120) | — | 0.0.9 |
+| Remove dead code — `tui.RunLoop`, `tui.RunSmartLoop` replaced by direct `RunFunc` wiring | — | 0.0.9 |
 
 ## Key Learnings
 
