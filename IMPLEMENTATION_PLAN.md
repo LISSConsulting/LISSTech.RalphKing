@@ -51,6 +51,7 @@
 | Regent context-cancel state persistence — `finishGraceful()` sets `FinishedAt`/`Passed=true` on all three cancel paths (pre-loop, post-failure, backoff) so `ralph status` no longer shows stale "running" after SIGINT | the-regent.md | 0.0.16 |
 | `RevertLastCommit` error path tests — `LastCommit` failure, `CurrentBranch` failure; `mockGit` gains `currentBranchErr` field; regent coverage 94% → 96% | the-regent.md | 0.0.16 |
 | Fix `ralph run` stale closure bug — `needsPlan` check moved inside `smartRunFn` closure so Regent retries re-evaluate whether `IMPLEMENTATION_PLAN.md` exists instead of using a stale captured value from startup | ralph-core.md | 0.0.17 |
+| Config validation — `Config.Validate()` catches empty prompt files, negative iteration counts, invalid Regent settings (max_retries, backoff, hang_timeout), and `rollback_on_test_failure` without `test_command` before loop starts; reports all issues joined; config coverage 92.9% → 95.7% | ralph-core.md, the-regent.md | 0.0.18 |
 
 ## Key Learnings
 
@@ -81,6 +82,7 @@
 - `showStatus` result display has four tiers: running → pass → fail (N errors) → fail; the last fallback handles non-Regent runs where `Passed=false` and `ConsecutiveErrs=0`
 - Regent `finishGraceful()` mirrors `stateTracker.finish()` semantics: context cancellation = user-initiated stop = `Passed=true`. All three cancel paths (pre-loop select, post-run ctx check, backoff select) now persist state before returning
 - **Closures passed to Regent must re-evaluate state**: any `RunFunc` closure that checks filesystem state (e.g., file existence) must do so *inside* the closure body, not capture a variable computed outside. The Regent calls the closure multiple times on retry, so stale captured values cause incorrect behavior
+- `Config.Validate()` is pure (no I/O) — checks structural correctness of values. Prompt file existence is still checked at runtime by `os.ReadFile` in `loop.Run`, which gives a clear error. Regent numeric checks are gated on `Regent.Enabled` since disabled Regent values are never used. `errors.Join` collects all issues into a single error for user-friendly reporting
 
 ## Out of Scope (for now)
 
