@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **All core features complete (P1–P6) + spec polish.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 84–97% test coverage across all packages.
+> Current state: **All core features complete (P1–P6) + spec polish.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 89–97% test coverage across all packages.
 
 ## Completed Work
 
@@ -39,6 +39,8 @@
 | Refactor `cmd/ralph/main.go` — split 468-line monolith into `main.go` (55), `commands.go` (151), `execute.go` (166), `wiring.go` (120) | — | 0.0.9 |
 | Remove dead code — `tui.RunLoop`, `tui.RunSmartLoop` replaced by direct `RunFunc` wiring | — | 0.0.9 |
 | Per-iteration test-gated rollback — `Loop.PostIteration` hook, `Regent.RunPostIterationTests` called after each iteration instead of after loop completion | the-regent.md | 0.0.10 |
+| TUI scrollable log history — j/k, pgup/pgdown, g/G, arrow keys; footer scroll indicator; auto-scroll at bottom | ralph-core.md | 0.0.11 |
+| Regent live state persistence — `UpdateState()` persists to disk on meaningful changes so `ralph status` is accurate mid-loop | the-regent.md | 0.0.11 |
 
 ## Key Learnings
 
@@ -59,6 +61,8 @@
 - Regent TUI wiring uses two channels: loopEvents → forwarding goroutine (updates state) → tuiEvents; Regent emits directly to tuiEvents
 - Regent no-TUI wiring uses a single shared channel with a drain goroutine; both loop and Regent write non-blocking
 - Per-iteration test-gated rollback uses `Loop.PostIteration` hook (wired to `Regent.RunPostIterationTests` in CLI wiring layer); errors are emitted as events, not returned, so the loop continues to the next iteration per spec
+- TUI scroll uses `scrollOffset` (0 = bottom, >0 = lines from end); `renderLog` calculates `end = len(lines) - offset`, `start = end - height`; new entries auto-scroll only when offset is 0
+- Regent `UpdateState()` persists to disk only when meaningful state fields change (iteration, cost, commit, branch, mode) — avoids unnecessary I/O for info-only events
 
 ## Out of Scope (for now)
 
