@@ -24,12 +24,28 @@ func runWithTUI(ctx context.Context, lp *loop.Loop, runFn regent.RunFunc) error 
 	model := tui.New(events)
 	program := tea.NewProgram(model, tea.WithAltScreen())
 
+	errCh := make(chan error, 1)
 	go func() {
 		defer close(events)
-		runFn(ctx)
+		errCh <- runFn(ctx)
 	}()
 
-	return finishTUI(program)
+	tuiErr := finishTUI(program)
+	if tuiErr != nil {
+		return tuiErr
+	}
+
+	// Collect loop error if available. When the TUI exited because the loop
+	// finished (channel closed), the error is already in errCh. When the user
+	// quit manually (pressed 'q'), the loop may still be running.
+	select {
+	case loopErr := <-errCh:
+		if loopErr != nil && !errors.Is(loopErr, context.Canceled) {
+			return loopErr
+		}
+	default:
+	}
+	return nil
 }
 
 // runWithRegent runs the loop under Regent supervision without TUI.
@@ -92,14 +108,29 @@ func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gi
 	}()
 
 	// Run loop under Regent supervision; close channels when done
+	errCh := make(chan error, 1)
 	go func() {
 		defer close(tuiEvents)
-		rgt.Supervise(ctx, run)
+		superviseErr := rgt.Supervise(ctx, run)
 		close(loopEvents)
 		<-forwardDone
+		errCh <- superviseErr
 	}()
 
-	return finishTUI(program)
+	tuiErr := finishTUI(program)
+	if tuiErr != nil {
+		return tuiErr
+	}
+
+	// Collect Regent/loop error if available.
+	select {
+	case loopErr := <-errCh:
+		if loopErr != nil && !errors.Is(loopErr, context.Canceled) {
+			return loopErr
+		}
+	default:
+	}
+	return nil
 }
 
 // finishTUI runs the bubbletea program and returns any loop error.

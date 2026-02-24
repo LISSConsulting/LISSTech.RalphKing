@@ -41,6 +41,7 @@
 | Per-iteration test-gated rollback — `Loop.PostIteration` hook, `Regent.RunPostIterationTests` called after each iteration instead of after loop completion | the-regent.md | 0.0.10 |
 | TUI scrollable log history — j/k, pgup/pgdown, g/G, arrow keys; footer scroll indicator; auto-scroll at bottom | ralph-core.md | 0.0.11 |
 | Regent live state persistence — `UpdateState()` persists to disk on meaningful changes so `ralph status` is accurate mid-loop | the-regent.md | 0.0.11 |
+| Fix TUI error propagation — `runWithTUI` and `runWithRegentTUI` now capture and return loop/Regent errors via buffered error channel instead of silently swallowing them | ralph-core.md, the-regent.md | 0.0.12 |
 
 ## Key Learnings
 
@@ -63,6 +64,7 @@
 - Per-iteration test-gated rollback uses `Loop.PostIteration` hook (wired to `Regent.RunPostIterationTests` in CLI wiring layer); errors are emitted as events, not returned, so the loop continues to the next iteration per spec
 - TUI scroll uses `scrollOffset` (0 = bottom, >0 = lines from end); `renderLog` calculates `end = len(lines) - offset`, `start = end - height`; new entries auto-scroll only when offset is 0
 - Regent `UpdateState()` persists to disk only when meaningful state fields change (iteration, cost, commit, branch, mode) — avoids unnecessary I/O for info-only events
+- TUI wiring error propagation uses buffered error channel (`errCh := make(chan error, 1)`) + non-blocking `select/default` to safely collect errors without blocking when user quits early; `context.Canceled` is suppressed as normal shutdown
 
 ## Out of Scope (for now)
 
