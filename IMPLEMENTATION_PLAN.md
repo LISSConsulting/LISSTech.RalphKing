@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **All core features complete (P1–P6) + spec polish.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 89–97% test coverage across all packages.
+> Current state: **All core features complete (P1–P6) + production polish.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 89–97% test coverage across all packages.
 
 ## Completed Work
 
@@ -42,6 +42,8 @@
 | TUI scrollable log history — j/k, pgup/pgdown, g/G, arrow keys; footer scroll indicator; auto-scroll at bottom | ralph-core.md | 0.0.11 |
 | Regent live state persistence — `UpdateState()` persists to disk on meaningful changes so `ralph status` is accurate mid-loop | the-regent.md | 0.0.11 |
 | Fix TUI error propagation — `runWithTUI` and `runWithRegentTUI` now capture and return loop/Regent errors via buffered error channel instead of silently swallowing them | ralph-core.md, the-regent.md | 0.0.12 |
+| ClaudeAgent stderr capture — includes stderr text in error events when Claude CLI exits non-zero, replacing opaque "exit status 1" | ralph-core.md | 0.0.13 |
+| `ralph status` running state — detects mid-run processes (StartedAt set, FinishedAt zero), shows elapsed time, last output, and "running" result | ralph-core.md, the-regent.md | 0.0.13 |
 
 ## Key Learnings
 
@@ -65,6 +67,8 @@
 - TUI scroll uses `scrollOffset` (0 = bottom, >0 = lines from end); `renderLog` calculates `end = len(lines) - offset`, `start = end - height`; new entries auto-scroll only when offset is 0
 - Regent `UpdateState()` persists to disk only when meaningful state fields change (iteration, cost, commit, branch, mode) — avoids unnecessary I/O for info-only events
 - TUI wiring error propagation uses buffered error channel (`errCh := make(chan error, 1)`) + non-blocking `select/default` to safely collect errors without blocking when user quits early; `context.Canceled` is suppressed as normal shutdown
+- ClaudeAgent captures stderr via `bytes.Buffer` on `cmd.Stderr`; on non-zero exit, stderr text is appended to the error event for diagnostics (e.g. "claude exited: exit status 1: API rate limit exceeded")
+- `ralph status` running detection uses `!StartedAt.IsZero() && FinishedAt.IsZero()` — when the process crashes without cleanup, `FinishedAt` stays zero, so status shows "running" until the next loop overwrites state
 
 ## Out of Scope (for now)
 
