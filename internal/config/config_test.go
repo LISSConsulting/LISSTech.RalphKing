@@ -186,7 +186,7 @@ name = "FoundIt"
 
 		// Change to child directory to test walk-up
 		origDir, _ := os.Getwd()
-		t.Cleanup(func() { os.Chdir(origDir) })
+		t.Cleanup(func() { _ = os.Chdir(origDir) })
 		if err := os.Chdir(child); err != nil {
 			t.Fatal(err)
 		}
@@ -203,7 +203,7 @@ name = "FoundIt"
 	t.Run("returns error when ralph.toml not found anywhere", func(t *testing.T) {
 		dir := t.TempDir()
 		origDir, _ := os.Getwd()
-		t.Cleanup(func() { os.Chdir(origDir) })
+		t.Cleanup(func() { _ = os.Chdir(origDir) })
 		if err := os.Chdir(dir); err != nil {
 			t.Fatal(err)
 		}
@@ -268,28 +268,28 @@ func TestValidate(t *testing.T) {
 			modify: func(c *Config) {},
 		},
 		{
-			name:   "empty plan.prompt_file",
-			modify: func(c *Config) { c.Plan.PromptFile = "" },
+			name:    "empty plan.prompt_file",
+			modify:  func(c *Config) { c.Plan.PromptFile = "" },
 			wantErr: "plan.prompt_file must not be empty",
 		},
 		{
-			name:   "empty build.prompt_file",
-			modify: func(c *Config) { c.Build.PromptFile = "" },
+			name:    "empty build.prompt_file",
+			modify:  func(c *Config) { c.Build.PromptFile = "" },
 			wantErr: "build.prompt_file must not be empty",
 		},
 		{
-			name:   "negative plan.max_iterations",
-			modify: func(c *Config) { c.Plan.MaxIterations = -1 },
+			name:    "negative plan.max_iterations",
+			modify:  func(c *Config) { c.Plan.MaxIterations = -1 },
 			wantErr: "plan.max_iterations must be >= 0",
 		},
 		{
-			name:   "negative build.max_iterations",
-			modify: func(c *Config) { c.Build.MaxIterations = -1 },
+			name:    "negative build.max_iterations",
+			modify:  func(c *Config) { c.Build.MaxIterations = -1 },
 			wantErr: "build.max_iterations must be >= 0",
 		},
 		{
-			name:   "negative claude.max_turns",
-			modify: func(c *Config) { c.Claude.MaxTurns = -1 },
+			name:    "negative claude.max_turns",
+			modify:  func(c *Config) { c.Claude.MaxTurns = -1 },
 			wantErr: "claude.max_turns must be >= 0",
 		},
 		{

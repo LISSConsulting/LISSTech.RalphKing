@@ -123,7 +123,7 @@ func Defaults() Config {
 	return Config{
 		Project: ProjectConfig{Name: ""},
 		Claude: ClaudeConfig{
-			Model:                "sonnet",
+			Model:                 "sonnet",
 			DangerSkipPermissions: true,
 		},
 		Plan: PlanConfig{

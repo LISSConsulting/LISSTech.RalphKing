@@ -19,7 +19,7 @@ type mockGit struct {
 	pushCalls   []string
 }
 
-func (m *mockGit) LastCommit() (string, error) { return m.lastCommit, m.lastCommitErr }
+func (m *mockGit) LastCommit() (string, error)    { return m.lastCommit, m.lastCommitErr }
 func (m *mockGit) CurrentBranch() (string, error) { return m.branch, m.currentBranchErr }
 
 func (m *mockGit) Revert(sha string) error {

@@ -21,7 +21,7 @@ func TestParseStream(t *testing.T) {
 		}
 	}{
 		{
-			name: "tool_use event",
+			name:  "tool_use event",
 			input: `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"write_file","input":{"path":"main.go"}}]}}`,
 			events: []struct {
 				typ      EventType
@@ -35,7 +35,7 @@ func TestParseStream(t *testing.T) {
 			},
 		},
 		{
-			name: "text event",
+			name:  "text event",
 			input: `{"type":"assistant","message":{"content":[{"type":"text","text":"Hello world"}]}}`,
 			events: []struct {
 				typ      EventType
@@ -49,7 +49,7 @@ func TestParseStream(t *testing.T) {
 			},
 		},
 		{
-			name: "result event",
+			name:  "result event",
 			input: `{"type":"result","cost_usd":0.14,"duration_ms":4200}`,
 			events: []struct {
 				typ      EventType
@@ -63,7 +63,7 @@ func TestParseStream(t *testing.T) {
 			},
 		},
 		{
-			name: "error event",
+			name:  "error event",
 			input: `{"type":"system","subtype":"error","error":"something broke"}`,
 			events: []struct {
 				typ      EventType
@@ -77,7 +77,7 @@ func TestParseStream(t *testing.T) {
 			},
 		},
 		{
-			name: "multiple content blocks",
+			name:  "multiple content blocks",
 			input: `{"type":"assistant","message":{"content":[{"type":"text","text":"analyzing"},{"type":"tool_use","name":"bash","input":{"command":"go test"}}]}}`,
 			events: []struct {
 				typ      EventType

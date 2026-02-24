@@ -70,7 +70,6 @@ func (r *Regent) Supervise(ctx context.Context, run RunFunc) error {
 		err := r.runWithHangDetection(ctx, run)
 
 		if err == nil {
-			consecutiveErrors = 0
 			r.mu.Lock()
 			r.state.ConsecutiveErrs = 0
 			r.state.FinishedAt = time.Now()

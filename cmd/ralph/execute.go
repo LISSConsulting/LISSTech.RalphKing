@@ -157,13 +157,14 @@ func showStatus() error {
 		fmt.Printf("  %-20s %s ago\n", "Last output:", ago)
 	}
 
-	if running {
+	switch {
+	case running:
 		fmt.Printf("  %-20s %s\n", "Result:", "running")
-	} else if state.Passed {
+	case state.Passed:
 		fmt.Printf("  %-20s %s\n", "Result:", "pass")
-	} else if state.ConsecutiveErrs > 0 {
+	case state.ConsecutiveErrs > 0:
 		fmt.Printf("  %-20s fail (%d consecutive errors)\n", "Result:", state.ConsecutiveErrs)
-	} else if !state.FinishedAt.IsZero() {
+	case !state.FinishedAt.IsZero():
 		fmt.Printf("  %-20s %s\n", "Result:", "fail")
 	}
 

@@ -623,10 +623,8 @@ func TestNewBelowIndicator(t *testing.T) {
 				if !strings.Contains(footer, want) {
 					t.Errorf("footer should contain %q, got: %s", want, footer)
 				}
-			} else {
-				if strings.Contains(footer, "new") {
-					t.Errorf("footer should not contain 'new', got: %s", footer)
-				}
+			} else if strings.Contains(footer, "new") {
+				t.Errorf("footer should not contain 'new', got: %s", footer)
 			}
 
 			if tt.wantScrollHint {

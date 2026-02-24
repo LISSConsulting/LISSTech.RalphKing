@@ -9,11 +9,11 @@ import (
 
 func TestList(t *testing.T) {
 	tests := []struct {
-		name       string
-		specFiles  []string
+		name        string
+		specFiles   []string
 		planContent string
-		wantCount  int
-		wantSpecs  map[string]Status // name → expected status
+		wantCount   int
+		wantSpecs   map[string]Status // name → expected status
 	}{
 		{
 			name:      "no specs directory",

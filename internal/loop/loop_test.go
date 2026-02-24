@@ -52,7 +52,7 @@ type mockGit struct {
 	stashPopCalls int
 }
 
-func (m *mockGit) CurrentBranch() (string, error)       { return m.branch, nil }
+func (m *mockGit) CurrentBranch() (string, error)        { return m.branch, nil }
 func (m *mockGit) HasUncommittedChanges() (bool, error)  { return m.dirty, m.dirtyErr }
 func (m *mockGit) Pull(_ string) error                   { m.pullCalls++; return m.pullErr }
 func (m *mockGit) Push(_ string) error                   { m.pushCalls++; return m.pushErr }

@@ -22,15 +22,6 @@ func defaultTestRegentConfig() config.RegentConfig {
 	}
 }
 
-// collectEvents drains events from a channel into a slice.
-func collectEvents(ch <-chan loop.LogEntry, done chan<- []loop.LogEntry) {
-	var entries []loop.LogEntry
-	for e := range ch {
-		entries = append(entries, e)
-	}
-	done <- entries
-}
-
 func TestSupervise(t *testing.T) {
 	t.Run("successful run completes without retries", func(t *testing.T) {
 		dir := t.TempDir()
@@ -295,7 +286,7 @@ func TestSupervise(t *testing.T) {
 		rgt := New(cfg, dir, &mockGit{branch: "main"}, events)
 
 		go func() {
-			rgt.Supervise(context.Background(), func(_ context.Context) error {
+			_ = rgt.Supervise(context.Background(), func(_ context.Context) error {
 				return nil
 			})
 			close(events)

@@ -38,10 +38,10 @@ type Loop struct {
 	Agent         claude.Agent
 	Git           GitOps
 	Config        *config.Config
-	Log           io.Writer      // output destination; defaults to os.Stdout
+	Log           io.Writer       // output destination; defaults to os.Stdout
 	Events        chan<- LogEntry // optional: structured event sink for TUI
-	Dir           string         // working directory for prompt file resolution
-	PostIteration func()         // optional: called after each iteration (e.g., test-gated rollback)
+	Dir           string          // working directory for prompt file resolution
+	PostIteration func()          // optional: called after each iteration (e.g., test-gated rollback)
 }
 
 // Run executes the loop in the given mode. It runs iterations until the

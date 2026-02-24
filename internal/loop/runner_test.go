@@ -226,7 +226,7 @@ func TestClaudeAgentRun(t *testing.T) {
 		// Script that sleeps forever
 		script := fakeClaudeScript(t, 0, "")
 		// Rewrite script to sleep
-		sleepScript := fmt.Sprintf("#!/bin/sh\nsleep 60\n")
+		sleepScript := "#!/bin/sh\nsleep 60\n"
 		if err := os.WriteFile(script, []byte(sleepScript), 0755); err != nil {
 			t.Fatal(err)
 		}
