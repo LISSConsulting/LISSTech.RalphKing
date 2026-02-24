@@ -588,13 +588,14 @@ func TestStashIfDirtyErrors(t *testing.T) {
 }
 
 func TestPushIfNeededErrors(t *testing.T) {
-	t.Run("DiffFromRemote error skips push and logs", func(t *testing.T) {
+	t.Run("DiffFromRemote error pushes anyway and logs", func(t *testing.T) {
 		agent := &mockAgent{
 			events: []claude.Event{claude.ResultEvent(0.10, 1.0)},
 		}
 		git := &mockGit{
-			branch:  "main",
-			diffErr: errors.New("diff failed"),
+			branch:     "main",
+			diffErr:    errors.New("diff failed"),
+			lastCommit: "abc new",
 		}
 		cfg := defaultTestConfig()
 		cfg.Git.AutoPush = true
@@ -606,8 +607,8 @@ func TestPushIfNeededErrors(t *testing.T) {
 		if err != nil {
 			t.Fatalf("DiffFromRemote error should not abort loop, got: %v", err)
 		}
-		if git.pushCalls != 0 {
-			t.Errorf("should not push when diff check fails, got %d push calls", git.pushCalls)
+		if git.pushCalls != 1 {
+			t.Errorf("should push when diff check fails (e.g., new branch), got %d push calls", git.pushCalls)
 		}
 		if !strings.Contains(buf.String(), "Diff check failed") {
 			t.Errorf("should log diff failure, got: %s", buf.String())

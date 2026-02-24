@@ -228,13 +228,14 @@ func (l *Loop) stashIfDirty() (bool, error) {
 func (l *Loop) pushIfNeeded(branch string) error {
 	hasChanges, err := l.Git.DiffFromRemote(branch)
 	if err != nil {
+		// Can't determine diff state (e.g., no remote tracking branch yet).
+		// Push anyway — Push() handles -u fallback for new branches.
 		l.emit(LogEntry{
 			Kind:    LogInfo,
-			Message: fmt.Sprintf("Diff check failed: %v (skipping push)", err),
+			Message: fmt.Sprintf("Diff check failed: %v (pushing anyway)", err),
 		})
-		return nil
 	}
-	if !hasChanges {
+	if err == nil && !hasChanges {
 		return nil
 	}
 	l.emit(LogEntry{

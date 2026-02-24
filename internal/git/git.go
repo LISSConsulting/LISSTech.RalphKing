@@ -102,13 +102,19 @@ func (r *Runner) Revert(sha string) error {
 }
 
 // DiffFromRemote returns true if HEAD differs from origin/<branch>.
+// It distinguishes real diffs (exit code 1) from errors like a missing
+// remote tracking branch (which produce "fatal:" in stderr).
 func (r *Runner) DiffFromRemote(branch string) (bool, error) {
 	_, err := r.run("diff", "--quiet", fmt.Sprintf("origin/%s", branch), "HEAD")
-	if err != nil {
-		// diff --quiet exits non-zero when there are differences
-		return true, nil
+	if err == nil {
+		return false, nil
 	}
-	return false, nil
+	// git diff --quiet exits 1 for real diffs, but other failures (e.g.,
+	// missing remote ref) include "fatal:" in the error message.
+	if strings.Contains(err.Error(), "fatal:") {
+		return false, fmt.Errorf("git diff from remote: %w", err)
+	}
+	return true, nil
 }
 
 // run executes a git command and returns its combined output.

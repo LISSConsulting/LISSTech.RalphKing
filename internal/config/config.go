@@ -89,7 +89,7 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.Regent.RollbackOnTestFailure && c.Regent.TestCommand == "" {
+	if c.Regent.Enabled && c.Regent.RollbackOnTestFailure && c.Regent.TestCommand == "" {
 		errs = append(errs, fmt.Errorf("regent.test_command must be set when regent.rollback_on_test_failure is true"))
 	}
 

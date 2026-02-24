@@ -503,6 +503,19 @@ func TestDiffFromRemote(t *testing.T) {
 		}
 	})
 
+	t.Run("error when remote branch does not exist", func(t *testing.T) {
+		workDir, _ := initTestRepoWithRemote(t)
+		r := NewRunner(workDir)
+
+		_, err := r.DiffFromRemote("nonexistent-branch")
+		if err == nil {
+			t.Fatal("expected error for nonexistent remote branch")
+		}
+		if !strings.Contains(err.Error(), "git diff from remote") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
 	t.Run("diff when local has new commit", func(t *testing.T) {
 		workDir, _ := initTestRepoWithRemote(t)
 		r := NewRunner(workDir)

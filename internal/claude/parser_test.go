@@ -128,6 +128,47 @@ func TestParseStream(t *testing.T) {
 			}{},
 		},
 		{
+			name:  "result event with is_error emits error then result",
+			input: `{"type":"result","cost_usd":0.08,"duration_ms":3000,"is_error":true,"result":"API rate limit exceeded"}`,
+			events: []struct {
+				typ      EventType
+				toolName string
+				text     string
+				costUSD  float64
+				errMsg   string
+			}{
+				{typ: EventError, errMsg: "API rate limit exceeded"},
+				{typ: EventResult, costUSD: 0.08},
+			},
+		},
+		{
+			name:  "result event with is_error and empty result uses fallback message",
+			input: `{"type":"result","cost_usd":0.01,"duration_ms":500,"is_error":true}`,
+			events: []struct {
+				typ      EventType
+				toolName string
+				text     string
+				costUSD  float64
+				errMsg   string
+			}{
+				{typ: EventError, errMsg: "claude run failed"},
+				{typ: EventResult, costUSD: 0.01},
+			},
+		},
+		{
+			name:  "result event with is_error false is normal result",
+			input: `{"type":"result","cost_usd":0.14,"duration_ms":4200,"is_error":false,"subtype":"success"}`,
+			events: []struct {
+				typ      EventType
+				toolName string
+				text     string
+				costUSD  float64
+				errMsg   string
+			}{
+				{typ: EventResult, costUSD: 0.14},
+			},
+		},
+		{
 			name: "multi-line stream",
 			input: `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"read_file","input":{"path":"go.mod"}}]}}
 {"type":"assistant","message":{"content":[{"type":"tool_use","name":"write_file","input":{"path":"main.go"}}]}}

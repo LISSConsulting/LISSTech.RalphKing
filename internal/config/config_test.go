@@ -307,6 +307,14 @@ func TestValidate(t *testing.T) {
 			},
 		},
 		{
+			name: "rollback_on_test_failure without test_command skipped when disabled",
+			modify: func(c *Config) {
+				c.Regent.Enabled = false
+				c.Regent.RollbackOnTestFailure = true
+				c.Regent.TestCommand = ""
+			},
+		},
+		{
 			name: "rollback_on_test_failure without test_command",
 			modify: func(c *Config) {
 				c.Regent.RollbackOnTestFailure = true

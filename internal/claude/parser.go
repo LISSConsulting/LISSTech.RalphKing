@@ -39,6 +39,8 @@ type streamMessage struct {
 	// Result fields (type=result)
 	CostUSD  float64 `json:"cost_usd"`
 	Duration float64 `json:"duration_ms"`
+	IsError  bool    `json:"is_error"`
+	Result   string  `json:"result"`
 	// Error fields (type=system, subtype=error)
 	Error string `json:"error"`
 }
@@ -65,7 +67,16 @@ func parseLine(line []byte) []Event {
 	case "assistant":
 		return parseAssistantMessage(msg)
 	case "result":
-		return []Event{ResultEvent(msg.CostUSD, msg.Duration/1000)}
+		var events []Event
+		if msg.IsError {
+			errText := msg.Result
+			if errText == "" {
+				errText = "claude run failed"
+			}
+			events = append(events, ErrorEvent(errText))
+		}
+		events = append(events, ResultEvent(msg.CostUSD, msg.Duration/1000))
+		return events
 	case "system":
 		if msg.Subtype == "error" {
 			return []Event{ErrorEvent(msg.Error)}
