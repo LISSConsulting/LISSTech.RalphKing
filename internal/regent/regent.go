@@ -59,6 +59,7 @@ func (r *Regent) Supervise(ctx context.Context, run RunFunc) error {
 		select {
 		case <-ctx.Done():
 			r.emit("Shutting down gracefully")
+			r.finishGraceful()
 			return ctx.Err()
 		default:
 		}
@@ -82,6 +83,7 @@ func (r *Regent) Supervise(ctx context.Context, run RunFunc) error {
 
 		if ctx.Err() != nil {
 			r.emit("Context cancelled — stopping")
+			r.finishGraceful()
 			return ctx.Err()
 		}
 
@@ -108,6 +110,7 @@ func (r *Regent) Supervise(ctx context.Context, run RunFunc) error {
 
 		select {
 		case <-ctx.Done():
+			r.finishGraceful()
 			return ctx.Err()
 		case <-time.After(backoff):
 		}
@@ -226,6 +229,16 @@ func (r *Regent) RunPostIterationTests() {
 		return
 	}
 	r.emit(fmt.Sprintf("Reverted commit %s — pushed revert", sha))
+}
+
+// finishGraceful sets FinishedAt and Passed=true for context-cancelled exits.
+// Context cancellation is a user-initiated stop, not a failure.
+func (r *Regent) finishGraceful() {
+	r.mu.Lock()
+	r.state.FinishedAt = time.Now()
+	r.state.Passed = true
+	r.mu.Unlock()
+	r.saveState()
 }
 
 func (r *Regent) touchOutput() {

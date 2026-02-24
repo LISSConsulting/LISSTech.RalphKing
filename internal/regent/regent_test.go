@@ -139,6 +139,70 @@ func TestSupervise(t *testing.T) {
 		}
 	})
 
+	t.Run("context cancellation persists finished state", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := defaultTestRegentConfig()
+		events := make(chan loop.LogEntry, 128)
+		rgt := New(cfg, dir, &mockGit{branch: "main"}, events)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // cancel immediately
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- rgt.Supervise(ctx, func(_ context.Context) error {
+				return nil
+			})
+			close(events)
+		}()
+
+		<-errCh
+		state, loadErr := LoadState(dir)
+		if loadErr != nil {
+			t.Fatalf("LoadState: %v", loadErr)
+		}
+		if state.FinishedAt.IsZero() {
+			t.Error("expected FinishedAt to be set on context cancellation")
+		}
+		if !state.Passed {
+			t.Error("expected Passed = true on context cancellation (user-initiated stop)")
+		}
+	})
+
+	t.Run("context cancel after run failure persists finished state", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := defaultTestRegentConfig()
+		cfg.MaxRetries = 3
+		events := make(chan loop.LogEntry, 128)
+		rgt := New(cfg, dir, &mockGit{branch: "main"}, events)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		calls := 0
+		run := func(_ context.Context) error {
+			calls++
+			cancel() // cancel after first run failure
+			return errors.New("fail")
+		}
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- rgt.Supervise(ctx, run)
+			close(events)
+		}()
+
+		<-errCh
+		state, loadErr := LoadState(dir)
+		if loadErr != nil {
+			t.Fatalf("LoadState: %v", loadErr)
+		}
+		if state.FinishedAt.IsZero() {
+			t.Error("expected FinishedAt to be set when context cancelled after failure")
+		}
+		if !state.Passed {
+			t.Error("expected Passed = true on context cancellation (user-initiated stop)")
+		}
+	})
+
 	t.Run("saves state file", func(t *testing.T) {
 		dir := t.TempDir()
 		cfg := defaultTestRegentConfig()

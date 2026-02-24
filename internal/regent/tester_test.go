@@ -8,18 +8,19 @@ import (
 
 // mockGit is a test double for GitOps.
 type mockGit struct {
-	lastCommit    string
-	lastCommitErr error // error returned by LastCommit
-	branch        string
-	revertErr     error
-	pushErr       error
+	lastCommit       string
+	lastCommitErr    error // error returned by LastCommit
+	branch           string
+	currentBranchErr error // error returned by CurrentBranch
+	revertErr        error
+	pushErr          error
 
 	revertCalls []string
 	pushCalls   []string
 }
 
 func (m *mockGit) LastCommit() (string, error) { return m.lastCommit, m.lastCommitErr }
-func (m *mockGit) CurrentBranch() (string, error) { return m.branch, nil }
+func (m *mockGit) CurrentBranch() (string, error) { return m.branch, m.currentBranchErr }
 
 func (m *mockGit) Revert(sha string) error {
 	m.revertCalls = append(m.revertCalls, sha)
@@ -131,6 +132,51 @@ func TestRevertLastCommit(t *testing.T) {
 		}
 		if sha != "abc1234" {
 			t.Errorf("sha = %q, want %q", sha, "abc1234")
+		}
+	})
+
+	t.Run("LastCommit error propagates", func(t *testing.T) {
+		g := &mockGit{
+			lastCommitErr: errors.New("git log failed"),
+			branch:        "main",
+		}
+		sha, err := RevertLastCommit(g)
+		if err == nil {
+			t.Fatal("expected error when LastCommit fails")
+		}
+		if !strings.Contains(err.Error(), "git log failed") {
+			t.Errorf("error should contain cause, got: %v", err)
+		}
+		if sha != "" {
+			t.Errorf("sha should be empty on LastCommit error, got %q", sha)
+		}
+		if len(g.revertCalls) != 0 {
+			t.Error("should not attempt revert when LastCommit fails")
+		}
+	})
+
+	t.Run("CurrentBranch error propagates", func(t *testing.T) {
+		g := &mockGit{
+			lastCommit:       "abc1234 bad commit",
+			branch:           "main",
+			currentBranchErr: errors.New("detached HEAD"),
+		}
+		sha, err := RevertLastCommit(g)
+		if err == nil {
+			t.Fatal("expected error when CurrentBranch fails")
+		}
+		if !strings.Contains(err.Error(), "detached HEAD") {
+			t.Errorf("error should contain cause, got: %v", err)
+		}
+		if sha != "abc1234" {
+			t.Errorf("sha = %q, want %q", sha, "abc1234")
+		}
+		// Revert should have been called, but push should not
+		if len(g.revertCalls) != 1 {
+			t.Errorf("expected 1 revert call, got %d", len(g.revertCalls))
+		}
+		if len(g.pushCalls) != 0 {
+			t.Error("should not push when CurrentBranch fails")
 		}
 	})
 }
