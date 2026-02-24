@@ -2,9 +2,11 @@
 package loop
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/claude"
 )
@@ -37,6 +39,9 @@ func (a *ClaudeAgent) Run(ctx context.Context, prompt string, opts claude.RunOpt
 		return nil, fmt.Errorf("claude agent: stdout pipe: %w", err)
 	}
 
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("claude agent: start: %w", err)
 	}
@@ -52,7 +57,11 @@ func (a *ClaudeAgent) Run(ctx context.Context, prompt string, opts claude.RunOpt
 		if err := cmd.Wait(); err != nil {
 			// Context cancellation produces a non-zero exit — that's expected
 			if ctx.Err() == nil {
-				ch <- claude.ErrorEvent(fmt.Sprintf("claude exited: %v", err))
+				msg := fmt.Sprintf("claude exited: %v", err)
+				if detail := strings.TrimSpace(stderrBuf.String()); detail != "" {
+					msg = fmt.Sprintf("claude exited: %v: %s", err, detail)
+				}
+				ch <- claude.ErrorEvent(msg)
 			}
 		}
 	}()

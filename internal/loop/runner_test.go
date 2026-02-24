@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/claude"
@@ -153,6 +154,59 @@ func TestClaudeAgentRun(t *testing.T) {
 		}
 	})
 
+	t.Run("non-zero exit includes stderr in error", func(t *testing.T) {
+		script := fakeClaudeScriptWithStderr(t, 1, "", "API rate limit exceeded")
+		agent := &ClaudeAgent{Executable: script}
+
+		ch, err := agent.Run(context.Background(), "test", claude.RunOptions{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		var events []claude.Event
+		for ev := range ch {
+			events = append(events, ev)
+		}
+
+		if len(events) == 0 {
+			t.Fatal("expected at least 1 event")
+		}
+		last := events[len(events)-1]
+		if last.Type != claude.EventError {
+			t.Fatalf("last event type: expected %q, got %q", claude.EventError, last.Type)
+		}
+		if !strings.Contains(last.Error, "API rate limit exceeded") {
+			t.Errorf("error should contain stderr text, got: %s", last.Error)
+		}
+	})
+
+	t.Run("non-zero exit without stderr omits detail", func(t *testing.T) {
+		script := fakeClaudeScriptWithStderr(t, 1, "", "")
+		agent := &ClaudeAgent{Executable: script}
+
+		ch, err := agent.Run(context.Background(), "test", claude.RunOptions{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		var events []claude.Event
+		for ev := range ch {
+			events = append(events, ev)
+		}
+
+		if len(events) == 0 {
+			t.Fatal("expected at least 1 event")
+		}
+		last := events[len(events)-1]
+		if last.Type != claude.EventError {
+			t.Fatalf("last event type: expected %q, got %q", claude.EventError, last.Type)
+		}
+		// Should just have the exit status, no trailing ": "
+		if strings.HasSuffix(last.Error, ": ") {
+			t.Errorf("error should not have trailing colon-space when stderr is empty: %s", last.Error)
+		}
+	})
+
 	t.Run("context cancellation stops process", func(t *testing.T) {
 		// Script that sleeps forever
 		script := fakeClaudeScript(t, 0, "")
@@ -205,6 +259,33 @@ func fakeClaudeScript(t *testing.T, exitCode int, output string) string {
 	var buf bytes.Buffer
 	buf.WriteString("#!/bin/sh\n")
 	buf.WriteString(fmt.Sprintf("cat %s\n", dataPath))
+	buf.WriteString(fmt.Sprintf("exit %d\n", exitCode))
+	if err := os.WriteFile(script, buf.Bytes(), 0755); err != nil {
+		t.Fatal(err)
+	}
+	return script
+}
+
+// fakeClaudeScriptWithStderr creates a shell script that outputs to stdout and stderr,
+// then exits with the given code. Returns the path to the script.
+func fakeClaudeScriptWithStderr(t *testing.T, exitCode int, stdout, stderr string) string {
+	t.Helper()
+	dir := t.TempDir()
+
+	dataPath := filepath.Join(dir, "stdout.txt")
+	if err := os.WriteFile(dataPath, []byte(stdout), 0644); err != nil {
+		t.Fatal(err)
+	}
+	stderrPath := filepath.Join(dir, "stderr.txt")
+	if err := os.WriteFile(stderrPath, []byte(stderr), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	script := filepath.Join(dir, "claude")
+	var buf bytes.Buffer
+	buf.WriteString("#!/bin/sh\n")
+	buf.WriteString(fmt.Sprintf("cat %s\n", dataPath))
+	buf.WriteString(fmt.Sprintf("cat %s >&2\n", stderrPath))
 	buf.WriteString(fmt.Sprintf("exit %d\n", exitCode))
 	if err := os.WriteFile(script, buf.Bytes(), 0755); err != nil {
 		t.Fatal(err)

@@ -142,12 +142,24 @@ func showStatus() error {
 	fmt.Printf("  %-20s %d\n", "Iteration:", state.Iteration)
 	fmt.Printf("  %-20s $%.2f\n", "Total cost:", state.TotalCostUSD)
 
-	if !state.StartedAt.IsZero() && !state.FinishedAt.IsZero() {
+	running := !state.StartedAt.IsZero() && state.FinishedAt.IsZero()
+
+	if running {
+		elapsed := time.Since(state.StartedAt).Round(time.Second)
+		fmt.Printf("  %-20s %s (running)\n", "Duration:", elapsed)
+	} else if !state.StartedAt.IsZero() && !state.FinishedAt.IsZero() {
 		dur := state.FinishedAt.Sub(state.StartedAt).Round(time.Second)
 		fmt.Printf("  %-20s %s\n", "Duration:", dur)
 	}
 
-	if state.Passed {
+	if running && !state.LastOutputAt.IsZero() {
+		ago := time.Since(state.LastOutputAt).Round(time.Second)
+		fmt.Printf("  %-20s %s ago\n", "Last output:", ago)
+	}
+
+	if running {
+		fmt.Printf("  %-20s %s\n", "Result:", "running")
+	} else if state.Passed {
 		fmt.Printf("  %-20s %s\n", "Result:", "pass")
 	} else if state.ConsecutiveErrs > 0 {
 		fmt.Printf("  %-20s fail (%d consecutive errors)\n", "Result:", state.ConsecutiveErrs)
