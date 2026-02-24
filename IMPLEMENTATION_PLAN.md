@@ -46,6 +46,8 @@
 | `ralph status` running state — detects mid-run processes (StartedAt set, FinishedAt zero), shows elapsed time, last output, and "running" result | ralph-core.md, the-regent.md | 0.0.13 |
 | `stateTracker` for non-Regent paths — `runWithStateTracking` / `runWithTUIAndState` persist `.ralph/regent-state.json` so `ralph status` works when `regent.enabled = false` | ralph-core.md | 0.0.14 |
 | Test coverage push — tui 94%→99%, loop 90%→98%, regent 90%→94%; added mockGit error injection, stash/push/pull/revert error paths, renderLine LogRegent, toolStyle all branches | — | 0.0.14 |
+| `showStatus` fail result fallback — non-Regent runs that fail now show "fail" instead of empty result (ConsecutiveErrs=0 path) | ralph-core.md | 0.0.15 |
+| `stateTracker` unit tests — table-driven tests for init, trackEntry, zero-value preservation, save, finish (success/cancel/error), lastOutputAt | — | 0.0.15 |
 
 ## Key Learnings
 
@@ -72,7 +74,8 @@
 - ClaudeAgent captures stderr via `bytes.Buffer` on `cmd.Stderr`; on non-zero exit, stderr text is appended to the error event for diagnostics (e.g. "claude exited: exit status 1: API rate limit exceeded")
 - `ralph status` running detection uses `!StartedAt.IsZero() && FinishedAt.IsZero()` — when the process crashes without cleanup, `FinishedAt` stays zero, so status shows "running" until the next loop overwrites state
 - `stateTracker` pattern: a lightweight struct in `cmd/ralph/wiring.go` that tracks loop state and persists to `.ralph/regent-state.json` — used in non-Regent paths; mirrors what Regent.UpdateState() does for Regent paths
-- Coverage gaps hard to test: `renderLog` defensive guards (`end < 0`, `end > len`) require out-of-bounds scrollOffset; `cmd/ralph` CLI wiring has 0% coverage (integration-only); these are acceptable gaps
+- Coverage gaps hard to test: `renderLog` defensive guards (`end < 0`, `end > len`) require out-of-bounds scrollOffset; CLI command handlers in `cmd/ralph` are integration-only (cobra + real deps); `stateTracker` now has unit tests
+- `showStatus` result display has four tiers: running → pass → fail (N errors) → fail; the last fallback handles non-Regent runs where `Passed=false` and `ConsecutiveErrs=0`
 
 ## Out of Scope (for now)
 
