@@ -22,6 +22,7 @@
 | Spec detection | `detectStatus` fallback: specs mentioned anywhere in plan text (not just section headers) show as in-progress instead of not-started | v0.0.25 |
 | Cost control | `claude.max_turns` config: limits agentic turns per iteration via `--max-turns` CLI flag (0 = unlimited) | v0.0.26 |
 | Result subtype | Surface `subtype` from stream-JSON result events (success, error_max_turns) in TUI and log output — closes spec gap: `type=result → display cost, duration, exit` | v0.0.27 |
+| Init scaffolding | `ralph init` now scaffolds full project structure: ralph.toml, PROMPT_plan.md, PROMPT_build.md, specs/ directory. Idempotent — skips existing files | v0.0.28 |
 | Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, removed dead TUI code | 0.0.9 |
 
 Specs implemented: `ralph-core.md`, `the-regent.md`.
@@ -49,6 +50,7 @@ Specs implemented: `ralph-core.md`, `the-regent.md`.
 - TUI `newBelow` counter tracks events arriving while scrolled up; resets when `scrollOffset` returns to 0
 - `claude.max_turns` (0 = unlimited) passes `--max-turns N` to Claude CLI; complements Regent hang detection with explicit turn limits
 - Result `subtype` (success, error_max_turns, etc.) threads through `Event.Subtype` → `LogEntry.Subtype` → TUI/log display; empty subtype omitted from output
+- `ScaffoldProject` creates all files referenced by ralph.toml defaults (prompt files, specs dir); `InitFile` still available for ralph.toml-only creation
 
 ## Out of Scope (for now)
 
