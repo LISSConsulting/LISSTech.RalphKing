@@ -32,6 +32,10 @@ type Model struct {
 	// Project identity
 	projectName string // from ralph.toml [project].name; empty falls back to "RalphKing"
 
+	// Graceful stop support
+	requestStop  func() // called once when user presses 's'; provided by wiring
+	stopRequested bool  // true after first 's' press
+
 	// Loop state
 	mode         string
 	branch       string
@@ -64,7 +68,9 @@ type tickMsg time.Time
 // accentColor is a hex color string (e.g. "#7D56F4") for the header and
 // accent elements. If empty, the default indigo is used.
 // projectName is displayed in the header; if empty, "RalphKing" is shown.
-func New(events <-chan loop.LogEntry, accentColor, projectName string) Model {
+// requestStop, if non-nil, is called once when the user presses 's' to request
+// a graceful stop after the current iteration.
+func New(events <-chan loop.LogEntry, accentColor, projectName string, requestStop func()) Model {
 	accent := lipgloss.Color(defaultAccentColor)
 	if accentColor != "" {
 		accent = lipgloss.Color(accentColor)
@@ -77,6 +83,7 @@ func New(events <-chan loop.LogEntry, accentColor, projectName string) Model {
 		startedAt:   now,
 		now:         now,
 		projectName: projectName,
+		requestStop: requestStop,
 		accentHeaderStyle: lipgloss.NewStyle().
 			Background(accent).
 			Foreground(colorWhite).

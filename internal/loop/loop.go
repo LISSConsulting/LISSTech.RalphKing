@@ -42,6 +42,7 @@ type Loop struct {
 	Events        chan<- LogEntry // optional: structured event sink for TUI
 	Dir           string          // working directory for prompt file resolution
 	PostIteration func()          // optional: called after each iteration (e.g., test-gated rollback)
+	StopAfter     <-chan struct{}  // optional: closed to request graceful stop after current iteration
 }
 
 // Run executes the loop in the given mode. It runs iterations until the
@@ -105,6 +106,19 @@ func (l *Loop) Run(ctx context.Context, mode Mode, maxOverride int) error {
 			Message:   fmt.Sprintf("Running total: $%.2f", totalCost),
 			TotalCost: totalCost,
 		})
+
+		// Check for user-requested graceful stop (TUI 's' key).
+		if l.StopAfter != nil {
+			select {
+			case <-l.StopAfter:
+				l.emit(LogEntry{
+					Kind:    LogStopped,
+					Message: "Stop requested — exiting after this iteration",
+				})
+				return nil
+			default:
+			}
+		}
 	}
 
 	l.emit(LogEntry{

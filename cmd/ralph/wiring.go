@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -50,11 +51,17 @@ func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gi
 	loopEvents := make(chan loop.LogEntry, 128)
 	tuiEvents := make(chan loop.LogEntry, 128)
 
+	// Graceful stop: TUI 's' key closes stopCh; loop checks it after each iteration.
+	stopCh := make(chan struct{})
+	var stopOnce sync.Once
+	requestStop := func() { stopOnce.Do(func() { close(stopCh) }) }
+	lp.StopAfter = stopCh
+
 	lp.Events = loopEvents
 	rgt := regent.New(cfg.Regent, dir, gitRunner, tuiEvents)
 	lp.PostIteration = rgt.RunPostIterationTests
 
-	model := tui.New(tuiEvents, cfg.TUI.AccentColor, cfg.Project.Name)
+	model := tui.New(tuiEvents, cfg.TUI.AccentColor, cfg.Project.Name, requestStop)
 	program := tea.NewProgram(model, tea.WithAltScreen())
 
 	// Forward loop events → regent state update → TUI
@@ -148,12 +155,18 @@ func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunne
 	loopEvents := make(chan loop.LogEntry, 128)
 	tuiEvents := make(chan loop.LogEntry, 128)
 
+	// Graceful stop: TUI 's' key closes stopCh; loop checks it after each iteration.
+	stopCh := make(chan struct{})
+	var stopOnce sync.Once
+	requestStop := func() { stopOnce.Do(func() { close(stopCh) }) }
+	lp.StopAfter = stopCh
+
 	lp.Events = loopEvents
 
 	st := newStateTracker(dir, mode, gitRunner)
 	st.save()
 
-	model := tui.New(tuiEvents, accentColor, projectName)
+	model := tui.New(tuiEvents, accentColor, projectName, requestStop)
 	program := tea.NewProgram(model, tea.WithAltScreen())
 
 	// Forward loop events → state tracking → TUI

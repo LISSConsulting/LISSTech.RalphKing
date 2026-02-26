@@ -891,3 +891,77 @@ func TestEmitNilLog(t *testing.T) {
 		t.Fatalf("nil Log should fall back to stdout without error, got: %v", err)
 	}
 }
+
+func TestRunStopAfter(t *testing.T) {
+	t.Run("stops after first iteration when channel is pre-closed", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 2.0, "success")},
+		}
+		git := &mockGit{branch: "main", lastCommit: "abc123 feat"}
+		cfg := defaultTestConfig()
+		cfg.Build.MaxIterations = 5 // would run 5 iterations without stop
+
+		lp, buf := setupTestLoop(t, agent, git, cfg)
+
+		// Close the channel before the loop starts — stop after first iteration.
+		stopCh := make(chan struct{})
+		close(stopCh)
+		lp.StopAfter = stopCh
+
+		err := lp.Run(context.Background(), ModeBuild, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// Should have run exactly one iteration before stopping
+		if agent.calls != 1 {
+			t.Errorf("expected 1 agent call, got %d", agent.calls)
+		}
+		// Log should contain the stop message
+		if !strings.Contains(buf.String(), "Stop requested") {
+			t.Errorf("log should contain stop message, got: %s", buf.String())
+		}
+	})
+
+	t.Run("runs multiple iterations when channel is not closed", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.05, 1.0, "success")},
+		}
+		git := &mockGit{branch: "main"}
+		cfg := defaultTestConfig()
+		cfg.Build.MaxIterations = 3
+
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+
+		// Channel present but never closed — should run all iterations normally.
+		stopCh := make(chan struct{})
+		lp.StopAfter = stopCh
+
+		err := lp.Run(context.Background(), ModeBuild, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if agent.calls != 3 {
+			t.Errorf("expected 3 agent calls, got %d", agent.calls)
+		}
+	})
+
+	t.Run("nil StopAfter runs all iterations", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.05, 1.0, "success")},
+		}
+		git := &mockGit{branch: "main"}
+		cfg := defaultTestConfig()
+		cfg.Build.MaxIterations = 2
+
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+		// lp.StopAfter is nil by default
+
+		err := lp.Run(context.Background(), ModeBuild, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if agent.calls != 2 {
+			t.Errorf("expected 2 agent calls, got %d", agent.calls)
+		}
+	})
+}

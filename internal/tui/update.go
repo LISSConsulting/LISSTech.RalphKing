@@ -43,6 +43,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
+	case "s":
+		if m.requestStop != nil && !m.stopRequested {
+			m.stopRequested = true
+			m.requestStop()
+		}
 	case "up", "k":
 		if m.scrollOffset < m.maxScrollOffset() {
 			m.scrollOffset++
