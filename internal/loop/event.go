@@ -9,6 +9,7 @@ const (
 	LogInfo         LogKind = iota // General informational message
 	LogIterStart                   // Iteration starting
 	LogToolUse                     // Claude tool use event
+	LogText                        // Claude text/reasoning output between tool calls
 	LogIterComplete                // Iteration finished
 	LogError                       // Error from Claude or loop
 	LogGitPull                     // Git pull operation

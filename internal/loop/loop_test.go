@@ -394,6 +394,87 @@ func TestLogOutput(t *testing.T) {
 			t.Error("log should contain error message")
 		}
 	})
+
+	t.Run("logs text events as reasoning", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{
+				claude.TextEvent("I'll start by reading the config file."),
+				claude.ResultEvent(0.10, 1.0, "success"),
+			},
+		}
+		git := &mockGit{branch: "main", lastCommit: "abc test"}
+		cfg := defaultTestConfig()
+		cfg.Plan.MaxIterations = 1
+
+		lp, buf := setupTestLoop(t, agent, git, cfg)
+		err := lp.Run(context.Background(), ModePlan, 0)
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		output := buf.String()
+		if !strings.Contains(output, "I'll start by reading the config file.") {
+			t.Error("log should contain text event message")
+		}
+	})
+
+	t.Run("empty text events are not logged", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{
+				claude.TextEvent(""),
+				claude.ResultEvent(0.05, 0.5, "success"),
+			},
+		}
+		git := &mockGit{branch: "main", lastCommit: "abc test"}
+		cfg := defaultTestConfig()
+		cfg.Plan.MaxIterations = 1
+
+		lp, buf := setupTestLoop(t, agent, git, cfg)
+		err := lp.Run(context.Background(), ModePlan, 0)
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		_ = buf // no assertions needed; just verify no panic
+	})
+}
+
+func TestTextEventInEventChannel(t *testing.T) {
+	ch := make(chan LogEntry, 16)
+	agent := &mockAgent{
+		events: []claude.Event{
+			claude.TextEvent("I'll examine the project structure first."),
+			claude.ResultEvent(0.10, 1.0, "success"),
+		},
+	}
+	git := &mockGit{branch: "main", lastCommit: "abc test"}
+	cfg := defaultTestConfig()
+	cfg.Plan.MaxIterations = 1
+
+	lp, _ := setupTestLoop(t, agent, git, cfg)
+	lp.Events = ch
+
+	err := lp.Run(context.Background(), ModePlan, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	close(ch)
+	var textEntry *LogEntry
+	for e := range ch {
+		e := e
+		if e.Kind == LogText {
+			textEntry = &e
+			break
+		}
+	}
+
+	if textEntry == nil {
+		t.Fatal("expected a LogText entry on the Events channel")
+	}
+	if textEntry.Message != "I'll examine the project structure first." {
+		t.Errorf("expected text message, got %q", textEntry.Message)
+	}
 }
 
 func TestSubtypeInLogOutput(t *testing.T) {

@@ -48,6 +48,9 @@ var (
 
 	infoStyle = lipgloss.NewStyle().
 			Foreground(colorWhite)
+
+	reasoningStyle = lipgloss.NewStyle().
+			Foreground(colorGray)
 )
 
 // toolIcon returns the emoji icon for a given tool name.

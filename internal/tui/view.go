@@ -164,6 +164,14 @@ func (m Model) renderLine(line logLine) string {
 		}
 		return fmt.Sprintf("%s  %s %s %s", ts, icon, name, input)
 
+	case loop.LogText:
+		text := e.Message
+		if len([]rune(text)) > 80 {
+			runes := []rune(text)
+			text = string(runes[:79]) + "…"
+		}
+		return fmt.Sprintf("%s  %s", ts, reasoningStyle.Render("💭 "+text))
+
 	case loop.LogIterStart:
 		return fmt.Sprintf("%s  ── iteration %d ──", ts, e.Iteration)
 

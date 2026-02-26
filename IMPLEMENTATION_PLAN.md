@@ -40,7 +40,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 | Low | Display loop elapsed time | ✅ Fixed v0.0.47 | Added `startedAt time.Time` in `New()`; `formatElapsed()` renders compact duration (e.g. `2m35s`, `1h30m`); shown as `elapsed: X` in header |
 | Low | Display last response elapsed time | ✅ Fixed v0.0.44 | Added `lastDuration` to TUI model; updated from `LogIterComplete` entries; shown as `last: %.1fs` in header (omitted until first iteration completes) |
 | Low | Always display latest commit | ✅ Fixed v0.0.46 | `loop.Run()` now calls `LastCommit()` at startup and includes `Commit` in the initial `LogInfo` event; TUI footer shows HEAD commit from first render instead of `—` |
-| High | Show agent's reasoning | Pending | Needs spec (Claude --thinking mode / stream-JSON TextEvent rendering) |
+| High | Show agent's reasoning | ✅ Fixed v0.0.51 | `LogText` kind added; loop emits `LogText` for `claude.EventText` events; TUI renders with 💭 icon in muted gray style (truncated to 80 chars); spec at `specs/agent-reasoning.md` |
 | Low | Truncate long commands | ✅ Fixed v0.0.45 | `renderLine` now truncates `ToolInput` at 60 chars (59+`…`); tool names were already truncated at 14 chars |
 | Bug | macOS iTerm scroll issue | Pending | Bubbletea scroll investigation needed |
 | Bug | Windows WezTerm header disappears after multiline output | Pending | Bubbletea/lipgloss Windows rendering issue |
@@ -116,6 +116,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - `tui.New()` accepts a `projectName` third parameter and a `requestStop func()` fourth parameter; `renderHeader()` shows `👑 <projectName>` when set, falls back to `👑 RalphKing` when empty; both `runWithRegentTUI` and `runWithTUIAndState` pass `cfg.Project.Name` and a `sync.Once`-guarded channel close through
 - Graceful stop: wiring creates `stopCh chan struct{}` + `sync.Once`-guarded close; assigns `stopCh` to `Loop.StopAfter` and close func to TUI's `requestStop`; loop checks channel after each iteration via non-blocking `select`; TUI `s` key handler guards on `!m.stopRequested` to make repeat presses no-ops; footer switches to `⏹ stopping after iteration…  q to force quit` when stop is requested
 - `DetectProjectName(dir)` tries pyproject.toml → package.json → Cargo.toml in priority order; pyproject.toml checks `[project] name` (PEP 621) first, then `[tool.poetry] name` (Poetry); all parse errors are silently ignored (return ""); called in `Load()` only when `cfg.Project.Name == ""`; BurntSushi/toml used for TOML manifests, encoding/json for package.json
+- `LogText` kind surfaces `claude.EventText` (agent reasoning/commentary between tool calls) in the TUI with 💭 icon and muted gray style; text is truncated at 80 runes (79 + `…`) to preserve single-line layout; empty text events are silently ignored; `formatLogLine` in `cmd/ralph/execute.go` handles it via the generic path
 
 ## Out of Scope (for now)
 

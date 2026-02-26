@@ -1362,3 +1362,59 @@ func TestGracefulStopFooterIndicator(t *testing.T) {
 		t.Errorf("footer should not show 's to stop' after stop requested, got: %s", footer)
 	}
 }
+
+func TestRenderLineLogText(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", nil)
+	now := time.Date(2026, 2, 26, 10, 0, 0, 0, time.UTC)
+
+	t.Run("short text shown with thinking icon", func(t *testing.T) {
+		entry := loop.LogEntry{
+			Kind:      loop.LogText,
+			Timestamp: now,
+			Message:   "I'll read the config file first.",
+		}
+		rendered := m.renderLine(logLine{entry: entry})
+		if !strings.Contains(rendered, "💭") {
+			t.Errorf("LogText line should contain 💭 icon, got: %s", rendered)
+		}
+		if !strings.Contains(rendered, "I'll read the config file first.") {
+			t.Errorf("LogText line should contain the message, got: %s", rendered)
+		}
+	})
+
+	t.Run("long text truncated at 80 runes", func(t *testing.T) {
+		longText := strings.Repeat("x", 100)
+		entry := loop.LogEntry{
+			Kind:      loop.LogText,
+			Timestamp: now,
+			Message:   longText,
+		}
+		rendered := m.renderLine(logLine{entry: entry})
+		if !strings.Contains(rendered, "💭") {
+			t.Errorf("LogText line should contain 💭 icon, got: %s", rendered)
+		}
+		// Should be truncated: 79 x's + ellipsis
+		want := strings.Repeat("x", 79) + "…"
+		if !strings.Contains(rendered, want) {
+			t.Errorf("long LogText should be truncated to 79 runes + ellipsis, got: %s", rendered)
+		}
+		// Full 100-char string should not appear
+		if strings.Contains(rendered, longText) {
+			t.Errorf("full 100-char text should not appear untruncated, got: %s", rendered)
+		}
+	})
+
+	t.Run("exactly 80 rune text not truncated", func(t *testing.T) {
+		exactText := strings.Repeat("y", 80)
+		entry := loop.LogEntry{
+			Kind:      loop.LogText,
+			Timestamp: now,
+			Message:   exactText,
+		}
+		rendered := m.renderLine(logLine{entry: entry})
+		if !strings.Contains(rendered, exactText) {
+			t.Errorf("80-rune text should not be truncated, got: %s", rendered)
+		}
+	})
+}

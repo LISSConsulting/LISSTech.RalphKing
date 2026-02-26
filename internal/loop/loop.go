@@ -196,7 +196,12 @@ func (l *Loop) iteration(ctx context.Context, n, maxIter int, prompt, branch str
 				ToolInput: summarizeInput(ev.ToolInput),
 			})
 		case claude.EventText:
-			// Skip text events in log output (verbose)
+			if ev.Text != "" {
+				l.emit(LogEntry{
+					Kind:    LogText,
+					Message: ev.Text,
+				})
+			}
 		case claude.EventResult:
 			cost = ev.CostUSD
 			msg := fmt.Sprintf("Iteration %d complete — $%.2f — %.1fs", n, ev.CostUSD, ev.Duration)
