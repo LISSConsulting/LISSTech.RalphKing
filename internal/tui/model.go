@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -37,6 +39,10 @@ type Model struct {
 	lastCommit   string
 	done         bool
 	err          error
+
+	// Time tracking
+	startedAt time.Time // when the TUI was initialized
+	now       time.Time // updated every second by tickMsg
 }
 
 // logEntryMsg wraps a LogEntry as a bubbletea message.
@@ -48,6 +54,9 @@ type loopDoneMsg struct{}
 // loopErrMsg carries a loop error back to the TUI.
 type loopErrMsg struct{ err error }
 
+// tickMsg is sent every second to update the clock display.
+type tickMsg time.Time
+
 // New creates a new TUI Model that consumes events from the given channel.
 // accentColor is a hex color string (e.g. "#7D56F4") for the header and
 // accent elements. If empty, the default indigo is used.
@@ -56,10 +65,13 @@ func New(events <-chan loop.LogEntry, accentColor string) Model {
 	if accentColor != "" {
 		accent = lipgloss.Color(accentColor)
 	}
+	now := time.Now()
 	return Model{
-		events: events,
-		width:  80,
-		height: 24,
+		events:    events,
+		width:     80,
+		height:    24,
+		startedAt: now,
+		now:       now,
 		accentHeaderStyle: lipgloss.NewStyle().
 			Background(accent).
 			Foreground(colorWhite).
@@ -70,9 +82,16 @@ func New(events <-chan loop.LogEntry, accentColor string) Model {
 	}
 }
 
-// Init returns the initial command: start listening for events.
+// Init returns the initial commands: start listening for events and start the clock ticker.
 func (m Model) Init() tea.Cmd {
-	return waitForEvent(m.events)
+	return tea.Batch(waitForEvent(m.events), tickCmd())
+}
+
+// tickCmd schedules the next one-second clock tick.
+func tickCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
 }
 
 // Err returns any error that occurred during the loop.

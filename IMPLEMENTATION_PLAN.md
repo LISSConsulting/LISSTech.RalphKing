@@ -36,8 +36,8 @@ These items originate from user feedback. Items requiring new specs are noted; b
 | Bug | Task/TaskOutput tool inputs empty in TUI | ✅ Fixed v0.0.42 | `summarizeInput()` extended with `description`, `prompt`, `query`, `notebook_path`, `task_id` |
 | Low | Replace app branding with project name | Pending | TUI header shows "👑 RalphKing"; spec change needed to show `ralph.toml[project.name]` |
 | Low | Display current directory | Pending | Needs spec |
-| Low | Display current time | Pending | Needs spec |
-| Low | Display loop elapsed time | Pending | Needs spec |
+| Low | Display current time | ✅ Fixed v0.0.47 | Added `now time.Time` field updated by `tickMsg` every second; shown as `HH:MM` in header |
+| Low | Display loop elapsed time | ✅ Fixed v0.0.47 | Added `startedAt time.Time` in `New()`; `formatElapsed()` renders compact duration (e.g. `2m35s`, `1h30m`); shown as `elapsed: X` in header |
 | Low | Display last response elapsed time | ✅ Fixed v0.0.44 | Added `lastDuration` to TUI model; updated from `LogIterComplete` entries; shown as `last: %.1fs` in header (omitted until first iteration completes) |
 | Low | Always display latest commit | ✅ Fixed v0.0.46 | `loop.Run()` now calls `LastCommit()` at startup and includes `Commit` in the initial `LogInfo` event; TUI footer shows HEAD commit from first render instead of `—` |
 | High | Show agent's reasoning | Pending | Needs spec (Claude --thinking mode / stream-JSON TextEvent rendering) |
@@ -111,6 +111,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - `ScaffoldProject` creates/appends `.gitignore` with `.ralph/regent-state.json` entry; file is created if absent, entry is appended if missing, no-op if already present; `.gitignore` path is included in the `created` list whenever the file was created or the entry was added
 - `loop.Run()` calls `LastCommit()` at startup and sets `Commit` on the initial `LogInfo` event; TUI footer updates via `handleLogEntry`'s `if entry.Commit != ""` guard — gracefully ignores empty-repo case
 - `regent.SaveState` uses write-then-rename (atomic): writes JSON to a temp file in the `.ralph/` dir, then renames to `regent-state.json`; prevents partial reads when `Supervise` and the drain goroutine in `runWithRegent` call `saveState` concurrently
+- TUI clock ticker: `Init()` returns `tea.Batch(waitForEvent, tickCmd())`; `tickCmd()` uses `tea.Tick(time.Second, ...)` to fire `tickMsg` each second; handler in `Update()` updates `m.now` and reschedules with `tickCmd()`; `startedAt` set once in `New()` for elapsed computation; `formatElapsed(d)` renders compact duration (Xs, Xm Ys, Xh Ym)
 - TUI `renderLine` truncates `ToolInput` at 60 chars (59 + `…`) to match the tool-name truncation pattern (14 chars); truncation happens at display time in `view.go`, not at source in `loop.go`, keeping `LogEntry.ToolInput` intact for any non-TUI consumers
 
 ## Out of Scope (for now)

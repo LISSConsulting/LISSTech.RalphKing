@@ -1170,3 +1170,95 @@ func TestNewCustomAccentColor(t *testing.T) {
 		t.Errorf("git push line with custom accent should render, got: %s", push)
 	}
 }
+
+func TestRenderHeaderShowsElapsedAndTime(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "")
+
+	// Set deterministic time values
+	start := time.Date(2026, 2, 26, 10, 0, 0, 0, time.UTC)
+	m.startedAt = start
+	m.now = start.Add(2*time.Minute + 35*time.Second)
+
+	// Wide terminal to avoid wrap
+	m.width = 300
+	header := m.renderHeader()
+
+	if !strings.Contains(header, "elapsed: 2m35s") {
+		t.Errorf("header should contain 'elapsed: 2m35s', got: %s", header)
+	}
+	if !strings.Contains(header, "10:02") {
+		t.Errorf("header should contain current time '10:02', got: %s", header)
+	}
+}
+
+func TestRenderHeaderElapsedSeconds(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "")
+
+	start := time.Date(2026, 2, 26, 9, 0, 0, 0, time.UTC)
+	m.startedAt = start
+	m.now = start.Add(45 * time.Second)
+	m.width = 300
+
+	header := m.renderHeader()
+	if !strings.Contains(header, "elapsed: 45s") {
+		t.Errorf("header should contain 'elapsed: 45s', got: %s", header)
+	}
+}
+
+func TestRenderHeaderElapsedHours(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "")
+
+	start := time.Date(2026, 2, 26, 8, 0, 0, 0, time.UTC)
+	m.startedAt = start
+	m.now = start.Add(1*time.Hour + 30*time.Minute)
+	m.width = 300
+
+	header := m.renderHeader()
+	if !strings.Contains(header, "elapsed: 1h30m") {
+		t.Errorf("header should contain 'elapsed: 1h30m', got: %s", header)
+	}
+}
+
+func TestFormatElapsed(t *testing.T) {
+	tests := []struct {
+		d    time.Duration
+		want string
+	}{
+		{0, "0s"},
+		{5 * time.Second, "5s"},
+		{59 * time.Second, "59s"},
+		{time.Minute, "1m0s"},
+		{2*time.Minute + 35*time.Second, "2m35s"},
+		{59*time.Minute + 59*time.Second, "59m59s"},
+		{time.Hour, "1h0m"},
+		{1*time.Hour + 30*time.Minute, "1h30m"},
+		{2*time.Hour + 5*time.Minute, "2h5m"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			got := formatElapsed(tt.d)
+			if got != tt.want {
+				t.Errorf("formatElapsed(%v) = %q, want %q", tt.d, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTickMsgUpdatesNow(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "")
+
+	fixedTime := time.Date(2026, 2, 26, 15, 30, 0, 0, time.UTC)
+	updated, cmd := m.Update(tickMsg(fixedTime))
+	m = updated.(Model)
+
+	if !m.now.Equal(fixedTime) {
+		t.Errorf("tickMsg should update now to %v, got %v", fixedTime, m.now)
+	}
+	if cmd == nil {
+		t.Error("tickMsg handler should return next tick command")
+	}
+}

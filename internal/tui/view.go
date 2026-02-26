@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 )
@@ -48,6 +49,13 @@ func (m Model) renderHeader() string {
 	}
 	if m.lastDuration > 0 {
 		parts = append(parts, fmt.Sprintf("last: %.1fs", m.lastDuration))
+	}
+	if !m.startedAt.IsZero() {
+		elapsed := m.now.Sub(m.startedAt)
+		parts = append(parts, fmt.Sprintf("elapsed: %s", formatElapsed(elapsed)))
+	}
+	if !m.now.IsZero() {
+		parts = append(parts, m.now.Format("15:04"))
 	}
 
 	content := strings.Join(parts, "  │  ")
@@ -110,6 +118,22 @@ func (m Model) renderLog(height int) string {
 	}
 
 	return b.String()
+}
+
+// formatElapsed renders a duration as a compact human-readable string.
+// Examples: "5s", "2m30s", "1h15m"
+func formatElapsed(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	if h > 0 {
+		return fmt.Sprintf("%dh%dm", h, m)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm%ds", m, s)
+	}
+	return fmt.Sprintf("%ds", s)
 }
 
 func (m Model) renderLine(line logLine) string {

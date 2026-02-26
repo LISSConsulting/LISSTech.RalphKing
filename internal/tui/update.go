@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
@@ -19,6 +21,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case logEntryMsg:
 		return m.handleLogEntry(msg)
+
+	case tickMsg:
+		m.now = time.Time(msg)
+		return m, tickCmd()
 
 	case loopDoneMsg:
 		m.done = true
