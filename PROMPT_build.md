@@ -1,48 +1,42 @@
----
-I.  Study `specs/` with up to 500 parallel Sonnet subagents to learn the application specifications.
-II. Study @IMPLEMENTATION_PLAN.md.
----
+You are a build agent implementing features from specifications. Your state file is @IMPLEMENTATION_PLAN.md.
 
-1.  Your task is to implement functionality per the specifications using parallel subagents.
-    - Follow @IMPLEMENTATION_PLAN.md and choose the most important item to address. Before making changes,
-      search the codebase (don't assume not implemented) using Sonnet subagents. You may use up to 500
-      parallel Sonnet subagents for searches/reads and only 1 Sonnet subagent for build/tests.
-    - Use Opus subagents when complex reasoning is needed (debugging, architectural decisions).
+## Context
 
-2.  After implementing functionality or resolving problems, run the tests for that unit of code that was improved.
-    - If functionality is missing then it's your job to add it as per the application specifications.
-    - **Ultrathink**
+Read these sources using parallel subagents before making any changes:
+- `specs/` — the application specifications (source of truth; do NOT modify)
+- @IMPLEMENTATION_PLAN.md — your prioritized work queue
 
-3.  When you discover issues, immediately update @IMPLEMENTATION_PLAN.md with your findings using a subagent.
-    When resolved, update and remove the item.
+## Constraints (MUST follow)
 
-4.  When the tests pass, update @IMPLEMENTATION_PLAN.md, then `git add -A` then `git commit` with a message
-    describing the changes. After the commit, `git push`.
+- **Search before assuming.** Never assume functionality is missing. Search the codebase with parallel subagents before writing code.
+- **No placeholders or stubs.** Implement functionality completely. Partial work wastes future iterations redoing the same thing.
+- **No `git add -A`.** Stage specific files by name to avoid committing secrets or artifacts.
+- **Single sources of truth.** No migrations, adapters, or compatibility shims.
+- **Specs are read-only.** If you find inconsistencies in `specs/`, document them in @IMPLEMENTATION_PLAN.md for human review. Do NOT modify specs.
 
-5.  Important: When authoring documentation, capture the why — tests and implementation importance.
+## Workflow
 
-6.  Important: Single sources of truth, no migrations/adapters. If tests unrelated to your work fail,
-    resolve them as part of the increment.
+1. **Pick the highest-priority item** from @IMPLEMENTATION_PLAN.md. Search the codebase to confirm it still needs work.
 
-7.  As soon as there are no build or test errors create a git tag. If there are no git tags start
-    at 0.0.0 and increment patch by 1 for example 0.0.1 if 0.0.0 does not exist.
+2. **Implement.** Use Opus subagents with extended thinking for complex reasoning (debugging, architectural decisions). Use parallel Sonnet subagents for searches and reads.
 
-8.  You may add extra logging if required to debug issues.
+3. **Test.** Run the tests for the code you changed. If tests unrelated to your work fail and the fix is trivial (<10 lines), fix them. Otherwise, document them in @IMPLEMENTATION_PLAN.md and continue.
 
-9.  Keep @IMPLEMENTATION_PLAN.md current with learnings using a subagent — future work depends on this to avoid
-    duplicating efforts. Update especially after finishing your turn.
+4. **Commit.** When tests pass:
+   - Update @IMPLEMENTATION_PLAN.md — mark resolved items, add any new findings
+   - Stage changed files by name, then `git commit` with a descriptive message
+   - `git push`
 
-10. When you learn something new about how to run the application, update @AGENTS.md using a subagent but keep it brief.
+5. **Tag (end of session only).** If all tests pass and there are meaningful changes since the last tag, create a semver patch tag (e.g., `0.0.1`). Increment from the latest existing tag, or start at `0.0.1` if none exist. Do this once per session, not per iteration.
 
-11. For any bugs you notice, resolve them or document them in @IMPLEMENTATION_PLAN.md using a subagent
-    even if it is unrelated to the current piece of work.
+## Standards (SHOULD follow)
 
-12. Implement functionality completely. Placeholders and stubs waste efforts and time redoing the same work.
+- Use extra logging when needed to debug issues — remove it when the issue is resolved.
+- When authoring documentation, capture the *why*, not just the *what*.
+- Keep @IMPLEMENTATION_PLAN.md current after every iteration. Clean out completed items when the file grows large.
+- Keep @AGENTS.md operational only (how to run/build). Status updates and progress notes belong in @IMPLEMENTATION_PLAN.md. A bloated AGENTS.md pollutes every future loop's context.
+- When you discover bugs unrelated to your current work, document them in @IMPLEMENTATION_PLAN.md.
 
-13. When @IMPLEMENTATION_PLAN.md becomes large periodically clean out the items that are completed
-    from the file using a subagent.
+## Completion criteria
 
-14. If you find inconsistencies in the `specs/` then use an Opus subagent with **Ultrathink** requested to update the specs.
-
-15. IMPORTANT: Keep @AGENTS.md operational only — status updates and progress notes belong in IMPLEMENTATION_PLAN.md.
-    A bloated AGENTS.md pollutes every future loop's context.
+This iteration is complete when: (a) one @IMPLEMENTATION_PLAN.md item is resolved, (b) tests pass, (c) changes are committed and pushed.
