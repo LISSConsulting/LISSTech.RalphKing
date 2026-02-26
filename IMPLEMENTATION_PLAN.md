@@ -38,7 +38,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 | Low | Display current directory | Pending | Needs spec |
 | Low | Display current time | Pending | Needs spec |
 | Low | Display loop elapsed time | Pending | Needs spec |
-| Low | Display last response elapsed time | Pending | Available in ResultEvent; needs TUI wiring |
+| Low | Display last response elapsed time | ✅ Fixed v0.0.44 | Added `lastDuration` to TUI model; updated from `LogIterComplete` entries; shown as `last: %.1fs` in header (omitted until first iteration completes) |
 | Low | Always display latest commit | Pending | Header already shows commit; clarify behavior needed |
 | High | Show agent's reasoning | Pending | Needs spec (Claude --thinking mode / stream-JSON TextEvent rendering) |
 | Low | Truncate long commands | Pending | Tool names truncated; command values may also need truncation |
@@ -106,6 +106,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - SIGQUIT handling: `quit_unix.go` registers `syscall.SIGQUIT` via `signal.Notify`; goroutine prints "SIGQUIT — stopping immediately" to stderr and calls `os.Exit(1)`; `quit_windows.go` is a no-op (SIGQUIT is Unix-only); satisfies the-regent.md "On SIGQUIT: stop immediately, kill Ralph child process"
 
 - `summarizeInput()` extracts display text from tool inputs by checking known field names in priority order: `file_path`, `command`, `path`, `url`, `pattern`, `description`, `prompt`, `query`, `notebook_path`, `task_id`; unknown tool types show no input (empty string is valid)
+- TUI `lastDuration` tracks seconds for the last completed iteration via `LogIterComplete` events; rendered as `last: %.1fs` in header; zero-value means no iteration completed yet so the field is omitted; TUI header test must set `Width: 200` via `WindowSizeMsg` to prevent lipgloss wrapping when asserting on header content
 - `Stash()` handles "No local changes to save" from `git stash push` as success — some git versions exit non-zero even when nothing is stashed; `stashIfDirty()` already pre-guards via `HasUncommittedChanges()` but defensive handling prevents errors if called directly
 - `ScaffoldProject` creates/appends `.gitignore` with `.ralph/regent-state.json` entry; file is created if absent, entry is appended if missing, no-op if already present; `.gitignore` path is included in the `created` list whenever the file was created or the entry was added
 - `regent.SaveState` uses write-then-rename (atomic): writes JSON to a temp file in the `.ralph/` dir, then renames to `regent-state.json`; prevents partial reads when `Supervise` and the drain goroutine in `runWithRegent` call `saveState` concurrently

@@ -46,6 +46,9 @@ func (m Model) renderHeader() string {
 		fmt.Sprintf("iter: %s/%s", iter, maxLabel),
 		fmt.Sprintf("cost: $%.2f", m.totalCost),
 	}
+	if m.lastDuration > 0 {
+		parts = append(parts, fmt.Sprintf("last: %.1fs", m.lastDuration))
+	}
 
 	content := strings.Join(parts, "  │  ")
 	return m.accentHeaderStyle.Width(m.width).Render(content)

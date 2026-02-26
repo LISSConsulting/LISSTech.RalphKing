@@ -82,6 +82,9 @@ func (m Model) handleLogEntry(msg logEntryMsg) (tea.Model, tea.Cmd) {
 	if entry.TotalCost > 0 {
 		m.totalCost = entry.TotalCost
 	}
+	if entry.Kind == loop.LogIterComplete && entry.Duration > 0 {
+		m.lastDuration = entry.Duration
+	}
 	if entry.Commit != "" {
 		m.lastCommit = entry.Commit
 	}

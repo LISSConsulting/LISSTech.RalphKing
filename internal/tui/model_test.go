@@ -111,6 +111,45 @@ func TestUpdateCostTracking(t *testing.T) {
 	}
 }
 
+func TestUpdateDurationTracking(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "")
+
+	// Non-complete entries should not update lastDuration
+	nonComplete := logEntryMsg(loop.LogEntry{
+		Kind:      loop.LogInfo,
+		Timestamp: time.Now(),
+		Duration:  99.9,
+	})
+	updated, _ := m.Update(nonComplete)
+	m = updated.(Model)
+	if m.lastDuration != 0 {
+		t.Errorf("non-complete entry should not update lastDuration, got %.1f", m.lastDuration)
+	}
+
+	// LogIterComplete with duration > 0 should update lastDuration
+	complete := logEntryMsg(loop.LogEntry{
+		Kind:      loop.LogIterComplete,
+		Timestamp: time.Now(),
+		Iteration: 1,
+		CostUSD:   0.10,
+		Duration:  7.5,
+	})
+	updated, _ = m.Update(complete)
+	m = updated.(Model)
+	if m.lastDuration != 7.5 {
+		t.Errorf("expected lastDuration 7.5, got %.1f", m.lastDuration)
+	}
+
+	// Header should contain "last: 7.5s"; use wide terminal to avoid wrap.
+	updated, _ = m.Update(tea.WindowSizeMsg{Width: 200, Height: 24})
+	m = updated.(Model)
+	view := m.View()
+	if !strings.Contains(view, "last: 7.5s") {
+		t.Errorf("header should contain 'last: 7.5s', view: %s", view)
+	}
+}
+
 func TestUpdateLoopDone(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
 	m := New(ch, "")
@@ -205,6 +244,10 @@ func TestViewRenders(t *testing.T) {
 	}
 	if !strings.Contains(view, "q to quit") {
 		t.Error("View should contain quit hint in footer")
+	}
+	// "last:" should not appear before any iteration completes
+	if strings.Contains(view, "last:") {
+		t.Error("header should not show 'last:' before any iteration completes")
 	}
 }
 

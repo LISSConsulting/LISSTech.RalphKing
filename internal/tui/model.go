@@ -28,14 +28,15 @@ type Model struct {
 	accentGitStyle    lipgloss.Style
 
 	// Loop state
-	mode       string
-	branch     string
-	iteration  int
-	maxIter    int
-	totalCost  float64
-	lastCommit string
-	done       bool
-	err        error
+	mode         string
+	branch       string
+	iteration    int
+	maxIter      int
+	totalCost    float64
+	lastDuration float64 // seconds; 0 until first iteration completes
+	lastCommit   string
+	done         bool
+	err          error
 }
 
 // logEntryMsg wraps a LogEntry as a bubbletea message.
