@@ -530,9 +530,17 @@ func TestSummarizeInput(t *testing.T) {
 		{"file_path", map[string]any{"file_path": "main.go"}, "main.go"},
 		{"command", map[string]any{"command": "go build"}, "go build"},
 		{"path", map[string]any{"path": "/tmp"}, "/tmp"},
+		{"url", map[string]any{"url": "https://example.com"}, "https://example.com"},
+		{"pattern", map[string]any{"pattern": "*.go"}, "*.go"},
+		{"description", map[string]any{"description": "Run tests"}, "Run tests"},
+		{"prompt", map[string]any{"prompt": "Write a test"}, "Write a test"},
+		{"query", map[string]any{"query": "golang errors"}, "golang errors"},
+		{"notebook_path", map[string]any{"notebook_path": "nb.ipynb"}, "nb.ipynb"},
+		{"task_id", map[string]any{"task_id": "abc123"}, "abc123"},
 		{"empty", map[string]any{"other": "value"}, ""},
 		{"nil", nil, ""},
-		{"prefers file_path", map[string]any{"file_path": "a.go", "command": "ls"}, "a.go"},
+		{"prefers file_path over command", map[string]any{"file_path": "a.go", "command": "ls"}, "a.go"},
+		{"prefers description over prompt", map[string]any{"description": "short", "prompt": "long text"}, "short"},
 	}
 
 	for _, tt := range tests {

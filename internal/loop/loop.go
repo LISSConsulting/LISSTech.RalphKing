@@ -305,7 +305,14 @@ func iterLabel(max int) string {
 }
 
 func summarizeInput(input map[string]any) string {
-	for _, key := range []string{"file_path", "command", "path", "url", "pattern"} {
+	// Check well-known field names in priority order.
+	for _, key := range []string{
+		"file_path", "command", "path", "url", "pattern", // core tools
+		"description", "prompt",                           // Task / agent tools
+		"query",                                           // WebSearch
+		"notebook_path",                                   // NotebookEdit
+		"task_id",                                         // TaskOutput
+	} {
 		if v, ok := input[key]; ok {
 			return fmt.Sprintf("%v", v)
 		}

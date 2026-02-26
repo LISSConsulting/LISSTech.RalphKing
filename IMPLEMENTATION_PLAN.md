@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **All core features complete + hardened.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 96-99% test coverage across all internal packages; cmd/ralph 74.0%, overall ~89%. Re-audited 2026-02-26 via full code search across all spec requirements. All remaining work items resolved as of v0.0.40. SIGQUIT handling confirmed implemented in `quit_unix.go`. `spec.List()` subdirectory walk fixed in v0.0.39.
+> Current state: **All core features complete + hardened.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 96-99% test coverage across all internal packages; cmd/ralph 74.0%, overall ~89%. Re-audited 2026-02-26 via full code search across all spec requirements. All remaining work items resolved as of v0.0.40. SIGQUIT handling confirmed implemented in `quit_unix.go`. `spec.List()` subdirectory walk fixed in v0.0.39. v2 improvements branch (`002-v2-improvements`) active — bugs fixed in v0.0.42.
 
 ## Completed Work
 
@@ -24,6 +24,38 @@ Specs implemented: `ralph-core.md`, `the-regent.md`.
 | Priority | Item | Location | Notes |
 |----------|------|----------|-------|
 | Info | cmd/ralph coverage ceiling at 74.0% | `cmd/ralph/wiring.go` — `runWithRegentTUI`, `finishTUI`, `runWithTUIAndState`; `cmd/ralph/main.go` — `main`; `cmd/ralph/quit_unix.go`/`quit_windows.go` — `registerQuitHandler` | These functions require a real TTY (bubbletea) or are OS-level signal handlers. No further coverage attainable without a bubbletea headless test mode. Not actionable |
+
+## v2 Improvement Backlog (from GitHub Issues #1 and #2)
+
+These items originate from user feedback. Items requiring new specs are noted; bug fixes can be done directly.
+
+### TUI Improvements (Issue #1)
+| Priority | Item | Status | Notes |
+|----------|------|--------|-------|
+| Bug | Stash error when no changes | ✅ Fixed v0.0.42 | `Stash()` now returns nil for "No local changes to save" |
+| Bug | Task/TaskOutput tool inputs empty in TUI | ✅ Fixed v0.0.42 | `summarizeInput()` extended with `description`, `prompt`, `query`, `notebook_path`, `task_id` |
+| Low | Replace app branding with project name | Pending | TUI header shows "👑 RalphKing"; spec change needed to show `ralph.toml[project.name]` |
+| Low | Display current directory | Pending | Needs spec |
+| Low | Display current time | Pending | Needs spec |
+| Low | Display loop elapsed time | Pending | Needs spec |
+| Low | Display last response elapsed time | Pending | Available in ResultEvent; needs TUI wiring |
+| Low | Always display latest commit | Pending | Header already shows commit; clarify behavior needed |
+| High | Show agent's reasoning | Pending | Needs spec (Claude --thinking mode / stream-JSON TextEvent rendering) |
+| Low | Truncate long commands | Pending | Tool names truncated; command values may also need truncation |
+| Bug | macOS iTerm scroll issue | Pending | Bubbletea scroll investigation needed |
+| Bug | Windows WezTerm header disappears after multiline output | Pending | Bubbletea/lipgloss Windows rendering issue |
+
+### RK Improvements (Issue #2)
+| Priority | Item | Status | Notes |
+|----------|------|--------|-------|
+| Low | `ralph init` adds `.ralph/regent-state.json` to `.gitignore` | Pending | Simple, no spec needed — state file should not be committed |
+| Low | Read project name from pyproject.toml/package.json/cargo.toml | Pending | Needs spec |
+| Low | Allow user to stop after current iteration | Pending | Needs spec (likely a key binding or file-sentinel approach) |
+| Info | Work trees per iteration | Pending | High effort; needs spec; would require major loop refactor |
+| Info | Rename PROMPT_plan.md → PLAN.md, PROMPT_build.md → BUILD.md, IMPLEMENTATION_PLAN.md → CHRONICLE.md | Pending | Breaking change; needs spec and migration path |
+| Info | `ralph init` write IMPLEMENTATION_PLAN.md | Pending | Minor scaffolding addition; needs spec |
+| Info | Webhooks / ntfy.sh notifications | Pending | Needs spec |
+| Info | Regent daemon mode | Pending | Explicitly out of scope in current specs |
 
 ## Key Learnings
 
@@ -72,6 +104,9 @@ Specs implemented: `ralph-core.md`, `the-regent.md`.
 - `spec.List()` walks one level of subdirectories (e.g. `specs/001-the-genesis/`); `ralph spec new` still creates flat `specs/name.md`; two-levels-deep and hidden files are ignored; `Path` field is relative to project root (`specs/subdir/name.md`)
 - `RunTests()` in tester.go uses `runtime.GOOS` to select `cmd /C` (Windows) or `sh -c` (Unix); `errors.As(err, &exitErr)` distinguishes test failure (`*exec.ExitError` → `Passed: false`) from shell-not-found (other errors → return error); `TestRunTests_ShellNotFound` covers the error path via `t.Setenv("PATH", "")`
 - SIGQUIT handling: `quit_unix.go` registers `syscall.SIGQUIT` via `signal.Notify`; goroutine prints "SIGQUIT — stopping immediately" to stderr and calls `os.Exit(1)`; `quit_windows.go` is a no-op (SIGQUIT is Unix-only); satisfies the-regent.md "On SIGQUIT: stop immediately, kill Ralph child process"
+
+- `summarizeInput()` extracts display text from tool inputs by checking known field names in priority order: `file_path`, `command`, `path`, `url`, `pattern`, `description`, `prompt`, `query`, `notebook_path`, `task_id`; unknown tool types show no input (empty string is valid)
+- `Stash()` handles "No local changes to save" from `git stash push` as success — some git versions exit non-zero even when nothing is stashed; `stashIfDirty()` already pre-guards via `HasUncommittedChanges()` but defensive handling prevents errors if called directly
 
 ## Out of Scope (for now)
 
