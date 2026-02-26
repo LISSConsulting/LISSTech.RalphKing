@@ -106,11 +106,11 @@ func TestFormatScaffoldResult(t *testing.T) {
 		},
 		{
 			name:    "multiple files created",
-			created: []string{"ralph.toml", "PROMPT_plan.md", "PROMPT_build.md", "specs/"},
+			created: []string{"ralph.toml", "PLAN.md", "BUILD.md", "specs/"},
 			contains: []string{
 				"Created ralph.toml",
-				"Created PROMPT_plan.md",
-				"Created PROMPT_build.md",
+				"Created PLAN.md",
+				"Created BUILD.md",
 				"Created specs/",
 			},
 		},
@@ -210,7 +210,7 @@ func TestInitCmdExecution(t *testing.T) {
 	}
 
 	// Verify core files were created
-	for _, name := range []string{"ralph.toml", "PROMPT_plan.md", "PROMPT_build.md"} {
+	for _, name := range []string{"ralph.toml", "PLAN.md", "BUILD.md"} {
 		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 			t.Errorf("expected %s to exist: %v", name, err)
 		}

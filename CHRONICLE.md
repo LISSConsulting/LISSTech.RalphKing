@@ -52,7 +52,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 | Low | Read project name from pyproject.toml/package.json/cargo.toml | ✅ Fixed v0.0.50 | `DetectProjectName(dir)` in `internal/config/detect.go`; checks pyproject.toml ([project] name or [tool.poetry] name), package.json (name), Cargo.toml ([package] name) in priority order; called in `Load()` when project.name is empty; spec at `specs/project-name-detection.md` |
 | Low | Allow user to stop after current iteration | ✅ Fixed v0.0.49 | `s` key in TUI closes `Loop.StopAfter` channel; loop exits after current iteration with `LogStopped`; footer shows `⏹ stopping after iteration…  q to force quit`; spec at `specs/graceful-stop.md` |
 | Info | Work trees per iteration | Pending | High effort; needs spec; would require major loop refactor |
-| Info | Rename PROMPT_plan.md → PLAN.md, PROMPT_build.md → BUILD.md, IMPLEMENTATION_PLAN.md → CHRONICLE.md | Pending | Breaking change; needs spec and migration path |
+| Info | Rename PROMPT_plan.md → PLAN.md, PROMPT_build.md → BUILD.md, IMPLEMENTATION_PLAN.md → CHRONICLE.md | ✅ Fixed v0.0.57 | Scaffold creates PLAN.md, BUILD.md, CHRONICLE.md; defaults updated; spec at `specs/rename-prompt-files.md`; project files renamed |
 | Low | `ralph init` write IMPLEMENTATION_PLAN.md | ✅ Fixed v0.0.54 | `ScaffoldProject` creates `IMPLEMENTATION_PLAN.md` with starter template (Completed Work, Remaining Work, Key Learnings sections); idempotent; spec at `specs/init-implementation-plan.md` |
 | Info | Webhooks / ntfy.sh notifications | Pending | Needs spec |
 | Info | Regent daemon mode | Pending | Explicitly out of scope in current specs |
@@ -124,6 +124,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - `internal/loop/runner.Run` is 0% coverage on Windows because all tests use shell scripts (`#!/bin/sh`) which are skipped on Windows; this is the primary cause of loop package dropping from 97.7% to 81.0% on Windows
 - `SaveState` rename error tested by creating a directory at the state file path — `os.Rename(tempFile, directory)` fails on all platforms; `regent.saveState` error emit tested by blocking `.ralph` with a regular file
 - `RunPostIterationTests` "Failed to start tests" path tested via `t.Setenv("PATH", "")` to prevent shell binary lookup (same pattern as `TestRunTests_ShellNotFound`)
+- Scaffold file rename (PROMPT_plan.md→PLAN.md, PROMPT_build.md→BUILD.md, IMPLEMENTATION_PLAN.md→CHRONICLE.md): changing defaults and scaffold is all that's needed for new projects; existing projects with explicit `prompt_file` in ralph.toml are unaffected; `executeSmartRun` and `spec.List()` look for `CHRONICLE.md`; `internal/spec/spec_test.go` references must match the filename `spec.go` reads
 
 ## Out of Scope (for now)
 

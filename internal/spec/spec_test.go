@@ -133,7 +133,7 @@ func TestList(t *testing.T) {
 			}
 
 			if tt.planContent != "" {
-				if err := os.WriteFile(filepath.Join(dir, "IMPLEMENTATION_PLAN.md"), []byte(tt.planContent), 0o644); err != nil {
+				if err := os.WriteFile(filepath.Join(dir, "CHRONICLE.md"), []byte(tt.planContent), 0o644); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -185,7 +185,7 @@ func TestList_SubdirLayout(t *testing.T) {
 ## Remaining Work
 - Hang detection — the-regent.md
 `
-	if err := os.WriteFile(filepath.Join(dir, "IMPLEMENTATION_PLAN.md"), []byte(plan), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "CHRONICLE.md"), []byte(plan), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

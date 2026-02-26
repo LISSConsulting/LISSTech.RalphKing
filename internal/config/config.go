@@ -128,11 +128,11 @@ func Defaults() Config {
 			DangerSkipPermissions: true,
 		},
 		Plan: PlanConfig{
-			PromptFile:    "PROMPT_plan.md",
+			PromptFile:    "PLAN.md",
 			MaxIterations: 3,
 		},
 		Build: BuildConfig{
-			PromptFile:    "PROMPT_build.md",
+			PromptFile:    "BUILD.md",
 			MaxIterations: 0,
 		},
 		Git: GitConfig{
@@ -231,11 +231,11 @@ max_turns = 0  # 0 = unlimited agentic turns per iteration
 danger_skip_permissions = true
 
 [plan]
-prompt_file = "PROMPT_plan.md"
+prompt_file = "PLAN.md"
 max_iterations = 3
 
 [build]
-prompt_file = "PROMPT_build.md"
+prompt_file = "BUILD.md"
 max_iterations = 0  # 0 = unlimited
 
 [git]

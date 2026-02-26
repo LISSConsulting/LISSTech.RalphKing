@@ -18,11 +18,11 @@ func TestScaffoldProject(t *testing.T) {
 
 		expected := []string{
 			filepath.Join(dir, "ralph.toml"),
-			filepath.Join(dir, "PROMPT_plan.md"),
-			filepath.Join(dir, "PROMPT_build.md"),
+			filepath.Join(dir, "PLAN.md"),
+			filepath.Join(dir, "BUILD.md"),
 			filepath.Join(dir, "specs"),
 			filepath.Join(dir, ".gitignore"),
-			filepath.Join(dir, "IMPLEMENTATION_PLAN.md"),
+			filepath.Join(dir, "CHRONICLE.md"),
 		}
 
 		if len(created) != len(expected) {
@@ -68,11 +68,11 @@ func TestScaffoldProject(t *testing.T) {
 	t.Run("skips existing files", func(t *testing.T) {
 		dir := t.TempDir()
 
-		// Pre-create ralph.toml and PROMPT_build.md
+		// Pre-create ralph.toml and BUILD.md
 		if err := os.WriteFile(filepath.Join(dir, "ralph.toml"), []byte("existing"), 0644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "PROMPT_build.md"), []byte("custom build prompt"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "BUILD.md"), []byte("custom build prompt"), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -81,12 +81,12 @@ func TestScaffoldProject(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Should only create the missing files (PROMPT_plan.md, specs/, .gitignore, IMPLEMENTATION_PLAN.md)
+		// Should only create the missing files (PLAN.md, specs/, .gitignore, CHRONICLE.md)
 		expected := []string{
-			filepath.Join(dir, "PROMPT_plan.md"),
+			filepath.Join(dir, "PLAN.md"),
 			filepath.Join(dir, "specs"),
 			filepath.Join(dir, ".gitignore"),
-			filepath.Join(dir, "IMPLEMENTATION_PLAN.md"),
+			filepath.Join(dir, "CHRONICLE.md"),
 		}
 		if len(created) != len(expected) {
 			t.Fatalf("created %d files, want %d: %v", len(created), len(expected), created)
@@ -98,12 +98,12 @@ func TestScaffoldProject(t *testing.T) {
 		}
 
 		// Verify pre-existing file was not overwritten
-		content, err := os.ReadFile(filepath.Join(dir, "PROMPT_build.md"))
+		content, err := os.ReadFile(filepath.Join(dir, "BUILD.md"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		if string(content) != "custom build prompt" {
-			t.Error("PROMPT_build.md was overwritten")
+			t.Error("BUILD.md was overwritten")
 		}
 	})
 
@@ -114,10 +114,10 @@ func TestScaffoldProject(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "ralph.toml"), []byte("x"), 0644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "PROMPT_plan.md"), []byte("x"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "PLAN.md"), []byte("x"), 0644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "PROMPT_build.md"), []byte("x"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "BUILD.md"), []byte("x"), 0644); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.MkdirAll(filepath.Join(dir, "specs"), 0755); err != nil {
@@ -126,7 +126,7 @@ func TestScaffoldProject(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".ralph/regent-state.json\n"), 0644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "IMPLEMENTATION_PLAN.md"), []byte("existing plan"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "CHRONICLE.md"), []byte("existing plan"), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -175,10 +175,10 @@ func TestScaffoldProject(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "ralph.toml"), []byte("x"), 0644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "PROMPT_plan.md"), []byte("x"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "PLAN.md"), []byte("x"), 0644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "PROMPT_build.md"), []byte("x"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "BUILD.md"), []byte("x"), 0644); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.MkdirAll(filepath.Join(dir, "specs"), 0755); err != nil {
@@ -187,7 +187,7 @@ func TestScaffoldProject(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("# existing\n.ralph/regent-state.json\n"), 0644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "IMPLEMENTATION_PLAN.md"), []byte("existing plan"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "CHRONICLE.md"), []byte("existing plan"), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -206,12 +206,12 @@ func TestScaffoldProject(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		content, err := os.ReadFile(filepath.Join(dir, "PROMPT_plan.md"))
+		content, err := os.ReadFile(filepath.Join(dir, "PLAN.md"))
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		for _, want := range []string{"specs/", "IMPLEMENTATION_PLAN.md", "planning phase"} {
+		for _, want := range []string{"specs/", "CHRONICLE.md", "planning phase"} {
 			if !strings.Contains(string(content), want) {
 				t.Errorf("plan prompt should contain %q", want)
 			}
@@ -224,12 +224,12 @@ func TestScaffoldProject(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		content, err := os.ReadFile(filepath.Join(dir, "PROMPT_build.md"))
+		content, err := os.ReadFile(filepath.Join(dir, "BUILD.md"))
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		for _, want := range []string{"specs/", "IMPLEMENTATION_PLAN.md", "Implement"} {
+		for _, want := range []string{"specs/", "CHRONICLE.md", "Implement"} {
 			if !strings.Contains(string(content), want) {
 				t.Errorf("build prompt should contain %q", want)
 			}
@@ -242,22 +242,22 @@ func TestScaffoldProject(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		content, err := os.ReadFile(filepath.Join(dir, "IMPLEMENTATION_PLAN.md"))
+		content, err := os.ReadFile(filepath.Join(dir, "CHRONICLE.md"))
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		for _, want := range []string{"## Completed Work", "## Remaining Work", "## Key Learnings"} {
 			if !strings.Contains(string(content), want) {
-				t.Errorf("IMPLEMENTATION_PLAN.md should contain %q", want)
+				t.Errorf("CHRONICLE.md should contain %q", want)
 			}
 		}
 	})
 
-	t.Run("existing IMPLEMENTATION_PLAN.md is not overwritten", func(t *testing.T) {
+	t.Run("existing CHRONICLE.md is not overwritten", func(t *testing.T) {
 		dir := t.TempDir()
-		const existingContent = "# My existing plan\n\nDo not overwrite me.\n"
-		if err := os.WriteFile(filepath.Join(dir, "IMPLEMENTATION_PLAN.md"), []byte(existingContent), 0644); err != nil {
+		const existingContent = "# My existing chronicle\n\nDo not overwrite me.\n"
+		if err := os.WriteFile(filepath.Join(dir, "CHRONICLE.md"), []byte(existingContent), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -266,21 +266,21 @@ func TestScaffoldProject(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// IMPLEMENTATION_PLAN.md should NOT be in created list
-		planMDPath := filepath.Join(dir, "IMPLEMENTATION_PLAN.md")
+		// CHRONICLE.md should NOT be in created list
+		chroniclePath := filepath.Join(dir, "CHRONICLE.md")
 		for _, p := range created {
-			if p == planMDPath {
-				t.Error("IMPLEMENTATION_PLAN.md should not appear in created when it already exists")
+			if p == chroniclePath {
+				t.Error("CHRONICLE.md should not appear in created when it already exists")
 			}
 		}
 
 		// Content should be unchanged
-		content, err := os.ReadFile(planMDPath)
+		content, err := os.ReadFile(chroniclePath)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if string(content) != existingContent {
-			t.Error("existing IMPLEMENTATION_PLAN.md was overwritten")
+			t.Error("existing CHRONICLE.md was overwritten")
 		}
 	})
 

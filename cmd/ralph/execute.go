@@ -73,7 +73,7 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, runFn)
 }
 
-// executeSmartRun runs plan if IMPLEMENTATION_PLAN.md doesn't exist, then build.
+// executeSmartRun runs plan if CHRONICLE.md doesn't exist, then build.
 func executeSmartRun(maxOverride int, noTUI bool) error {
 	cfg, err := config.Load("")
 	if err != nil {
@@ -102,7 +102,7 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 	smartRunFn := func(ctx context.Context) error {
 		// Check inside the closure so Regent retries re-evaluate whether
 		// the plan file exists (it may have been created by a prior attempt).
-		planPath := filepath.Join(dir, "IMPLEMENTATION_PLAN.md")
+		planPath := filepath.Join(dir, "CHRONICLE.md")
 		info, statErr := os.Stat(planPath)
 		if needsPlanPhase(info, statErr) {
 			if planErr := lp.Run(ctx, loop.ModePlan, 0); planErr != nil {
@@ -226,7 +226,7 @@ func classifyResult(state regent.State) statusResult {
 }
 
 // needsPlanPhase reports whether the plan phase should run based on the
-// result of os.Stat on IMPLEMENTATION_PLAN.md. Returns true if the file
+// result of os.Stat on CHRONICLE.md. Returns true if the file
 // does not exist or is empty.
 func needsPlanPhase(info fs.FileInfo, statErr error) bool {
 	return statErr != nil || info == nil || info.Size() == 0

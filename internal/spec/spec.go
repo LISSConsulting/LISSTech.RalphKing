@@ -49,7 +49,7 @@ type SpecFile struct {
 }
 
 // List discovers specs/*.md and specs/*/*.md files (one level of subdirectories)
-// and detects their status by cross-referencing IMPLEMENTATION_PLAN.md.
+// and detects their status by cross-referencing CHRONICLE.md.
 // The dir argument is the project root directory.
 func List(dir string) ([]SpecFile, error) {
 	specsDir := filepath.Join(dir, "specs")
@@ -61,7 +61,7 @@ func List(dir string) ([]SpecFile, error) {
 		return nil, fmt.Errorf("read specs directory: %w", err)
 	}
 
-	planContent, _ := os.ReadFile(filepath.Join(dir, "IMPLEMENTATION_PLAN.md"))
+	planContent, _ := os.ReadFile(filepath.Join(dir, "CHRONICLE.md"))
 	plan := string(planContent)
 
 	var specs []SpecFile

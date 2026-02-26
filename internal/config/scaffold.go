@@ -9,7 +9,7 @@ import (
 
 // ScaffoldProject creates the full ralph project structure in the given
 // directory. It creates ralph.toml, prompt files for plan and build modes,
-// the specs/ directory, .gitignore, and IMPLEMENTATION_PLAN.md. Files that
+// the specs/ directory, .gitignore, and CHRONICLE.md. Files that
 // already exist are left untouched. Returns the list of created paths.
 func ScaffoldProject(dir string) ([]string, error) {
 	var created []string
@@ -23,8 +23,8 @@ func ScaffoldProject(dir string) ([]string, error) {
 		created = append(created, tomlPath)
 	}
 
-	// PROMPT_plan.md
-	planPath := filepath.Join(dir, "PROMPT_plan.md")
+	// PLAN.md
+	planPath := filepath.Join(dir, "PLAN.md")
 	if _, err := os.Stat(planPath); os.IsNotExist(err) {
 		if writeErr := os.WriteFile(planPath, []byte(planPromptTemplate), 0644); writeErr != nil {
 			return created, fmt.Errorf("scaffold: write %s: %w", planPath, writeErr)
@@ -32,8 +32,8 @@ func ScaffoldProject(dir string) ([]string, error) {
 		created = append(created, planPath)
 	}
 
-	// PROMPT_build.md
-	buildPath := filepath.Join(dir, "PROMPT_build.md")
+	// BUILD.md
+	buildPath := filepath.Join(dir, "BUILD.md")
 	if _, err := os.Stat(buildPath); os.IsNotExist(err) {
 		if writeErr := os.WriteFile(buildPath, []byte(buildPromptTemplate), 0644); writeErr != nil {
 			return created, fmt.Errorf("scaffold: write %s: %w", buildPath, writeErr)
@@ -73,20 +73,20 @@ func ScaffoldProject(dir string) ([]string, error) {
 		created = append(created, gitignorePath)
 	}
 
-	// IMPLEMENTATION_PLAN.md
-	planMDPath := filepath.Join(dir, "IMPLEMENTATION_PLAN.md")
-	if _, err := os.Stat(planMDPath); os.IsNotExist(err) {
-		if writeErr := os.WriteFile(planMDPath, []byte(implementationPlanTemplate), 0644); writeErr != nil {
-			return created, fmt.Errorf("scaffold: write %s: %w", planMDPath, writeErr)
+	// CHRONICLE.md
+	chroniclePath := filepath.Join(dir, "CHRONICLE.md")
+	if _, err := os.Stat(chroniclePath); os.IsNotExist(err) {
+		if writeErr := os.WriteFile(chroniclePath, []byte(implementationPlanTemplate), 0644); writeErr != nil {
+			return created, fmt.Errorf("scaffold: write %s: %w", chroniclePath, writeErr)
 		}
-		created = append(created, planMDPath)
+		created = append(created, chroniclePath)
 	}
 
 	return created, nil
 }
 
 const planPromptTemplate = `Read the specs in ` + "`specs/`" + ` and study the codebase.
-Create or update ` + "`IMPLEMENTATION_PLAN.md`" + ` with:
+Create or update ` + "`CHRONICLE.md`" + ` with:
 
 - A summary of current state (what exists, test coverage)
 - Remaining work organized by priority (highest-impact items first)
@@ -96,13 +96,13 @@ Do NOT write application code — this is a planning phase only.
 `
 
 const buildPromptTemplate = `Read the specs in ` + "`specs/`" + ` and the implementation plan.
-Pick the highest-priority incomplete item from ` + "`IMPLEMENTATION_PLAN.md`" + `.
+Pick the highest-priority incomplete item from ` + "`CHRONICLE.md`" + `.
 
 1. Study the codebase to understand what already exists.
 2. Implement the feature fully — no placeholders, no stubs.
 3. Run tests and ensure they pass.
 4. Commit with a descriptive message.
-5. Update ` + "`IMPLEMENTATION_PLAN.md`" + ` to reflect progress.
+5. Update ` + "`CHRONICLE.md`" + ` to reflect progress.
 `
 
 const implementationPlanTemplate = `> [Project]: spec-driven AI coding loop.

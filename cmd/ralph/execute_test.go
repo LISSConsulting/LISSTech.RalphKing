@@ -194,7 +194,7 @@ type fakeFileInfo struct {
 	size int64
 }
 
-func (f fakeFileInfo) Name() string       { return "IMPLEMENTATION_PLAN.md" }
+func (f fakeFileInfo) Name() string       { return "CHRONICLE.md" }
 func (f fakeFileInfo) Size() int64        { return f.size }
 func (f fakeFileInfo) Mode() fs.FileMode  { return 0644 }
 func (f fakeFileInfo) ModTime() time.Time { return time.Time{} }
@@ -405,11 +405,11 @@ func TestFormatStatus(t *testing.T) {
 // git ops turned off so tests don't attempt network operations.
 func testConfigNoRegent() string {
 	return `[plan]
-prompt_file = "PROMPT_plan.md"
+prompt_file = "PLAN.md"
 max_iterations = 1
 
 [build]
-prompt_file = "PROMPT_build.md"
+prompt_file = "BUILD.md"
 max_iterations = 1
 
 [git]
@@ -425,11 +425,11 @@ enabled = false
 // max_retries=0 so it fails fast after one error without backoff.
 func testConfigWithRegent() string {
 	return `[plan]
-prompt_file = "PROMPT_plan.md"
+prompt_file = "PLAN.md"
 max_iterations = 1
 
 [build]
-prompt_file = "PROMPT_build.md"
+prompt_file = "BUILD.md"
 max_iterations = 1
 
 [git]
@@ -490,14 +490,14 @@ func TestExecuteLoop_RegentDisabled_PromptMissing(t *testing.T) {
 	initGitRepo(t, dir)
 	t.Chdir(dir)
 	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
-	// PROMPT_plan.md intentionally absent — loop.Run fails reading it.
+	// PLAN.md intentionally absent — loop.Run fails reading it.
 
 	err := executeLoop(loop.ModePlan, 1, true)
 	if err == nil {
 		t.Fatal("expected error when prompt file missing")
 	}
-	if !strings.Contains(err.Error(), "PROMPT_plan.md") {
-		t.Errorf("error should mention PROMPT_plan.md, got: %v", err)
+	if !strings.Contains(err.Error(), "PLAN.md") {
+		t.Errorf("error should mention PLAN.md, got: %v", err)
 	}
 }
 
@@ -506,15 +506,15 @@ func TestExecuteLoop_RegentEnabled_PromptMissing(t *testing.T) {
 	initGitRepo(t, dir)
 	t.Chdir(dir)
 	writeExecTestFile(t, dir, "ralph.toml", testConfigWithRegent())
-	// PROMPT_plan.md intentionally absent.
+	// PLAN.md intentionally absent.
 	// Pre-flight check returns an error before Regent is initialised.
 
 	err := executeLoop(loop.ModePlan, 1, true)
 	if err == nil {
 		t.Fatal("expected error when prompt file missing")
 	}
-	if !strings.Contains(err.Error(), "PROMPT_plan.md") {
-		t.Errorf("error should mention PROMPT_plan.md, got: %v", err)
+	if !strings.Contains(err.Error(), "PLAN.md") {
+		t.Errorf("error should mention PLAN.md, got: %v", err)
 	}
 }
 
@@ -523,14 +523,14 @@ func TestExecuteLoop_BuildMode_PromptMissing(t *testing.T) {
 	initGitRepo(t, dir)
 	t.Chdir(dir)
 	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
-	// PROMPT_build.md intentionally absent — covers default case in mode switch.
+	// BUILD.md intentionally absent — covers default case in mode switch.
 
 	err := executeLoop(loop.ModeBuild, 1, true)
 	if err == nil {
 		t.Fatal("expected error when build prompt file missing")
 	}
-	if !strings.Contains(err.Error(), "PROMPT_build.md") {
-		t.Errorf("error should mention PROMPT_build.md, got: %v", err)
+	if !strings.Contains(err.Error(), "BUILD.md") {
+		t.Errorf("error should mention BUILD.md, got: %v", err)
 	}
 }
 
@@ -541,7 +541,7 @@ func TestExecuteLoop_RegentDisabled_PromptExists_GitFails(t *testing.T) {
 	// Deliberately no initGitRepo — git ops will fail.
 	t.Chdir(dir)
 	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
-	writeExecTestFile(t, dir, "PROMPT_plan.md", "# Plan\n")
+	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
 
 	err := executeLoop(loop.ModePlan, 1, true)
 	// Loop fails at git CurrentBranch — must be an error but not a prompt-file error.
@@ -561,7 +561,7 @@ func TestExecuteLoop_RegentEnabled_PromptExists_GitFails(t *testing.T) {
 	// Deliberately no initGitRepo — git ops will fail.
 	t.Chdir(dir)
 	writeExecTestFile(t, dir, "ralph.toml", testConfigWithRegent())
-	writeExecTestFile(t, dir, "PROMPT_plan.md", "# Plan\n")
+	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
 
 	err := executeLoop(loop.ModePlan, 1, true)
 	// Regent gives up after 0 retries — must be an error.
@@ -592,15 +592,15 @@ func TestExecuteSmartRun_NeedsPlan_PromptMissing(t *testing.T) {
 	initGitRepo(t, dir)
 	t.Chdir(dir)
 	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
-	// No IMPLEMENTATION_PLAN.md → needsPlanPhase returns true.
-	// No PROMPT_plan.md → plan phase fails reading it.
+	// No CHRONICLE.md → needsPlanPhase returns true.
+	// No PLAN.md → plan phase fails reading it.
 
 	err := executeSmartRun(1, true)
 	if err == nil {
 		t.Fatal("expected error when plan prompt file missing")
 	}
-	if !strings.Contains(err.Error(), "PROMPT_plan.md") {
-		t.Errorf("error should mention PROMPT_plan.md, got: %v", err)
+	if !strings.Contains(err.Error(), "PLAN.md") {
+		t.Errorf("error should mention PLAN.md, got: %v", err)
 	}
 }
 
@@ -609,16 +609,16 @@ func TestExecuteSmartRun_SkipPlan_BuildPromptMissing(t *testing.T) {
 	initGitRepo(t, dir)
 	t.Chdir(dir)
 	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
-	// Non-empty IMPLEMENTATION_PLAN.md → needsPlanPhase returns false.
-	writeExecTestFile(t, dir, "IMPLEMENTATION_PLAN.md", "# Plan\n\nSome content.\n")
-	// PROMPT_build.md absent → build loop fails reading it.
+	// Non-empty CHRONICLE.md → needsPlanPhase returns false.
+	writeExecTestFile(t, dir, "CHRONICLE.md", "# Plan\n\nSome content.\n")
+	// BUILD.md absent → build loop fails reading it.
 
 	err := executeSmartRun(1, true)
 	if err == nil {
 		t.Fatal("expected error when build prompt file missing")
 	}
-	if !strings.Contains(err.Error(), "PROMPT_build.md") {
-		t.Errorf("error should mention PROMPT_build.md, got: %v", err)
+	if !strings.Contains(err.Error(), "BUILD.md") {
+		t.Errorf("error should mention BUILD.md, got: %v", err)
 	}
 }
 
@@ -642,8 +642,8 @@ func TestExecuteSmartRun_RegentEnabled_PromptMissing(t *testing.T) {
 	initGitRepo(t, dir)
 	t.Chdir(dir)
 	writeExecTestFile(t, dir, "ralph.toml", testConfigWithRegent())
-	// No IMPLEMENTATION_PLAN.md → needsPlanPhase returns true.
-	// No PROMPT_plan.md → plan phase fails reading it.
+	// No CHRONICLE.md → needsPlanPhase returns true.
+	// No PLAN.md → plan phase fails reading it.
 	// Regent gives up after 0 retries and returns max-retries error.
 
 	err := executeSmartRun(1, true)

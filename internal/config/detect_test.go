@@ -134,9 +134,9 @@ func TestLoadDetectsProjectName(t *testing.T) {
 	t.Run("auto-detects from pyproject.toml when project.name empty", func(t *testing.T) {
 		dir := t.TempDir()
 		writeFile(t, filepath.Join(dir, "ralph.toml"), `[plan]
-prompt_file = "PROMPT_plan.md"
+prompt_file = "PLAN.md"
 [build]
-prompt_file = "PROMPT_build.md"
+prompt_file = "BUILD.md"
 `)
 		writeFile(t, filepath.Join(dir, "pyproject.toml"), `[project]
 name = "detected-python"
@@ -156,9 +156,9 @@ name = "detected-python"
 		writeFile(t, filepath.Join(dir, "ralph.toml"), `[project]
 name = "explicit-name"
 [plan]
-prompt_file = "PROMPT_plan.md"
+prompt_file = "PLAN.md"
 [build]
-prompt_file = "PROMPT_build.md"
+prompt_file = "BUILD.md"
 `)
 		writeFile(t, filepath.Join(dir, "pyproject.toml"), `[project]
 name = "should-not-appear"
@@ -176,9 +176,9 @@ name = "should-not-appear"
 	t.Run("no manifest files leaves project.name empty", func(t *testing.T) {
 		dir := t.TempDir()
 		writeFile(t, filepath.Join(dir, "ralph.toml"), `[plan]
-prompt_file = "PROMPT_plan.md"
+prompt_file = "PLAN.md"
 [build]
-prompt_file = "PROMPT_build.md"
+prompt_file = "BUILD.md"
 `)
 
 		cfg, err := Load(filepath.Join(dir, "ralph.toml"))

@@ -1,10 +1,10 @@
-You are a planning agent. Your state file is @IMPLEMENTATION_PLAN.md. You MUST NOT implement anything.
+You are a planning agent. Your state file is @CHRONICLE.md. You MUST NOT implement anything.
 
 ## Context
 
 Read these sources using parallel subagents to build understanding:
 - `specs/` — the application specifications (source of truth)
-- @IMPLEMENTATION_PLAN.md — the current plan (may be incomplete or incorrect)
+- @CHRONICLE.md — the current plan (may be incomplete or incorrect)
 - The codebase — the actual implementation state
 
 ## Instructions
@@ -16,8 +16,8 @@ Read these sources using parallel subagents to build understanding:
    - Identify gaps, defects, and technical debt
    - Rank items by priority (blocking → high → medium → low)
 
-3. **Update @IMPLEMENTATION_PLAN.md.** Create or rewrite as a priority-sorted bullet list of items yet to be implemented or fixed. Mark items confirmed complete by code search. Remove stale entries that code search proves are resolved.
+3. **Update @CHRONICLE.md.** Create or rewrite as a priority-sorted bullet list of items yet to be implemented or fixed. Mark items confirmed complete by code search. Remove stale entries that code search proves are resolved.
 
 ## Completion criteria
 
-This iteration is complete when @IMPLEMENTATION_PLAN.md accurately reflects the current gap between `specs/` and the codebase, with every item confirmed by code search — not assumption.
+This iteration is complete when @CHRONICLE.md accurately reflects the current gap between `specs/` and the codebase, with every item confirmed by code search — not assumption.
