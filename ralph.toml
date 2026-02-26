@@ -2,10 +2,11 @@
 # Place this file in the root of your project.
 
 [project]
-name = "RalphKing"
+name = "LISSTech.RalphKing"
 
 [claude]
 model = "sonnet"
+max_turns = 0                  # 0 = unlimited agentic turns per iteration
 danger_skip_permissions = true
 
 [plan]
@@ -14,7 +15,7 @@ max_iterations = 3
 
 [build]
 prompt_file = "PROMPT_build.md"
-max_iterations = 0  # 0 = unlimited
+max_iterations = 0              # 0 = unlimited
 
 [git]
 auto_pull_rebase = true
@@ -22,8 +23,11 @@ auto_push = true
 
 [regent]
 enabled = true
-rollback_on_test_failure = false  # set true once test command configured
-test_command = ""                  # e.g. "go test ./..."
+rollback_on_test_failure = false # set true once test command configured
+test_command = ""                # e.g. "go test ./..."
 max_retries = 3
 retry_backoff_seconds = 30
-hang_timeout_seconds = 300        # kill Ralph if no output for 5 min
+hang_timeout_seconds = 300       # kill Ralph if no output for 5 min
+
+[tui]
+accent_color = "#7D56F4" # hex color for header/accent elements

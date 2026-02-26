@@ -1,10 +1,11 @@
-name: CI
+name: Release
 
 on:
   push:
-    branches: [main, develop, "feat/**"]
-  pull_request:
-    branches: [main, develop]
+    tags: ["v*"]
+
+permissions:
+  contents: write
 
 jobs:
   test:
@@ -37,8 +38,8 @@ jobs:
         with:
           version: latest
 
-  build:
-    name: Cross-compile
+  release:
+    name: Release
     runs-on: ubuntu-latest
     needs: [test, lint]
     strategy:
@@ -67,9 +68,13 @@ jobs:
         run: |
           EXT=""
           [ "$GOOS" = "windows" ] && EXT=".exe"
-          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+          VERSION=${GITHUB_REF_NAME}
           go build -ldflags="-s -w -X main.version=$VERSION" -o ralph-${{ matrix.goos }}-${{ matrix.goarch }}$EXT ./cmd/ralph
-      - uses: actions/upload-artifact@v4
+      - name: Upload release binary
+        uses: svenstaro/upload-release-action@v2
         with:
-          name: ralph-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ralph-${{ matrix.goos }}-${{ matrix.goarch }}*
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ralph-${{ matrix.goos }}-${{ matrix.goarch }}*
+          file_glob: true
+          tag: ${{ github.ref }}
+          overwrite: true

@@ -24,6 +24,13 @@ profile.cov
 go.work
 go.work.sum
 
+# Build output
+/ralph
+/ralph-*
+
+# Ralph runtime state
+.ralph/
+
 # env file
 .env
 
