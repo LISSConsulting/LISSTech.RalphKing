@@ -627,6 +627,42 @@ func TestPostIteration(t *testing.T) {
 	})
 }
 
+func TestInitialCommitInEvent(t *testing.T) {
+	// Verifies that the very first log event includes the current HEAD commit,
+	// so the TUI footer shows it from startup instead of showing "—".
+	agent := &mockAgent{
+		events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
+	}
+	git := &mockGit{branch: "main", lastCommit: "abc123 initial"}
+	cfg := defaultTestConfig()
+	cfg.Plan.MaxIterations = 1
+	cfg.Git.AutoPush = false // no push — commit must come from initial emit
+
+	ch := make(chan LogEntry, 32)
+	lp, _ := setupTestLoop(t, agent, git, cfg)
+	lp.Events = ch
+
+	err := lp.Run(context.Background(), ModePlan, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	close(ch)
+
+	var found bool
+	for e := range ch {
+		if e.Kind == LogInfo && e.Commit != "" {
+			found = true
+			if e.Commit != "abc123 initial" {
+				t.Errorf("expected commit 'abc123 initial', got %q", e.Commit)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("expected initial LogInfo event to have Commit set")
+	}
+}
+
 func TestIterLabel(t *testing.T) {
 	tests := []struct {
 		max  int

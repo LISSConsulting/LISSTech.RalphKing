@@ -64,10 +64,15 @@ func (l *Loop) Run(ctx context.Context, mode Mode, maxOverride int) error {
 		return fmt.Errorf("loop: get branch: %w", err)
 	}
 
+	// Include current HEAD commit so TUI footer shows it from the start,
+	// rather than showing "—" until the first push.
+	commit, _ := l.Git.LastCommit()
+
 	l.emit(LogEntry{
 		Kind:    LogInfo,
 		Message: fmt.Sprintf("Starting %s loop on branch %s (max: %s)", mode, branch, iterLabel(maxIter)),
 		Branch:  branch,
+		Commit:  commit,
 		MaxIter: maxIter,
 		Mode:    string(mode),
 	})
