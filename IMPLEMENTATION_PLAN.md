@@ -43,7 +43,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 | High | Show agent's reasoning | ✅ Fixed v0.0.51 | `LogText` kind added; loop emits `LogText` for `claude.EventText` events; TUI renders with 💭 icon in muted gray style (truncated to 80 chars); spec at `specs/agent-reasoning.md` |
 | Low | Truncate long commands | ✅ Fixed v0.0.45 | `renderLine` now truncates `ToolInput` at 60 chars (59+`…`); tool names were already truncated at 14 chars |
 | Bug | macOS iTerm scroll issue | Pending | Bubbletea scroll investigation needed |
-| Bug | Windows WezTerm header disappears after multiline output | Pending | Bubbletea/lipgloss Windows rendering issue |
+| Bug | Windows WezTerm header disappears after multiline output | ✅ Fixed v0.0.53 | `singleLine()` helper in `view.go` strips `\r\n`, `\r`, `\n` from all text before rendering; applied to `e.Message` and `e.ToolInput` in all `renderLine()` cases; prevents TUI height overflow when Claude outputs multi-paragraph reasoning text |
 
 ### RK Improvements (Issue #2)
 | Priority | Item | Status | Notes |
@@ -118,6 +118,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - `DetectProjectName(dir)` tries pyproject.toml → package.json → Cargo.toml in priority order; pyproject.toml checks `[project] name` (PEP 621) first, then `[tool.poetry] name` (Poetry); all parse errors are silently ignored (return ""); called in `Load()` only when `cfg.Project.Name == ""`; BurntSushi/toml used for TOML manifests, encoding/json for package.json
 - `LogText` kind surfaces `claude.EventText` (agent reasoning/commentary between tool calls) in the TUI with 💭 icon and muted gray style; text is truncated at 80 runes (79 + `…`) to preserve single-line layout; empty text events are silently ignored; `formatLogLine` in `cmd/ralph/execute.go` handles it via the generic path
 - `tui.New()` `workDir` param (5th, after `projectName`) displays abbreviated working directory as `dir: ~/path` in header; `abbreviatePath()` in `view.go` replaces home prefix with `~` and converts backslashes to forward slashes; omitted from header when empty; both `runWithRegentTUI` and `runWithTUIAndState` pass `dir` through
+- `singleLine(s string) string` in `view.go` strips `\r\n`, `\r`, `\n` with space replacement; applied to all text content in `renderLine()` (`e.Message` and `e.ToolInput`); prevents embedded newlines in Claude reasoning text from causing TUI height overflow and header disappearance on Windows WezTerm
 
 ## Out of Scope (for now)
 

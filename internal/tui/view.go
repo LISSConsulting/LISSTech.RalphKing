@@ -149,6 +149,17 @@ func formatElapsed(d time.Duration) string {
 	return fmt.Sprintf("%ds", s)
 }
 
+// singleLine replaces newline sequences with a space so every log entry
+// renders as exactly one terminal line. This prevents embedded newlines in
+// agent reasoning text or error messages from breaking the TUI height
+// calculation, which assumes a strict 1-entry-per-line mapping.
+func singleLine(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	return s
+}
+
 // abbreviatePath returns a display-friendly version of path.
 // If the path begins with the user's home directory, that prefix is replaced
 // with "~". Backslashes are converted to forward slashes for consistent display.
@@ -175,14 +186,14 @@ func (m Model) renderLine(line logLine) string {
 			displayName = displayName[:13] + "…"
 		}
 		name := style.Render(fmt.Sprintf("%-14s", displayName))
-		input := e.ToolInput
+		input := singleLine(e.ToolInput)
 		if len(input) > 60 {
 			input = input[:59] + "…"
 		}
 		return fmt.Sprintf("%s  %s %s %s", ts, icon, name, input)
 
 	case loop.LogText:
-		text := e.Message
+		text := singleLine(e.Message)
 		if len([]rune(text)) > 80 {
 			runes := []rune(text)
 			text = string(runes[:79]) + "…"
@@ -195,29 +206,29 @@ func (m Model) renderLine(line logLine) string {
 	case loop.LogIterComplete:
 		iterMsg := fmt.Sprintf("✅ iteration %d complete  —  $%.2f  —  %.1fs", e.Iteration, e.CostUSD, e.Duration)
 		if e.Subtype != "" {
-			iterMsg += fmt.Sprintf("  —  %s", e.Subtype)
+			iterMsg += fmt.Sprintf("  —  %s", singleLine(e.Subtype))
 		}
 		return fmt.Sprintf("%s  %s", ts, resultStyle.Render(iterMsg))
 
 	case loop.LogError:
-		return fmt.Sprintf("%s  %s", ts, errorStyle.Render("❌ "+e.Message))
+		return fmt.Sprintf("%s  %s", ts, errorStyle.Render("❌ "+singleLine(e.Message)))
 
 	case loop.LogGitPull:
-		return fmt.Sprintf("%s  %s", ts, m.accentGitStyle.Render("⬆ "+e.Message))
+		return fmt.Sprintf("%s  %s", ts, m.accentGitStyle.Render("⬆ "+singleLine(e.Message)))
 
 	case loop.LogGitPush:
-		return fmt.Sprintf("%s  %s", ts, m.accentGitStyle.Render("⬇ "+e.Message))
+		return fmt.Sprintf("%s  %s", ts, m.accentGitStyle.Render("⬇ "+singleLine(e.Message)))
 
 	case loop.LogDone:
-		return fmt.Sprintf("%s  %s", ts, resultStyle.Render("✅ "+e.Message))
+		return fmt.Sprintf("%s  %s", ts, resultStyle.Render("✅ "+singleLine(e.Message)))
 
 	case loop.LogStopped:
-		return fmt.Sprintf("%s  %s", ts, errorStyle.Render("⏹ "+e.Message))
+		return fmt.Sprintf("%s  %s", ts, errorStyle.Render("⏹ "+singleLine(e.Message)))
 
 	case loop.LogRegent:
-		return fmt.Sprintf("%s  %s", ts, regentStyle.Render("🛡️  Regent: "+e.Message))
+		return fmt.Sprintf("%s  %s", ts, regentStyle.Render("🛡️  Regent: "+singleLine(e.Message)))
 
 	default:
-		return fmt.Sprintf("%s  %s", ts, infoStyle.Render(e.Message))
+		return fmt.Sprintf("%s  %s", ts, infoStyle.Render(singleLine(e.Message)))
 	}
 }

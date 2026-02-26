@@ -1465,3 +1465,94 @@ func TestRenderLineLogText(t *testing.T) {
 		}
 	})
 }
+
+func TestSingleLine(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"no newlines", "hello world", "hello world"},
+		{"unix newline", "hello\nworld", "hello world"},
+		{"windows newline", "hello\r\nworld", "hello world"},
+		{"carriage return", "hello\rworld", "hello world"},
+		{"multiple newlines", "a\nb\nc", "a b c"},
+		{"leading newline", "\nhello", " hello"},
+		{"trailing newline", "hello\n", "hello "},
+		{"empty string", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := singleLine(tt.input)
+			if got != tt.want {
+				t.Errorf("singleLine(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRenderLineEmbeddedNewlines verifies that embedded newlines in log entry
+// text are stripped before rendering, so every entry produces exactly one line.
+// This prevents TUI height overflow on terminals like Windows WezTerm.
+func TestRenderLineEmbeddedNewlines(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	now := time.Date(2026, 2, 26, 10, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name  string
+		entry loop.LogEntry
+	}{
+		{
+			"LogText with unix newline",
+			loop.LogEntry{Kind: loop.LogText, Timestamp: now, Message: "first line\nsecond line"},
+		},
+		{
+			"LogText with windows newline",
+			loop.LogEntry{Kind: loop.LogText, Timestamp: now, Message: "first\r\nsecond"},
+		},
+		{
+			"LogError with newline",
+			loop.LogEntry{Kind: loop.LogError, Timestamp: now, Message: "error occurred\ndetails here"},
+		},
+		{
+			"LogGitPull with newline",
+			loop.LogEntry{Kind: loop.LogGitPull, Timestamp: now, Message: "Pulling main\nAlready up to date."},
+		},
+		{
+			"LogGitPush with newline",
+			loop.LogEntry{Kind: loop.LogGitPush, Timestamp: now, Message: "Pushing\nEnumerating objects: 3"},
+		},
+		{
+			"LogDone with newline",
+			loop.LogEntry{Kind: loop.LogDone, Timestamp: now, Message: "Complete\nall done"},
+		},
+		{
+			"LogStopped with newline",
+			loop.LogEntry{Kind: loop.LogStopped, Timestamp: now, Message: "Stopped\ngracefully"},
+		},
+		{
+			"LogRegent with newline",
+			loop.LogEntry{Kind: loop.LogRegent, Timestamp: now, Message: "Restarting\nRalph"},
+		},
+		{
+			"LogInfo with newline",
+			loop.LogEntry{Kind: loop.LogInfo, Timestamp: now, Message: "Starting\nloop"},
+		},
+		{
+			"LogToolUse with newline in input",
+			loop.LogEntry{Kind: loop.LogToolUse, Timestamp: now, ToolName: "Bash", ToolInput: "echo hello\necho world"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rendered := m.renderLine(logLine{entry: tt.entry})
+			// The rendered output must contain no literal newlines — each
+			// entry must occupy exactly one terminal line.
+			if strings.Contains(rendered, "\n") {
+				t.Errorf("renderLine should not produce embedded newlines, got: %q", rendered)
+			}
+		})
+	}
+}
