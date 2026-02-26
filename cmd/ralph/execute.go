@@ -31,6 +31,20 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 		return fmt.Errorf("get working directory: %w", err)
 	}
 
+	// Pre-flight: verify the prompt file exists before launching TUI or Regent.
+	// Without this check the TUI initialises, then fails on the first iteration
+	// with a confusing "loop: read prompt …: open …: no such file or directory".
+	var promptFile string
+	switch mode {
+	case loop.ModePlan:
+		promptFile = cfg.Plan.PromptFile
+	default:
+		promptFile = cfg.Build.PromptFile
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, promptFile)); statErr != nil {
+		return fmt.Errorf("prompt file %s: %w", promptFile, statErr)
+	}
+
 	ctx, cancel := signalContext()
 	defer cancel()
 

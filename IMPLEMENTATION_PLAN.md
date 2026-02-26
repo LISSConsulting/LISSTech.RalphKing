@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **All core features complete + hardened.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 96-99% test coverage across all internal packages; cmd/ralph 72.0%, overall 89.2%. Re-audited 2026-02-26 via full code search across all spec requirements — two minor gaps remain (see Remaining Work). SIGQUIT handling confirmed implemented in `quit_unix.go`. `spec.List()` subdirectory walk fixed in v0.0.39.
+> Current state: **All core features complete + hardened.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 96-99% test coverage across all internal packages; cmd/ralph 74.0%, overall ~89%. Re-audited 2026-02-26 via full code search across all spec requirements. All remaining work items resolved as of v0.0.40. SIGQUIT handling confirmed implemented in `quit_unix.go`. `spec.List()` subdirectory walk fixed in v0.0.39.
 
 ## Completed Work
 
@@ -14,7 +14,7 @@
 | Cost control | `claude.max_turns` config (0 = unlimited), `--max-turns` CLI passthrough | v0.0.26 |
 | Scaffolding | `ralph init` creates ralph.toml + PROMPT_plan.md + PROMPT_build.md + specs/ (idempotent) | v0.0.28 |
 | CI/CD | Go 1.24, version injection, race detection, release workflow (cross-compiled binaries on tag push), golangci-lint (go-critic + gofmt) in CI & release | 0.0.7, 0.0.19, v0.0.30 |
-| Test coverage | Git 94.7%, TUI 100%, loop 97.7%, claude 97.8%, regent 96.0%, config 92.5%, spec 95.5%, cmd/ralph 72.0%, overall 89.2% | 0.0.6, 0.0.14, 0.0.16, v0.0.32, v0.0.36–v0.0.38 |
+| Test coverage | Git 94.7%, TUI 100%, loop 97.7%, claude 97.8%, regent 96.0%, config 92.5%, spec 95.5%, cmd/ralph 74.0% (was 72.0%) | 0.0.6, 0.0.14, 0.0.16, v0.0.32, v0.0.36–v0.0.40 |
 | Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, prompt files, extract `classifyResult`/`needsPlanPhase`/`formatStatus`/`formatLogLine`/`formatSpecList`/`formatScaffoldResult` pure functions with table-driven tests, command tree structure tests, end-to-end command execution tests (cmd/ralph 8.8% → 41.8%); added `runWithStateTracking`/`runWithRegent`/`openEditor` tests (41.8% → 53.4%); added `executeLoop`/`executeSmartRun` integration tests + plan/build/run RunE tests (53.4% → 70.7%); added config-invalid/regent-enabled/corrupted-state-file tests for `executeSmartRun` and `showStatus` (70.7% → 72.0%) | 0.0.9, v0.0.21, v0.0.33–v0.0.38 |
 
 Specs implemented: `ralph-core.md`, `the-regent.md`.
@@ -23,8 +23,7 @@ Specs implemented: `ralph-core.md`, `the-regent.md`.
 
 | Priority | Item | Location | Notes |
 |----------|------|----------|-------|
-| Low | Prompt file absence not pre-flighted before TUI init | `cmd/ralph/execute.go` L38–43 (`executeLoop` constructs Loop); prompt read at `internal/loop/loop.go` L56–59 | Deliberate design choice (`Validate()` is pure, no I/O); UX cost is TUI starts then fails on first iteration with `"loop: read prompt <file>: open <path>: no such file or directory"`. Fix: add `os.Stat(promptPath)` check in `executeLoop` before constructing `Loop`, returning a clear error before TUI/Regent initialization |
-| Info | cmd/ralph coverage ceiling at 72.0% | `cmd/ralph/wiring.go` — `runWithRegentTUI`, `finishTUI`, `runWithTUIAndState`; `cmd/ralph/main.go` — `main`; `cmd/ralph/quit_unix.go`/`quit_windows.go` — `registerQuitHandler` | These functions require a real TTY (bubbletea) or are OS-level signal handlers. No further coverage attainable without a bubbletea headless test mode. Not actionable |
+| Info | cmd/ralph coverage ceiling at 74.0% | `cmd/ralph/wiring.go` — `runWithRegentTUI`, `finishTUI`, `runWithTUIAndState`; `cmd/ralph/main.go` — `main`; `cmd/ralph/quit_unix.go`/`quit_windows.go` — `registerQuitHandler` | These functions require a real TTY (bubbletea) or are OS-level signal handlers. No further coverage attainable without a bubbletea headless test mode. Not actionable |
 
 ## Key Learnings
 
@@ -42,7 +41,7 @@ Specs implemented: `ralph-core.md`, `the-regent.md`.
 - TUI scroll: `scrollOffset` 0 = bottom; auto-scroll only when at bottom
 - `stateTracker` mirrors Regent.UpdateState() for non-Regent paths, including live persistence on meaningful changes
 - Closures passed to Regent must re-evaluate filesystem state inside the closure body (not capture stale values)
-- `Config.Validate()` is pure (no I/O) — prompt file existence checked at runtime by `os.ReadFile`
+- `Config.Validate()` is pure (no I/O) — prompt file existence pre-flighted in `executeLoop` via `os.Stat` before TUI/Regent start; `loop.Run()` still reads the file at runtime
 - Claude result events with `is_error: true` emit ErrorEvent then ResultEvent (preserves cost tracking)
 - `git diff --quiet` exit 128 + "fatal:" = error; exit 1 = real diff; `pushIfNeeded` pushes on error
 - Accent-dependent TUI styles (header, git) live on Model as instance fields; non-accent styles remain package vars

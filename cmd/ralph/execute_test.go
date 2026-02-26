@@ -507,11 +507,69 @@ func TestExecuteLoop_RegentEnabled_PromptMissing(t *testing.T) {
 	t.Chdir(dir)
 	writeExecTestFile(t, dir, "ralph.toml", testConfigWithRegent())
 	// PROMPT_plan.md intentionally absent.
-	// Regent gives up after 0 retries and returns max-retries error.
+	// Pre-flight check returns an error before Regent is initialised.
 
 	err := executeLoop(loop.ModePlan, 1, true)
 	if err == nil {
-		t.Fatal("expected error — Regent should give up (max_retries=0)")
+		t.Fatal("expected error when prompt file missing")
+	}
+	if !strings.Contains(err.Error(), "PROMPT_plan.md") {
+		t.Errorf("error should mention PROMPT_plan.md, got: %v", err)
+	}
+}
+
+func TestExecuteLoop_BuildMode_PromptMissing(t *testing.T) {
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+	t.Chdir(dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+	// PROMPT_build.md intentionally absent — covers default case in mode switch.
+
+	err := executeLoop(loop.ModeBuild, 1, true)
+	if err == nil {
+		t.Fatal("expected error when build prompt file missing")
+	}
+	if !strings.Contains(err.Error(), "PROMPT_build.md") {
+		t.Errorf("error should mention PROMPT_build.md, got: %v", err)
+	}
+}
+
+func TestExecuteLoop_RegentDisabled_PromptExists_GitFails(t *testing.T) {
+	// Prompt file present (pre-flight passes) but no git repo, so loop fails at
+	// CurrentBranch(). Covers the noTUI/non-regent branch in executeLoop.
+	dir := t.TempDir()
+	// Deliberately no initGitRepo — git ops will fail.
+	t.Chdir(dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+	writeExecTestFile(t, dir, "PROMPT_plan.md", "# Plan\n")
+
+	err := executeLoop(loop.ModePlan, 1, true)
+	// Loop fails at git CurrentBranch — must be an error but not a prompt-file error.
+	if err == nil {
+		t.Fatal("expected error from git operations")
+	}
+	if strings.Contains(err.Error(), "prompt file") {
+		t.Errorf("should not be a prompt-file error, got: %v", err)
+	}
+}
+
+func TestExecuteLoop_RegentEnabled_PromptExists_GitFails(t *testing.T) {
+	// Prompt file present (pre-flight passes) but no git repo, so loop fails at
+	// CurrentBranch(). Regent gives up after 0 retries.
+	// Covers the noTUI/regent branch in executeLoop.
+	dir := t.TempDir()
+	// Deliberately no initGitRepo — git ops will fail.
+	t.Chdir(dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigWithRegent())
+	writeExecTestFile(t, dir, "PROMPT_plan.md", "# Plan\n")
+
+	err := executeLoop(loop.ModePlan, 1, true)
+	// Regent gives up after 0 retries — must be an error.
+	if err == nil {
+		t.Fatal("expected error — Regent should give up after 0 retries")
+	}
+	if strings.Contains(err.Error(), "prompt file") {
+		t.Errorf("should not be a prompt-file error, got: %v", err)
 	}
 }
 
