@@ -1,36 +1,48 @@
-You are building **RalphKing** — a spec-driven AI coding loop CLI in Go.
+---
+I.  Study `specs/` with up to 500 parallel Sonnet subagents to learn the application specifications.
+II. Study @IMPLEMENTATION_PLAN.md.
+---
 
-## What you are building
+1.  Your task is to implement functionality per the specifications using parallel subagents.
+    - Follow @IMPLEMENTATION_PLAN.md and choose the most important item to address. Before making changes,
+      search the codebase (don't assume not implemented) using Sonnet subagents. You may use up to 500
+      parallel Sonnet subagents for searches/reads and only 1 Sonnet subagent for build/tests.
+    - Use Opus subagents when complex reasoning is needed (debugging, architectural decisions).
 
-Ralph is a Go CLI that replaces `loop.sh` with a proper binary. It runs Claude Code against specs in a continuous loop: plan → build → commit → push → repeat. The Regent watches Ralph, detects crashes/hangs, rolls back bad commits, and restarts him.
+2.  After implementing functionality or resolving problems, run the tests for that unit of code that was improved.
+    - If functionality is missing then it's your job to add it as per the application specifications.
+    - **Ultrathink**
 
-Read `specs/ralph-core.md` and `specs/the-regent.md` before doing anything else.
-Read `CLAUDE.md` for architecture, build commands, and rules.
-Read `IMPLEMENTATION_PLAN.md` for current status and what to work on next.
+3.  When you discover issues, immediately update @IMPLEMENTATION_PLAN.md with your findings using a subagent.
+    When resolved, update and remove the item.
 
-## Your task
+4.  When the tests pass, update @IMPLEMENTATION_PLAN.md, then `git add -A` then `git commit` with a message
+    describing the changes. After the commit, `git push`.
 
-1. Study the specs and implementation plan. Pick the highest-priority incomplete item.
-2. Before writing anything, search the codebase to understand what already exists.
-3. Implement the feature fully — no placeholders, no stubs.
-4. Run `go build ./...` and `go test ./...` — both must pass before committing.
-5. Also run `go vet ./...` — must be clean.
-6. Commit with a descriptive message: `feat(scope): what you did`.
-7. After committing, update `IMPLEMENTATION_PLAN.md` to reflect progress.
-8. If you discover bugs or spec inconsistencies, fix or document them in `IMPLEMENTATION_PLAN.md`.
+5.  Important: When authoring documentation, capture the why — tests and implementation importance.
 
-## Rules (from CLAUDE.md)
+6.  Important: Single sources of truth, no migrations/adapters. If tests unrelated to your work fail,
+    resolve them as part of the increment.
 
-- **Specs are law.** Every feature must trace to a spec.
-- **Idiomatic Go.** Stdlib first. Approved deps: `cobra`, `BurntSushi/toml`, `bubbletea`, `lipgloss`. Justify any new dependency.
-- **Table-driven tests.** Use `t.Run`. Target 80% coverage.
-- **No global mutable state.** Pass deps explicitly.
-- **Errors are values.** Wrap with `fmt.Errorf("context: %w", err)`. Never swallow.
-- **Small packages, clear boundaries.** No circular imports.
+7.  As soon as there are no build or test errors create a git tag. If there are no git tags start
+    at 0.0.0 and increment patch by 1 for example 0.0.1 if 0.0.0 does not exist.
 
-## Important
+8.  You may add extra logging if required to debug issues.
 
-- Keep `IMPLEMENTATION_PLAN.md` current — future loops depend on it.
-- When `go test ./...` passes and something meaningful is done, create/increment a git tag (start at `0.0.1`).
-- If `IMPLEMENTATION_PLAN.md` gets large, prune completed items.
-- Think carefully before adding dependencies — justify each one.
+9.  Keep @IMPLEMENTATION_PLAN.md current with learnings using a subagent — future work depends on this to avoid
+    duplicating efforts. Update especially after finishing your turn.
+
+10. When you learn something new about how to run the application, update @AGENTS.md using a subagent but keep it brief.
+
+11. For any bugs you notice, resolve them or document them in @IMPLEMENTATION_PLAN.md using a subagent
+    even if it is unrelated to the current piece of work.
+
+12. Implement functionality completely. Placeholders and stubs waste efforts and time redoing the same work.
+
+13. When @IMPLEMENTATION_PLAN.md becomes large periodically clean out the items that are completed
+    from the file using a subagent.
+
+14. If you find inconsistencies in the `specs/` then use an Opus subagent with **Ultrathink** requested to update the specs.
+
+15. IMPORTANT: Keep @AGENTS.md operational only — status updates and progress notes belong in IMPLEMENTATION_PLAN.md.
+    A bloated AGENTS.md pollutes every future loop's context.
