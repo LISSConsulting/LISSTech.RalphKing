@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **All core features complete + hardened.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 96-99% test coverage across all internal packages; cmd/ralph 72.0%, overall 89.2%.
+> Current state: **All core features complete + hardened.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 96-99% test coverage across all internal packages; cmd/ralph 72.0%, overall 89.2%. Re-audited 2026-02-26 via full code search across all spec requirements — three minor gaps remain (see Remaining Work). SIGQUIT handling confirmed implemented in `quit_unix.go`. Re-confirmed 2026-02-26 (second pass, Opus deep analysis): all acceptance criteria met; three remaining items below verified with exact line references; no new gaps found; no stale entries removed.
 
 ## Completed Work
 
@@ -18,6 +18,15 @@
 | Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, prompt files, extract `classifyResult`/`needsPlanPhase`/`formatStatus`/`formatLogLine`/`formatSpecList`/`formatScaffoldResult` pure functions with table-driven tests, command tree structure tests, end-to-end command execution tests (cmd/ralph 8.8% → 41.8%); added `runWithStateTracking`/`runWithRegent`/`openEditor` tests (41.8% → 53.4%); added `executeLoop`/`executeSmartRun` integration tests + plan/build/run RunE tests (53.4% → 70.7%); added config-invalid/regent-enabled/corrupted-state-file tests for `executeSmartRun` and `showStatus` (70.7% → 72.0%) | 0.0.9, v0.0.21, v0.0.33–v0.0.38 |
 
 Specs implemented: `ralph-core.md`, `the-regent.md`.
+
+## Remaining Work
+
+| Priority | Item | Location | Notes |
+|----------|------|----------|-------|
+| Medium | `spec.List()` only reads flat `specs/*.md` — misses specs in subdirectories (e.g. `specs/001-the-genesis/`) | `internal/spec/spec.go` L53–82, specifically L67–68 (`entry.IsDir()` skip) | `ralph spec list` returns "No specs found" in this repo because both specs live under `specs/001-the-genesis/`. Specs created by `ralph spec new` land in flat `specs/` so the common path works. `spec_test.go` also only covers flat layout. Fix: shallow recursive walk (one level of subdirs) or document flat-only convention |
+| Medium | `RunTests()` conflates "command not found" with "test failure" — causes spurious reverts when `rollback_on_test_failure` is enabled | `internal/regent/tester.go` L26–44; specifically L31 (`sh -c` hardcoded), L38–42 (all `cmd.Run()` errors → `Passed: false`) | Doc comment (L25) says "Returns an error only if the command could not be started" but the implementation **never** returns non-nil error — `exec.Error` (missing binary) and `exec.ExitError` (test failure) are both swallowed as `{Passed: false}`. On Windows, `sh -c` is unavailable, making the entire feature non-functional. Feature is config-gated (`rollback_on_test_failure = false` default). Tests in `tester_test.go` also depend on `sh`. Fix: type-assert on `exec.ExitError` (test failed → `Passed: false`) vs `exec.Error` (command not found → return as error); use `cmd /C` on Windows via `runtime.GOOS` check |
+| Low | Prompt file absence not pre-flighted before TUI init | `cmd/ralph/execute.go` L38–43 (`executeLoop` constructs Loop); prompt read at `internal/loop/loop.go` L56–59 | Deliberate design choice (`Validate()` is pure, no I/O); UX cost is TUI starts then fails on first iteration with `"loop: read prompt <file>: open <path>: no such file or directory"`. Fix: add `os.Stat(promptPath)` check in `executeLoop` before constructing `Loop`, returning a clear error before TUI/Regent initialization |
+| Info | cmd/ralph coverage ceiling at 72.0% | `cmd/ralph/wiring.go` — `runWithRegentTUI`, `finishTUI`, `runWithTUIAndState`; `cmd/ralph/main.go` — `main`; `cmd/ralph/quit_unix.go`/`quit_windows.go` — `registerQuitHandler` | These functions require a real TTY (bubbletea) or are OS-level signal handlers. No further coverage attainable without a bubbletea headless test mode. Not actionable |
 
 ## Key Learnings
 
@@ -63,6 +72,9 @@ Specs implemented: `ralph-core.md`, `the-regent.md`.
 - `executeLoop`/`executeSmartRun` integration tests: use `t.Chdir(t.TempDir())` + `writeExecTestFile` helpers; test error paths (no ralph.toml, invalid config, prompt missing, regent-enabled path) without needing a real Claude binary; `signalContext` goroutine exits cleanly via `defer cancel()` even in error paths; `showStatus` corrupted-state-file test covers `regent.LoadState()` parse-error path
 - `planCmd`/`buildCmd`/`runCmd` RunE closures tested by calling `cmd.RunE(cmd, nil)` in no-config temp dir; `--no-tui` persistent flag not inherited when calling RunE directly but doesn't matter since config.Load() fails first
 - Remaining 0% functions are OS-level (`main`, `registerQuitHandler`) or TUI-required (`runWithRegentTUI`, `finishTUI`, `runWithTUIAndState`) — not worth testing without a real terminal
+- `spec.List()` uses `os.ReadDir` with `entry.IsDir()` skip — intentionally flat; does not recurse into subdirectories; `ralph spec new` creates files directly in `specs/` so the common path works correctly
+- `RunTests()` in tester.go uses `exec.Command("sh", "-c", testCommand)` — works on Unix/macOS; silently fails on Windows when test_command is set (feature is off by default); all `cmd.Run()` errors (including `exec.Error` for missing binary) are treated as test failures rather than real errors — see Remaining Work
+- SIGQUIT handling: `quit_unix.go` registers `syscall.SIGQUIT` via `signal.Notify`; goroutine prints "SIGQUIT — stopping immediately" to stderr and calls `os.Exit(1)`; `quit_windows.go` is a no-op (SIGQUIT is Unix-only); satisfies the-regent.md "On SIGQUIT: stop immediately, kill Ralph child process"
 
 ## Out of Scope (for now)
 
