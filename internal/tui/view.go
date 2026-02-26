@@ -125,7 +125,11 @@ func (m Model) renderLine(line logLine) string {
 			displayName = displayName[:13] + "…"
 		}
 		name := style.Render(fmt.Sprintf("%-14s", displayName))
-		return fmt.Sprintf("%s  %s %s %s", ts, icon, name, e.ToolInput)
+		input := e.ToolInput
+		if len(input) > 60 {
+			input = input[:59] + "…"
+		}
+		return fmt.Sprintf("%s  %s %s %s", ts, icon, name, input)
 
 	case loop.LogIterStart:
 		return fmt.Sprintf("%s  ── iteration %d ──", ts, e.Iteration)

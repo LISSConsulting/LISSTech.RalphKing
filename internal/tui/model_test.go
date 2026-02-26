@@ -961,6 +961,52 @@ func TestRenderLineLongToolName(t *testing.T) {
 	}
 }
 
+func TestRenderLineLongToolInput(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "")
+	now := time.Date(2026, 2, 23, 14, 30, 0, 0, time.UTC)
+
+	// Tool input longer than 60 chars should be truncated with ellipsis.
+	longInput := strings.Repeat("a", 80)
+	entry := loop.LogEntry{
+		Kind:      loop.LogToolUse,
+		Timestamp: now,
+		ToolName:  "Read",
+		ToolInput: longInput,
+	}
+	rendered := m.renderLine(logLine{entry: entry})
+
+	// Should contain the truncated input (59 chars + ellipsis).
+	want := strings.Repeat("a", 59) + "…"
+	if !strings.Contains(rendered, want) {
+		t.Errorf("long tool input should be truncated with ellipsis, got: %s", rendered)
+	}
+	// Should NOT contain the full untruncated input.
+	if strings.Contains(rendered, longInput) {
+		t.Errorf("full tool input should not appear in output, got: %s", rendered)
+	}
+}
+
+func TestRenderLineShortToolInputUnchanged(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "")
+	now := time.Date(2026, 2, 23, 14, 30, 0, 0, time.UTC)
+
+	// Tool input at exactly 60 chars should not be truncated.
+	exactInput := strings.Repeat("b", 60)
+	entry := loop.LogEntry{
+		Kind:      loop.LogToolUse,
+		Timestamp: now,
+		ToolName:  "Read",
+		ToolInput: exactInput,
+	}
+	rendered := m.renderLine(logLine{entry: entry})
+
+	if !strings.Contains(rendered, exactInput) {
+		t.Errorf("60-char tool input should not be truncated, got: %s", rendered)
+	}
+}
+
 func TestViewTinyHeight(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
 	m := New(ch, "")

@@ -41,7 +41,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 | Low | Display last response elapsed time | ✅ Fixed v0.0.44 | Added `lastDuration` to TUI model; updated from `LogIterComplete` entries; shown as `last: %.1fs` in header (omitted until first iteration completes) |
 | Low | Always display latest commit | Pending | Header already shows commit; clarify behavior needed |
 | High | Show agent's reasoning | Pending | Needs spec (Claude --thinking mode / stream-JSON TextEvent rendering) |
-| Low | Truncate long commands | Pending | Tool names truncated; command values may also need truncation |
+| Low | Truncate long commands | ✅ Fixed v0.0.45 | `renderLine` now truncates `ToolInput` at 60 chars (59+`…`); tool names were already truncated at 14 chars |
 | Bug | macOS iTerm scroll issue | Pending | Bubbletea scroll investigation needed |
 | Bug | Windows WezTerm header disappears after multiline output | Pending | Bubbletea/lipgloss Windows rendering issue |
 
@@ -110,6 +110,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - `Stash()` handles "No local changes to save" from `git stash push` as success — some git versions exit non-zero even when nothing is stashed; `stashIfDirty()` already pre-guards via `HasUncommittedChanges()` but defensive handling prevents errors if called directly
 - `ScaffoldProject` creates/appends `.gitignore` with `.ralph/regent-state.json` entry; file is created if absent, entry is appended if missing, no-op if already present; `.gitignore` path is included in the `created` list whenever the file was created or the entry was added
 - `regent.SaveState` uses write-then-rename (atomic): writes JSON to a temp file in the `.ralph/` dir, then renames to `regent-state.json`; prevents partial reads when `Supervise` and the drain goroutine in `runWithRegent` call `saveState` concurrently
+- TUI `renderLine` truncates `ToolInput` at 60 chars (59 + `…`) to match the tool-name truncation pattern (14 chars); truncation happens at display time in `view.go`, not at source in `loop.go`, keeping `LogEntry.ToolInput` intact for any non-TUI consumers
 
 ## Out of Scope (for now)
 
