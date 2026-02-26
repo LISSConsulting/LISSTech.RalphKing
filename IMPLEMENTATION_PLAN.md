@@ -34,7 +34,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 |----------|------|--------|-------|
 | Bug | Stash error when no changes | ✅ Fixed v0.0.42 | `Stash()` now returns nil for "No local changes to save" |
 | Bug | Task/TaskOutput tool inputs empty in TUI | ✅ Fixed v0.0.42 | `summarizeInput()` extended with `description`, `prompt`, `query`, `notebook_path`, `task_id` |
-| Low | Replace app branding with project name | Pending | TUI header shows "👑 RalphKing"; spec change needed to show `ralph.toml[project.name]` |
+| Low | Replace app branding with project name | ✅ Fixed v0.0.48 | `tui.New()` accepts `projectName` param; header shows `👑 <project.name>` when set, falls back to "RalphKing" when empty |
 | Low | Display current directory | Pending | Needs spec |
 | Low | Display current time | ✅ Fixed v0.0.47 | Added `now time.Time` field updated by `tickMsg` every second; shown as `HH:MM` in header |
 | Low | Display loop elapsed time | ✅ Fixed v0.0.47 | Added `startedAt time.Time` in `New()`; `formatElapsed()` renders compact duration (e.g. `2m35s`, `1h30m`); shown as `elapsed: X` in header |
@@ -113,6 +113,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - `regent.SaveState` uses write-then-rename (atomic): writes JSON to a temp file in the `.ralph/` dir, then renames to `regent-state.json`; prevents partial reads when `Supervise` and the drain goroutine in `runWithRegent` call `saveState` concurrently
 - TUI clock ticker: `Init()` returns `tea.Batch(waitForEvent, tickCmd())`; `tickCmd()` uses `tea.Tick(time.Second, ...)` to fire `tickMsg` each second; handler in `Update()` updates `m.now` and reschedules with `tickCmd()`; `startedAt` set once in `New()` for elapsed computation; `formatElapsed(d)` renders compact duration (Xs, Xm Ys, Xh Ym)
 - TUI `renderLine` truncates `ToolInput` at 60 chars (59 + `…`) to match the tool-name truncation pattern (14 chars); truncation happens at display time in `view.go`, not at source in `loop.go`, keeping `LogEntry.ToolInput` intact for any non-TUI consumers
+- `tui.New()` accepts a `projectName` third parameter (from `cfg.Project.Name`); `renderHeader()` shows `👑 <projectName>` when set, falls back to `👑 RalphKing` when empty; both `runWithRegentTUI` and `runWithTUIAndState` pass `cfg.Project.Name` through
 
 ## Out of Scope (for now)
 

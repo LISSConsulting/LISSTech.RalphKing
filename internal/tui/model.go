@@ -29,6 +29,9 @@ type Model struct {
 	accentHeaderStyle lipgloss.Style
 	accentGitStyle    lipgloss.Style
 
+	// Project identity
+	projectName string // from ralph.toml [project].name; empty falls back to "RalphKing"
+
 	// Loop state
 	mode         string
 	branch       string
@@ -60,18 +63,20 @@ type tickMsg time.Time
 // New creates a new TUI Model that consumes events from the given channel.
 // accentColor is a hex color string (e.g. "#7D56F4") for the header and
 // accent elements. If empty, the default indigo is used.
-func New(events <-chan loop.LogEntry, accentColor string) Model {
+// projectName is displayed in the header; if empty, "RalphKing" is shown.
+func New(events <-chan loop.LogEntry, accentColor, projectName string) Model {
 	accent := lipgloss.Color(defaultAccentColor)
 	if accentColor != "" {
 		accent = lipgloss.Color(accentColor)
 	}
 	now := time.Now()
 	return Model{
-		events:    events,
-		width:     80,
-		height:    24,
-		startedAt: now,
-		now:       now,
+		events:      events,
+		width:       80,
+		height:      24,
+		startedAt:   now,
+		now:         now,
+		projectName: projectName,
 		accentHeaderStyle: lipgloss.NewStyle().
 			Background(accent).
 			Foreground(colorWhite).

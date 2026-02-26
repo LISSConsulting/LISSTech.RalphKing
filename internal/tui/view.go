@@ -40,8 +40,13 @@ func (m Model) renderHeader() string {
 		mode = "—"
 	}
 
+	name := "RalphKing"
+	if m.projectName != "" {
+		name = m.projectName
+	}
+
 	parts := []string{
-		"👑 RalphKing",
+		"👑 " + name,
 		fmt.Sprintf("mode: %s", mode),
 		fmt.Sprintf("branch: %s", branch),
 		fmt.Sprintf("iter: %s/%s", iter, maxLabel),
