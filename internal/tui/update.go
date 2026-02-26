@@ -14,6 +14,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
+	case tea.MouseMsg:
+		return m.handleMouse(msg), nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -72,6 +75,23 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.newBelow = 0
 	}
 	return m, nil
+}
+
+func (m Model) handleMouse(msg tea.MouseMsg) Model {
+	switch msg.Button {
+	case tea.MouseButtonWheelUp:
+		if m.scrollOffset < m.maxScrollOffset() {
+			m.scrollOffset++
+		}
+	case tea.MouseButtonWheelDown:
+		if m.scrollOffset > 0 {
+			m.scrollOffset--
+		}
+	}
+	if m.scrollOffset == 0 {
+		m.newBelow = 0
+	}
+	return m
 }
 
 func (m Model) handleLogEntry(msg logEntryMsg) (tea.Model, tea.Cmd) {

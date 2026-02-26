@@ -1556,3 +1556,110 @@ func TestRenderLineEmbeddedNewlines(t *testing.T) {
 		})
 	}
 }
+
+func TestMouseWheelScroll(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	m.height = 5 // log height = 3
+
+	for i := 0; i < 10; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("line %d", i)},
+		})
+	}
+
+	// Initially at bottom
+	if m.scrollOffset != 0 {
+		t.Fatalf("expected scrollOffset 0 initially, got %d", m.scrollOffset)
+	}
+
+	// Wheel up scrolls up
+	updated, cmd := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp})
+	m = updated.(Model)
+	if cmd != nil {
+		t.Error("mouse wheel should not produce a command")
+	}
+	if m.scrollOffset != 1 {
+		t.Errorf("expected scrollOffset 1 after wheel up, got %d", m.scrollOffset)
+	}
+
+	// Wheel down scrolls back down
+	updated, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+	m = updated.(Model)
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset 0 after wheel down, got %d", m.scrollOffset)
+	}
+
+	// Wheel down at bottom does nothing
+	updated, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+	m = updated.(Model)
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset to stay 0, got %d", m.scrollOffset)
+	}
+}
+
+func TestMouseWheelScrollBound(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	m.height = 5 // log height = 3; max offset = 10 - 3 = 7
+
+	for i := 0; i < 10; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("line %d", i)},
+		})
+	}
+
+	// Wheel up beyond max should clamp at max offset
+	for i := 0; i < 20; i++ {
+		updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp})
+		m = updated.(Model)
+	}
+	if m.scrollOffset != 7 {
+		t.Errorf("expected scrollOffset clamped to 7, got %d", m.scrollOffset)
+	}
+}
+
+func TestMouseWheelResetsNewBelow(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	m.height = 5
+
+	for i := 0; i < 10; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("line %d", i)},
+		})
+	}
+
+	// Scroll up and set newBelow
+	m.scrollOffset = 1
+	m.newBelow = 4
+
+	// Wheel down to bottom should reset newBelow
+	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+	m = updated.(Model)
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset 0, got %d", m.scrollOffset)
+	}
+	if m.newBelow != 0 {
+		t.Errorf("expected newBelow 0 after wheel down to bottom, got %d", m.newBelow)
+	}
+}
+
+func TestMouseWheelIgnoresOtherButtons(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	m.height = 5
+
+	for i := 0; i < 10; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("line %d", i)},
+		})
+	}
+
+	// Click events should not change scroll offset
+	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = updated.(Model)
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset unchanged after mouse click, got %d", m.scrollOffset)
+	}
+}

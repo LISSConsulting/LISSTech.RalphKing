@@ -62,7 +62,7 @@ func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gi
 	lp.PostIteration = rgt.RunPostIterationTests
 
 	model := tui.New(tuiEvents, cfg.TUI.AccentColor, cfg.Project.Name, dir, requestStop)
-	program := tea.NewProgram(model, tea.WithAltScreen())
+	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	// Forward loop events → regent state update → TUI
 	forwardDone := make(chan struct{})
@@ -167,7 +167,7 @@ func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunne
 	st.save()
 
 	model := tui.New(tuiEvents, accentColor, projectName, dir, requestStop)
-	program := tea.NewProgram(model, tea.WithAltScreen())
+	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	// Forward loop events → state tracking → TUI
 	forwardDone := make(chan struct{})
