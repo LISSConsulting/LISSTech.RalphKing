@@ -3,6 +3,7 @@ package regent
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -149,5 +150,27 @@ func TestSaveState_MkdirError(t *testing.T) {
 	err := SaveState(dir, State{RalphPID: 1})
 	if err == nil {
 		t.Fatal("expected error when state dir is blocked by a regular file")
+	}
+}
+
+func TestSaveState_RenameError(t *testing.T) {
+	dir := t.TempDir()
+	stateDir := filepath.Join(dir, stateDirName)
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// Block the destination file path by placing a directory there.
+	// os.Rename(tempFile, directory) fails on all platforms.
+	statePath := filepath.Join(stateDir, stateFileName)
+	if err := os.MkdirAll(statePath, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	err := SaveState(dir, State{RalphPID: 1})
+	if err == nil {
+		t.Fatal("expected error when state file path is a directory")
+	}
+	if !strings.Contains(err.Error(), "finalize state") {
+		t.Errorf("expected 'finalize state' in error, got: %v", err)
 	}
 }

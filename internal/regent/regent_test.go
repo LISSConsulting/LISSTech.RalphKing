@@ -3,6 +3,8 @@ package regent
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -677,5 +679,62 @@ func TestSupervisWithNilEvents(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("Supervise with nil events should succeed, got: %v", err)
+	}
+}
+
+func TestSaveStateEmitsErrorOnFailure(t *testing.T) {
+	// Block the .ralph directory so SaveState fails, then verify saveState emits
+	// a "Failed to save state" event rather than silently swallowing the error.
+	dir := t.TempDir()
+	cfg := defaultTestRegentConfig()
+	events := make(chan loop.LogEntry, 128)
+	rgt := New(cfg, dir, &mockGit{branch: "main"}, events)
+
+	// Place a regular file at .ralph path so MkdirAll fails inside SaveState.
+	if err := os.WriteFile(filepath.Join(dir, stateDirName), []byte("block"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	rgt.saveState()
+
+	close(events)
+	var found bool
+	for e := range events {
+		if e.Kind == loop.LogRegent && strings.Contains(e.Message, "Failed to save state") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected 'Failed to save state' regent event when SaveState fails")
+	}
+}
+
+func TestRunPostIterationTests_RunTestsError(t *testing.T) {
+	// Clearing PATH prevents exec.LookPath from finding the shell binary.
+	// RunPostIterationTests must emit "Failed to start tests" and not trigger revert.
+	t.Setenv("PATH", "")
+
+	dir := t.TempDir()
+	cfg := defaultTestRegentConfig()
+	cfg.RollbackOnTestFailure = true
+	cfg.TestCommand = "some-nonexistent-command"
+	events := make(chan loop.LogEntry, 128)
+	g := &mockGit{branch: "main", lastCommit: "abc123 commit"}
+	rgt := New(cfg, dir, g, events)
+
+	rgt.RunPostIterationTests()
+
+	close(events)
+	var found bool
+	for e := range events {
+		if e.Kind == loop.LogRegent && strings.Contains(e.Message, "Failed to start tests") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected 'Failed to start tests' event when shell is not in PATH")
+	}
+	if len(g.revertCalls) != 0 {
+		t.Error("should not revert when RunTests returns a non-ExitError")
 	}
 }
