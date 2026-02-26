@@ -35,7 +35,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 | Bug | Stash error when no changes | ✅ Fixed v0.0.42 | `Stash()` now returns nil for "No local changes to save" |
 | Bug | Task/TaskOutput tool inputs empty in TUI | ✅ Fixed v0.0.42 | `summarizeInput()` extended with `description`, `prompt`, `query`, `notebook_path`, `task_id` |
 | Low | Replace app branding with project name | ✅ Fixed v0.0.48 | `tui.New()` accepts `projectName` param; header shows `👑 <project.name>` when set, falls back to "RalphKing" when empty |
-| Low | Display current directory | Pending | Needs spec |
+| Low | Display current directory | ✅ Fixed v0.0.52 | `tui.New()` accepts `workDir string` 4th param; `renderHeader()` shows `dir: ~/abbreviated-path` after project name; `abbreviatePath()` replaces home dir with `~` and normalises backslashes; spec at `specs/current-directory.md` |
 | Low | Display current time | ✅ Fixed v0.0.47 | Added `now time.Time` field updated by `tickMsg` every second; shown as `HH:MM` in header |
 | Low | Display loop elapsed time | ✅ Fixed v0.0.47 | Added `startedAt time.Time` in `New()`; `formatElapsed()` renders compact duration (e.g. `2m35s`, `1h30m`); shown as `elapsed: X` in header |
 | Low | Display last response elapsed time | ✅ Fixed v0.0.44 | Added `lastDuration` to TUI model; updated from `LogIterComplete` entries; shown as `last: %.1fs` in header (omitted until first iteration completes) |
@@ -117,6 +117,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - Graceful stop: wiring creates `stopCh chan struct{}` + `sync.Once`-guarded close; assigns `stopCh` to `Loop.StopAfter` and close func to TUI's `requestStop`; loop checks channel after each iteration via non-blocking `select`; TUI `s` key handler guards on `!m.stopRequested` to make repeat presses no-ops; footer switches to `⏹ stopping after iteration…  q to force quit` when stop is requested
 - `DetectProjectName(dir)` tries pyproject.toml → package.json → Cargo.toml in priority order; pyproject.toml checks `[project] name` (PEP 621) first, then `[tool.poetry] name` (Poetry); all parse errors are silently ignored (return ""); called in `Load()` only when `cfg.Project.Name == ""`; BurntSushi/toml used for TOML manifests, encoding/json for package.json
 - `LogText` kind surfaces `claude.EventText` (agent reasoning/commentary between tool calls) in the TUI with 💭 icon and muted gray style; text is truncated at 80 runes (79 + `…`) to preserve single-line layout; empty text events are silently ignored; `formatLogLine` in `cmd/ralph/execute.go` handles it via the generic path
+- `tui.New()` `workDir` param (5th, after `projectName`) displays abbreviated working directory as `dir: ~/path` in header; `abbreviatePath()` in `view.go` replaces home prefix with `~` and converts backslashes to forward slashes; omitted from header when empty; both `runWithRegentTUI` and `runWithTUIAndState` pass `dir` through
 
 ## Out of Scope (for now)
 

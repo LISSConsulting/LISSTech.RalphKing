@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -45,13 +46,16 @@ func (m Model) renderHeader() string {
 		name = m.projectName
 	}
 
-	parts := []string{
-		"👑 " + name,
+	parts := []string{"👑 " + name}
+	if m.workDir != "" {
+		parts = append(parts, "dir: "+abbreviatePath(m.workDir))
+	}
+	parts = append(parts,
 		fmt.Sprintf("mode: %s", mode),
 		fmt.Sprintf("branch: %s", branch),
 		fmt.Sprintf("iter: %s/%s", iter, maxLabel),
 		fmt.Sprintf("cost: $%.2f", m.totalCost),
-	}
+	)
 	if m.lastDuration > 0 {
 		parts = append(parts, fmt.Sprintf("last: %.1fs", m.lastDuration))
 	}
@@ -143,6 +147,19 @@ func formatElapsed(d time.Duration) string {
 		return fmt.Sprintf("%dm%ds", m, s)
 	}
 	return fmt.Sprintf("%ds", s)
+}
+
+// abbreviatePath returns a display-friendly version of path.
+// If the path begins with the user's home directory, that prefix is replaced
+// with "~". Backslashes are converted to forward slashes for consistent display.
+func abbreviatePath(path string) string {
+	if path == "" {
+		return ""
+	}
+	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(path, home) {
+		path = "~" + path[len(home):]
+	}
+	return strings.ReplaceAll(path, "\\", "/")
 }
 
 func (m Model) renderLine(line logLine) string {
