@@ -49,7 +49,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 | Priority | Item | Status | Notes |
 |----------|------|--------|-------|
 | Low | `ralph init` adds `.ralph/regent-state.json` to `.gitignore` | ✅ Fixed v0.0.43 | `ScaffoldProject` creates/appends `.gitignore` with `.ralph/regent-state.json` entry; idempotent |
-| Low | Read project name from pyproject.toml/package.json/cargo.toml | Pending | Needs spec |
+| Low | Read project name from pyproject.toml/package.json/cargo.toml | ✅ Fixed v0.0.50 | `DetectProjectName(dir)` in `internal/config/detect.go`; checks pyproject.toml ([project] name or [tool.poetry] name), package.json (name), Cargo.toml ([package] name) in priority order; called in `Load()` when project.name is empty; spec at `specs/project-name-detection.md` |
 | Low | Allow user to stop after current iteration | ✅ Fixed v0.0.49 | `s` key in TUI closes `Loop.StopAfter` channel; loop exits after current iteration with `LogStopped`; footer shows `⏹ stopping after iteration…  q to force quit`; spec at `specs/graceful-stop.md` |
 | Info | Work trees per iteration | Pending | High effort; needs spec; would require major loop refactor |
 | Info | Rename PROMPT_plan.md → PLAN.md, PROMPT_build.md → BUILD.md, IMPLEMENTATION_PLAN.md → CHRONICLE.md | Pending | Breaking change; needs spec and migration path |
@@ -115,6 +115,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - TUI `renderLine` truncates `ToolInput` at 60 chars (59 + `…`) to match the tool-name truncation pattern (14 chars); truncation happens at display time in `view.go`, not at source in `loop.go`, keeping `LogEntry.ToolInput` intact for any non-TUI consumers
 - `tui.New()` accepts a `projectName` third parameter and a `requestStop func()` fourth parameter; `renderHeader()` shows `👑 <projectName>` when set, falls back to `👑 RalphKing` when empty; both `runWithRegentTUI` and `runWithTUIAndState` pass `cfg.Project.Name` and a `sync.Once`-guarded channel close through
 - Graceful stop: wiring creates `stopCh chan struct{}` + `sync.Once`-guarded close; assigns `stopCh` to `Loop.StopAfter` and close func to TUI's `requestStop`; loop checks channel after each iteration via non-blocking `select`; TUI `s` key handler guards on `!m.stopRequested` to make repeat presses no-ops; footer switches to `⏹ stopping after iteration…  q to force quit` when stop is requested
+- `DetectProjectName(dir)` tries pyproject.toml → package.json → Cargo.toml in priority order; pyproject.toml checks `[project] name` (PEP 621) first, then `[tool.poetry] name` (Poetry); all parse errors are silently ignored (return ""); called in `Load()` only when `cfg.Project.Name == ""`; BurntSushi/toml used for TOML manifests, encoding/json for package.json
 
 ## Out of Scope (for now)
 

@@ -179,6 +179,10 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("config: unknown keys in %s: %s (possible typos?)", path, joinKeys(keys))
 	}
 
+	if cfg.Project.Name == "" {
+		cfg.Project.Name = DetectProjectName(filepath.Dir(path))
+	}
+
 	return &cfg, nil
 }
 
