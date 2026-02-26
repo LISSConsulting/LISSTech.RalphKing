@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1331,6 +1333,21 @@ func TestAbbreviatePath(t *testing.T) {
 		got := abbreviatePath("/tmp/some/path")
 		if got != "/tmp/some/path" {
 			t.Errorf("non-home path should be unchanged, got: %s", got)
+		}
+	})
+
+	t.Run("path inside home replaced with tilde", func(t *testing.T) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			t.Skip("cannot determine home directory")
+		}
+		subdir := filepath.Join(home, "projects", "myapp")
+		got := abbreviatePath(subdir)
+		if !strings.HasPrefix(got, "~") {
+			t.Errorf("abbreviatePath(%q) = %q, want prefix ~", subdir, got)
+		}
+		if strings.Contains(got, home) {
+			t.Errorf("abbreviatePath should replace home dir, got: %s", got)
 		}
 	})
 }
