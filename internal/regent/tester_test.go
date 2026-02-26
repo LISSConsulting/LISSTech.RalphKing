@@ -38,9 +38,8 @@ func TestRunTests(t *testing.T) {
 		command string
 		passed  bool
 	}{
+		// Commands that work on both Unix (sh -c) and Windows (cmd /C).
 		{"empty command passes", "", true},
-		{"true passes", "true", true},
-		{"false fails", "false", false},
 		{"exit 0 passes", "exit 0", true},
 		{"exit 1 fails", "exit 1", false},
 		{"echo passes", "echo hello", true},
@@ -66,6 +65,17 @@ func TestRunTests_CapturesOutput(t *testing.T) {
 	}
 	if !strings.Contains(result.Output, "test-output-marker") {
 		t.Errorf("expected output to contain marker, got: %s", result.Output)
+	}
+}
+
+func TestRunTests_ShellNotFound(t *testing.T) {
+	// Clearing PATH prevents exec.LookPath from finding the shell binary (sh or cmd).
+	// RunTests must return a real error, not treat this as a test failure.
+	t.Setenv("PATH", "")
+
+	_, err := RunTests(t.TempDir(), "exit 0")
+	if err == nil {
+		t.Error("expected error when shell is not found in PATH, got nil")
 	}
 }
 
