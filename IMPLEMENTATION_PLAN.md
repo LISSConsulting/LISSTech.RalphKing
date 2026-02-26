@@ -53,7 +53,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 | Low | Allow user to stop after current iteration | ✅ Fixed v0.0.49 | `s` key in TUI closes `Loop.StopAfter` channel; loop exits after current iteration with `LogStopped`; footer shows `⏹ stopping after iteration…  q to force quit`; spec at `specs/graceful-stop.md` |
 | Info | Work trees per iteration | Pending | High effort; needs spec; would require major loop refactor |
 | Info | Rename PROMPT_plan.md → PLAN.md, PROMPT_build.md → BUILD.md, IMPLEMENTATION_PLAN.md → CHRONICLE.md | Pending | Breaking change; needs spec and migration path |
-| Info | `ralph init` write IMPLEMENTATION_PLAN.md | Pending | Minor scaffolding addition; needs spec |
+| Low | `ralph init` write IMPLEMENTATION_PLAN.md | ✅ Fixed v0.0.54 | `ScaffoldProject` creates `IMPLEMENTATION_PLAN.md` with starter template (Completed Work, Remaining Work, Key Learnings sections); idempotent; spec at `specs/init-implementation-plan.md` |
 | Info | Webhooks / ntfy.sh notifications | Pending | Needs spec |
 | Info | Regent daemon mode | Pending | Explicitly out of scope in current specs |
 
@@ -119,6 +119,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - `LogText` kind surfaces `claude.EventText` (agent reasoning/commentary between tool calls) in the TUI with 💭 icon and muted gray style; text is truncated at 80 runes (79 + `…`) to preserve single-line layout; empty text events are silently ignored; `formatLogLine` in `cmd/ralph/execute.go` handles it via the generic path
 - `tui.New()` `workDir` param (5th, after `projectName`) displays abbreviated working directory as `dir: ~/path` in header; `abbreviatePath()` in `view.go` replaces home prefix with `~` and converts backslashes to forward slashes; omitted from header when empty; both `runWithRegentTUI` and `runWithTUIAndState` pass `dir` through
 - `singleLine(s string) string` in `view.go` strips `\r\n`, `\r`, `\n` with space replacement; applied to all text content in `renderLine()` (`e.Message` and `e.ToolInput`); prevents embedded newlines in Claude reasoning text from causing TUI height overflow and header disappearance on Windows WezTerm
+- `ScaffoldProject` creates `IMPLEMENTATION_PLAN.md` with a starter template containing `## Completed Work`, `## Remaining Work`, and `## Key Learnings` sections; idempotent — existing files are never overwritten; listed last in `created` slice (after `.gitignore`)
 
 ## Out of Scope (for now)
 

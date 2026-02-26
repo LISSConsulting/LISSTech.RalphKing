@@ -9,8 +9,8 @@ import (
 
 // ScaffoldProject creates the full ralph project structure in the given
 // directory. It creates ralph.toml, prompt files for plan and build modes,
-// and the specs/ directory. Files that already exist are left untouched.
-// Returns the list of created paths.
+// the specs/ directory, .gitignore, and IMPLEMENTATION_PLAN.md. Files that
+// already exist are left untouched. Returns the list of created paths.
 func ScaffoldProject(dir string) ([]string, error) {
 	var created []string
 
@@ -73,6 +73,15 @@ func ScaffoldProject(dir string) ([]string, error) {
 		created = append(created, gitignorePath)
 	}
 
+	// IMPLEMENTATION_PLAN.md
+	planMDPath := filepath.Join(dir, "IMPLEMENTATION_PLAN.md")
+	if _, err := os.Stat(planMDPath); os.IsNotExist(err) {
+		if writeErr := os.WriteFile(planMDPath, []byte(implementationPlanTemplate), 0644); writeErr != nil {
+			return created, fmt.Errorf("scaffold: write %s: %w", planMDPath, writeErr)
+		}
+		created = append(created, planMDPath)
+	}
+
 	return created, nil
 }
 
@@ -94,4 +103,22 @@ Pick the highest-priority incomplete item from ` + "`IMPLEMENTATION_PLAN.md`" + 
 3. Run tests and ensure they pass.
 4. Commit with a descriptive message.
 5. Update ` + "`IMPLEMENTATION_PLAN.md`" + ` to reflect progress.
+`
+
+const implementationPlanTemplate = `> [Project]: spec-driven AI coding loop.
+> Current state: **Initialization complete.** Specs pending implementation.
+
+## Completed Work
+
+| Phase | Features | Tags |
+|-------|----------|------|
+
+## Remaining Work
+
+| Priority | Item | Location | Notes |
+|----------|------|----------|-------|
+
+## Key Learnings
+
+-
 `
