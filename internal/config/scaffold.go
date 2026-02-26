@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // ScaffoldProject creates the full ralph project structure in the given
@@ -47,6 +48,29 @@ func ScaffoldProject(dir string) ([]string, error) {
 			return created, fmt.Errorf("scaffold: create %s: %w", specsDir, mkErr)
 		}
 		created = append(created, specsDir)
+	}
+
+	// .gitignore — ensure the regent state file is excluded from version control
+	const gitignoreEntry = ".ralph/regent-state.json"
+	gitignorePath := filepath.Join(dir, ".gitignore")
+	existing, err := os.ReadFile(gitignorePath)
+	if os.IsNotExist(err) {
+		if writeErr := os.WriteFile(gitignorePath, []byte(gitignoreEntry+"\n"), 0644); writeErr != nil {
+			return created, fmt.Errorf("scaffold: write %s: %w", gitignorePath, writeErr)
+		}
+		created = append(created, gitignorePath)
+	} else if err != nil {
+		return created, fmt.Errorf("scaffold: read %s: %w", gitignorePath, err)
+	} else if !strings.Contains(string(existing), gitignoreEntry) {
+		content := string(existing)
+		if len(content) > 0 && content[len(content)-1] != '\n' {
+			content += "\n"
+		}
+		content += gitignoreEntry + "\n"
+		if writeErr := os.WriteFile(gitignorePath, []byte(content), 0644); writeErr != nil {
+			return created, fmt.Errorf("scaffold: write %s: %w", gitignorePath, writeErr)
+		}
+		created = append(created, gitignorePath)
 	}
 
 	return created, nil

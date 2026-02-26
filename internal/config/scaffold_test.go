@@ -21,6 +21,7 @@ func TestScaffoldProject(t *testing.T) {
 			filepath.Join(dir, "PROMPT_plan.md"),
 			filepath.Join(dir, "PROMPT_build.md"),
 			filepath.Join(dir, "specs"),
+			filepath.Join(dir, ".gitignore"),
 		}
 
 		if len(created) != len(expected) {
@@ -52,6 +53,15 @@ func TestScaffoldProject(t *testing.T) {
 		if !info.IsDir() {
 			t.Error("specs should be a directory")
 		}
+
+		// Verify .gitignore contains the regent state entry
+		content, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
+		if err != nil {
+			t.Fatalf(".gitignore: %v", err)
+		}
+		if !strings.Contains(string(content), ".ralph/regent-state.json") {
+			t.Error(".gitignore should contain .ralph/regent-state.json")
+		}
 	})
 
 	t.Run("skips existing files", func(t *testing.T) {
@@ -70,10 +80,11 @@ func TestScaffoldProject(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Should only create the missing files
+		// Should only create the missing files (PROMPT_plan.md, specs/, .gitignore)
 		expected := []string{
 			filepath.Join(dir, "PROMPT_plan.md"),
 			filepath.Join(dir, "specs"),
+			filepath.Join(dir, ".gitignore"),
 		}
 		if len(created) != len(expected) {
 			t.Fatalf("created %d files, want %d: %v", len(created), len(expected), created)
@@ -97,7 +108,7 @@ func TestScaffoldProject(t *testing.T) {
 	t.Run("all files exist returns empty list", func(t *testing.T) {
 		dir := t.TempDir()
 
-		// Create all files
+		// Create all files including .gitignore with the required entry
 		if err := os.WriteFile(filepath.Join(dir, "ralph.toml"), []byte("x"), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -110,6 +121,9 @@ func TestScaffoldProject(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(dir, "specs"), 0755); err != nil {
 			t.Fatal(err)
 		}
+		if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".ralph/regent-state.json\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
 
 		created, err := ScaffoldProject(dir)
 		if err != nil {
@@ -117,6 +131,64 @@ func TestScaffoldProject(t *testing.T) {
 		}
 		if len(created) != 0 {
 			t.Errorf("expected empty list, got %v", created)
+		}
+	})
+
+	t.Run("appends entry to existing gitignore without entry", func(t *testing.T) {
+		dir := t.TempDir()
+		if _, err := ScaffoldProject(dir); err != nil {
+			t.Fatal(err)
+		}
+		// Remove the entry from .gitignore to simulate an existing file without it
+		if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("node_modules/\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		created, err := ScaffoldProject(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Only .gitignore should be in created (all other files exist)
+		if len(created) != 1 || created[0] != filepath.Join(dir, ".gitignore") {
+			t.Errorf("expected only .gitignore in created, got %v", created)
+		}
+		content, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(content), "node_modules/") {
+			t.Error("existing content should be preserved")
+		}
+		if !strings.Contains(string(content), ".ralph/regent-state.json") {
+			t.Error("entry should be appended")
+		}
+	})
+
+	t.Run("skips gitignore when entry already present", func(t *testing.T) {
+		dir := t.TempDir()
+		// Pre-create all files including .gitignore with the entry already present
+		if err := os.WriteFile(filepath.Join(dir, "ralph.toml"), []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "PROMPT_plan.md"), []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "PROMPT_build.md"), []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(dir, "specs"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("# existing\n.ralph/regent-state.json\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		created, err := ScaffoldProject(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(created) != 0 {
+			t.Errorf("expected empty list when entry already present, got %v", created)
 		}
 	})
 

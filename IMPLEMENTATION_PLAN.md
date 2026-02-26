@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **All core features complete + hardened.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 96-99% test coverage across all internal packages; cmd/ralph 74.0%, overall ~89%. Re-audited 2026-02-26 via full code search across all spec requirements. All remaining work items resolved as of v0.0.40. SIGQUIT handling confirmed implemented in `quit_unix.go`. `spec.List()` subdirectory walk fixed in v0.0.39. v2 improvements branch (`002-v2-improvements`) active — bugs fixed in v0.0.42.
+> Current state: **All core features complete + hardened.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 96-99% test coverage across all internal packages; cmd/ralph 74.0%, overall ~89%. Re-audited 2026-02-26 via full code search across all spec requirements. All remaining work items resolved as of v0.0.40. SIGQUIT handling confirmed implemented in `quit_unix.go`. `spec.List()` subdirectory walk fixed in v0.0.39. v2 improvements branch (`002-v2-improvements`) active — bugs fixed in v0.0.42. `ralph init` now writes `.gitignore` with `.ralph/regent-state.json` entry in v0.0.43. Fixed race condition in `regent.SaveState` (concurrent writes via atomic rename) in v0.0.43.
 
 ## Completed Work
 
@@ -48,7 +48,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 ### RK Improvements (Issue #2)
 | Priority | Item | Status | Notes |
 |----------|------|--------|-------|
-| Low | `ralph init` adds `.ralph/regent-state.json` to `.gitignore` | Pending | Simple, no spec needed — state file should not be committed |
+| Low | `ralph init` adds `.ralph/regent-state.json` to `.gitignore` | ✅ Fixed v0.0.43 | `ScaffoldProject` creates/appends `.gitignore` with `.ralph/regent-state.json` entry; idempotent |
 | Low | Read project name from pyproject.toml/package.json/cargo.toml | Pending | Needs spec |
 | Low | Allow user to stop after current iteration | Pending | Needs spec (likely a key binding or file-sentinel approach) |
 | Info | Work trees per iteration | Pending | High effort; needs spec; would require major loop refactor |
@@ -107,6 +107,8 @@ These items originate from user feedback. Items requiring new specs are noted; b
 
 - `summarizeInput()` extracts display text from tool inputs by checking known field names in priority order: `file_path`, `command`, `path`, `url`, `pattern`, `description`, `prompt`, `query`, `notebook_path`, `task_id`; unknown tool types show no input (empty string is valid)
 - `Stash()` handles "No local changes to save" from `git stash push` as success — some git versions exit non-zero even when nothing is stashed; `stashIfDirty()` already pre-guards via `HasUncommittedChanges()` but defensive handling prevents errors if called directly
+- `ScaffoldProject` creates/appends `.gitignore` with `.ralph/regent-state.json` entry; file is created if absent, entry is appended if missing, no-op if already present; `.gitignore` path is included in the `created` list whenever the file was created or the entry was added
+- `regent.SaveState` uses write-then-rename (atomic): writes JSON to a temp file in the `.ralph/` dir, then renames to `regent-state.json`; prevents partial reads when `Supervise` and the drain goroutine in `runWithRegent` call `saveState` concurrently
 
 ## Out of Scope (for now)
 
