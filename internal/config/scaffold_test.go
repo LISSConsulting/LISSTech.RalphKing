@@ -200,6 +200,35 @@ func TestScaffoldProject(t *testing.T) {
 		}
 	})
 
+	t.Run("gitignore is a directory returns error", func(t *testing.T) {
+		dir := t.TempDir()
+		// Pre-create all files that scaffold writes before .gitignore
+		for name, content := range map[string]string{
+			"ralph.toml": "x",
+			"PLAN.md":    "x",
+			"BUILD.md":   "x",
+		} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.MkdirAll(filepath.Join(dir, "specs"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		// Create .gitignore as a directory — os.ReadFile returns a non-IsNotExist error
+		if err := os.MkdirAll(filepath.Join(dir, ".gitignore"), 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err := ScaffoldProject(dir)
+		if err == nil {
+			t.Fatal("expected error when .gitignore is a directory")
+		}
+		if !strings.Contains(err.Error(), ".gitignore") {
+			t.Errorf("error should mention .gitignore, got: %v", err)
+		}
+	})
+
 	t.Run("plan prompt template contains key instructions", func(t *testing.T) {
 		dir := t.TempDir()
 		if _, err := ScaffoldProject(dir); err != nil {

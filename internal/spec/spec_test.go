@@ -351,6 +351,23 @@ func TestDetectStatus(t *testing.T) {
 	}
 }
 
+func TestNew_SpecsDirIsFile(t *testing.T) {
+	dir := t.TempDir()
+	// Create a regular file where specs/ would be — MkdirAll returns ENOTDIR
+	specsPath := filepath.Join(dir, "specs")
+	if err := os.WriteFile(specsPath, []byte("not a dir"), 0644); err != nil {
+		t.Fatalf("setup WriteFile: %v", err)
+	}
+
+	_, err := New(dir, "my-feature")
+	if err == nil {
+		t.Fatal("expected error when specs/ is a regular file")
+	}
+	if !strings.Contains(err.Error(), "create specs directory") {
+		t.Errorf("error should mention 'create specs directory', got: %v", err)
+	}
+}
+
 func TestNew(t *testing.T) {
 	t.Run("creates spec file", func(t *testing.T) {
 		dir := t.TempDir()
