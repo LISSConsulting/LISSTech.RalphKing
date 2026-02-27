@@ -41,7 +41,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 | Low | Display last response elapsed time | ✅ Fixed v0.0.44 | Added `lastDuration` to TUI model; updated from `LogIterComplete` entries; shown as `last: %.1fs` in header (omitted until first iteration completes) |
 | Low | Always display latest commit | ✅ Fixed v0.0.46 | `loop.Run()` now calls `LastCommit()` at startup and includes `Commit` in the initial `LogInfo` event; TUI footer shows HEAD commit from first render instead of `—` |
 | High | Show agent's reasoning | ✅ Fixed v0.0.51 | `LogText` kind added; loop emits `LogText` for `claude.EventText` events; TUI renders with 💭 icon in muted gray style (truncated to 80 chars); spec at `specs/agent-reasoning.md` |
-| Low | Truncate long commands | ✅ Fixed v0.0.45 | `renderLine` now truncates `ToolInput` at 60 chars (59+`…`); tool names were already truncated at 14 chars |
+| Low | Truncate long commands | ✅ Fixed v0.0.45, improved v0.0.62 | `renderLine` truncates `ToolInput` dynamically: `maxInput = m.width - 32` (min 20); tool names still capped at 14 chars. LogText uses `maxText = m.width - 17` (min 20). Both adapt to terminal width instead of fixed 60/80-char limits. |
 | Bug | macOS iTerm scroll issue | ✅ Fixed v0.0.55 | Enabled `tea.WithMouseCellMotion()` on both TUI program paths; added `tea.MouseMsg` handler in `update.go` that maps `MouseButtonWheelUp`/`Down` to scroll actions (same bounds/newBelow logic as keyboard) |
 | Bug | Windows WezTerm header disappears after multiline output | ✅ Fixed v0.0.53 | `singleLine()` helper in `view.go` strips `\r\n`, `\r`, `\n` from all text before rendering; applied to `e.Message` and `e.ToolInput` in all `renderLine()` cases; prevents TUI height overflow when Claude outputs multi-paragraph reasoning text |
 
@@ -87,7 +87,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - `Pull()` surfaces `rebase --abort` errors in the merge-failure message for better diagnostics; if abort fails AND merge fails, both errors are reported
 - `pushIfNeeded` handles `LastCommit()` errors with `"(unknown)"` fallback instead of showing empty commit info
 - `signalContext()` selects on both signal channel and `ctx.Done()` to prevent goroutine leaks; calls `signal.Stop()` on exit
-- TUI truncates tool names >14 chars with `"…"` to preserve columnar log layout
+- TUI truncates tool names >14 chars with `"…"` to preserve columnar log layout; tool input and LogText truncation adapts to `m.width` (`maxInput = m.width - 32`, `maxText = m.width - 17`, min 20) so lines always fit the terminal without a fixed character ceiling
 - `classifyResult(state)` is a pure function returning `statusResult` enum — six-state classification (no-state, running, pass, fail-with-errors, plain-fail) with documented priority order; `showStatus` delegates to it
 - `needsPlanPhase(info, statErr)` is a pure function encoding the plan-skip condition: file missing OR empty; used by `executeSmartRun`'s closure
 - `formatStatus(state, now)` is a pure function rendering status output as a string; `now` parameter pins time for deterministic tests; `showStatus` delegates to it
