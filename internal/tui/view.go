@@ -187,16 +187,26 @@ func (m Model) renderLine(line logLine) string {
 		}
 		name := style.Render(fmt.Sprintf("%-14s", displayName))
 		input := singleLine(e.ToolInput)
-		if len(input) > 60 {
-			input = input[:59] + "…"
+		// Truncate to fit terminal width. Prefix is ~30 visible columns.
+		maxInput := m.width - 32
+		if maxInput < 20 {
+			maxInput = 20
+		}
+		if len(input) > maxInput {
+			input = input[:maxInput-1] + "…"
 		}
 		return fmt.Sprintf("%s  %s %s %s", ts, icon, name, input)
 
 	case loop.LogText:
 		text := singleLine(e.Message)
-		if len([]rune(text)) > 80 {
+		// Truncate to fit terminal width. Prefix is ~15 visible columns.
+		maxText := m.width - 17
+		if maxText < 20 {
+			maxText = 20
+		}
+		if len([]rune(text)) > maxText {
 			runes := []rune(text)
-			text = string(runes[:79]) + "…"
+			text = string(runes[:maxText-1]) + "…"
 		}
 		return fmt.Sprintf("%s  %s", ts, reasoningStyle.Render("💭 "+text))
 

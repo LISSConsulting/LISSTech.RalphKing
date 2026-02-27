@@ -968,7 +968,8 @@ func TestRenderLineLongToolInput(t *testing.T) {
 	m := New(ch, "", "", "", nil)
 	now := time.Date(2026, 2, 23, 14, 30, 0, 0, time.UTC)
 
-	// Tool input longer than 60 chars should be truncated with ellipsis.
+	// Default width=80, prefix≈30, padding=2 → maxInput=48.
+	// Tool input longer than maxInput should be truncated with ellipsis.
 	longInput := strings.Repeat("a", 80)
 	entry := loop.LogEntry{
 		Kind:      loop.LogToolUse,
@@ -978,8 +979,8 @@ func TestRenderLineLongToolInput(t *testing.T) {
 	}
 	rendered := m.renderLine(logLine{entry: entry})
 
-	// Should contain the truncated input (59 chars + ellipsis).
-	want := strings.Repeat("a", 59) + "…"
+	// Should contain the truncated input (47 chars + ellipsis).
+	want := strings.Repeat("a", 47) + "…"
 	if !strings.Contains(rendered, want) {
 		t.Errorf("long tool input should be truncated with ellipsis, got: %s", rendered)
 	}
@@ -994,8 +995,8 @@ func TestRenderLineShortToolInputUnchanged(t *testing.T) {
 	m := New(ch, "", "", "", nil)
 	now := time.Date(2026, 2, 23, 14, 30, 0, 0, time.UTC)
 
-	// Tool input at exactly 60 chars should not be truncated.
-	exactInput := strings.Repeat("b", 60)
+	// Default width=80, maxInput=48. Input at exactly 48 chars should not be truncated.
+	exactInput := strings.Repeat("b", 48)
 	entry := loop.LogEntry{
 		Kind:      loop.LogToolUse,
 		Timestamp: now,
@@ -1005,7 +1006,7 @@ func TestRenderLineShortToolInputUnchanged(t *testing.T) {
 	rendered := m.renderLine(logLine{entry: entry})
 
 	if !strings.Contains(rendered, exactInput) {
-		t.Errorf("60-char tool input should not be truncated, got: %s", rendered)
+		t.Errorf("48-char tool input should not be truncated at width 80, got: %s", rendered)
 	}
 }
 
@@ -1447,7 +1448,8 @@ func TestRenderLineLogText(t *testing.T) {
 		}
 	})
 
-	t.Run("long text truncated at 80 runes", func(t *testing.T) {
+	t.Run("long text truncated to fit terminal width", func(t *testing.T) {
+		// Default width=80, prefix≈15, padding=2 → maxText=63.
 		longText := strings.Repeat("x", 100)
 		entry := loop.LogEntry{
 			Kind:      loop.LogText,
@@ -1458,10 +1460,10 @@ func TestRenderLineLogText(t *testing.T) {
 		if !strings.Contains(rendered, "💭") {
 			t.Errorf("LogText line should contain 💭 icon, got: %s", rendered)
 		}
-		// Should be truncated: 79 x's + ellipsis
-		want := strings.Repeat("x", 79) + "…"
+		// Should be truncated: 62 x's + ellipsis
+		want := strings.Repeat("x", 62) + "…"
 		if !strings.Contains(rendered, want) {
-			t.Errorf("long LogText should be truncated to 79 runes + ellipsis, got: %s", rendered)
+			t.Errorf("long LogText should be truncated to 62 runes + ellipsis, got: %s", rendered)
 		}
 		// Full 100-char string should not appear
 		if strings.Contains(rendered, longText) {
@@ -1469,8 +1471,9 @@ func TestRenderLineLogText(t *testing.T) {
 		}
 	})
 
-	t.Run("exactly 80 rune text not truncated", func(t *testing.T) {
-		exactText := strings.Repeat("y", 80)
+	t.Run("text within terminal width not truncated", func(t *testing.T) {
+		// Default width=80, maxText=63. Input at exactly 63 chars should not be truncated.
+		exactText := strings.Repeat("y", 63)
 		entry := loop.LogEntry{
 			Kind:      loop.LogText,
 			Timestamp: now,
@@ -1478,7 +1481,7 @@ func TestRenderLineLogText(t *testing.T) {
 		}
 		rendered := m.renderLine(logLine{entry: entry})
 		if !strings.Contains(rendered, exactText) {
-			t.Errorf("80-rune text should not be truncated, got: %s", rendered)
+			t.Errorf("63-rune text should not be truncated at width 80, got: %s", rendered)
 		}
 	})
 }
