@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **All core features complete + hardened.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 96-99% test coverage across all internal packages; cmd/ralph 74.0%, overall ~89%. Re-audited 2026-02-26 via full code search across all spec requirements. All remaining work items resolved as of v0.0.40. SIGQUIT handling confirmed implemented in `quit_unix.go`. `spec.List()` subdirectory walk fixed in v0.0.39. v2 improvements branch (`002-v2-improvements`) active — bugs fixed in v0.0.42. `ralph init` now writes `.gitignore` with `.ralph/regent-state.json` entry in v0.0.43. Fixed race condition in `regent.SaveState` (concurrent writes via atomic rename) in v0.0.43.
+> Current state: **All core features complete + hardened.** Both specs (`ralph-core.md`, `the-regent.md`) fully implemented. 96-99% test coverage across all internal packages; cmd/ralph 71.5%, overall ~89%. Re-audited 2026-02-26 via full code search across all spec requirements. All remaining work items resolved as of v0.0.40. SIGQUIT handling confirmed implemented in `quit_unix.go`. `spec.List()` subdirectory walk fixed in v0.0.39. v2 improvements branch (`002-v2-improvements`) active — bugs fixed in v0.0.42. `ralph init` now writes `.gitignore` with `.ralph/regent-state.json` entry in v0.0.43. Fixed race condition in `regent.SaveState` (concurrent writes via atomic rename) in v0.0.43.
 
 ## Completed Work
 
@@ -14,7 +14,7 @@
 | Cost control | `claude.max_turns` config (0 = unlimited), `--max-turns` CLI passthrough | v0.0.26 |
 | Scaffolding | `ralph init` creates ralph.toml + PROMPT_plan.md + PROMPT_build.md + specs/ (idempotent) | v0.0.28 |
 | CI/CD | Go 1.24, version injection, race detection, release workflow (cross-compiled binaries on tag push), golangci-lint (go-critic + gofmt) in CI & release | 0.0.7, 0.0.19, v0.0.30 |
-| Test coverage | Git 93.2%, TUI 99.5%, loop 81.0% (runner.Run skipped on Windows), claude 97.8%, regent 94.7%, config 91.3%, spec 94.9%, cmd/ralph 71.2% (ceiling: TUI/OS fns at 0%) | 0.0.6, 0.0.14, 0.0.16, v0.0.32, v0.0.36–v0.0.40, v0.0.56, v0.0.58 |
+| Test coverage | Git 93.2%, TUI 99.5%, loop 81.0% (runner.Run skipped on Windows), claude 97.8%, regent 94.7%, config 91.3%, spec 94.9%, cmd/ralph 71.5% (ceiling: TUI/OS fns at 0%) | 0.0.6, 0.0.14, 0.0.16, v0.0.32, v0.0.36–v0.0.40, v0.0.56, v0.0.58, v0.0.59 |
 | Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, prompt files, extract `classifyResult`/`needsPlanPhase`/`formatStatus`/`formatLogLine`/`formatSpecList`/`formatScaffoldResult` pure functions with table-driven tests, command tree structure tests, end-to-end command execution tests (cmd/ralph 8.8% → 41.8%); added `runWithStateTracking`/`runWithRegent`/`openEditor` tests (41.8% → 53.4%); added `executeLoop`/`executeSmartRun` integration tests + plan/build/run RunE tests (53.4% → 70.7%); added config-invalid/regent-enabled/corrupted-state-file tests for `executeSmartRun` and `showStatus` (70.7% → 72.0%) | 0.0.9, v0.0.21, v0.0.33–v0.0.38 |
 
 Specs implemented: `ralph-core.md`, `the-regent.md`.
@@ -23,7 +23,7 @@ Specs implemented: `ralph-core.md`, `the-regent.md`.
 
 | Priority | Item | Location | Notes |
 |----------|------|----------|-------|
-| Info | cmd/ralph coverage ceiling at 71.2% | `cmd/ralph/wiring.go` — `runWithRegentTUI`, `finishTUI`, `runWithTUIAndState`; `cmd/ralph/main.go` — `main`; `cmd/ralph/quit_unix.go`/`quit_windows.go` — `registerQuitHandler` | These functions require a real TTY (bubbletea) or are OS-level signal handlers. Not actionable without a bubbletea headless test mode. `internal/loop` runner.Run at 0% on Windows (shell script tests skipped). |
+| Info | cmd/ralph coverage ceiling at 71.5% | `cmd/ralph/wiring.go` — `runWithRegentTUI`, `finishTUI`, `runWithTUIAndState`; `cmd/ralph/main.go` — `main`; `cmd/ralph/quit_unix.go`/`quit_windows.go` — `registerQuitHandler` | These functions require a real TTY (bubbletea) or are OS-level signal handlers. Not actionable without a bubbletea headless test mode. `internal/loop` runner.Run at 0% on Windows (shell script tests skipped). Added `specNewCmd` existing-spec error path and `specListCmd` not-dir error path (Unix-only) in v0.0.59. |
 
 ## v2 Improvement Backlog (from GitHub Issues #1 and #2)
 
@@ -121,7 +121,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - `singleLine(s string) string` in `view.go` strips `\r\n`, `\r`, `\n` with space replacement; applied to all text content in `renderLine()` (`e.Message` and `e.ToolInput`); prevents embedded newlines in Claude reasoning text from causing TUI height overflow and header disappearance on Windows WezTerm
 - Mouse wheel scroll in TUI: `tea.WithMouseCellMotion()` must be passed to `tea.NewProgram()` to capture wheel events; handle `tea.MouseMsg` in `Update()` with `msg.Button == tea.MouseButtonWheelUp/Down`; without this, iTerm2 and other terminals route wheel events to their own scrollback buffer instead of the application
 - `abbreviatePath` home-dir substitution branch covered by calling `os.UserHomeDir()` in the test and constructing a path with `filepath.Join(home, "projects", "myapp")` — skip via `t.Skip` if `UserHomeDir` errors; TUI coverage 99.1% → 99.5%
-- `ScaffoldProject` creates `IMPLEMENTATION_PLAN.md` with a starter template containing `## Completed Work`, `## Remaining Work`, and `## Key Learnings` sections; idempotent — existing files are never overwritten; listed last in `created` slice (after `.gitignore`)
+- `ScaffoldProject` creates `CHRONICLE.md` with a starter template containing `## Completed Work`, `## Remaining Work`, and `## Key Learnings` sections; idempotent — existing files are never overwritten; listed last in `created` slice (after `.gitignore`)
 - `internal/loop/runner.Run` is 0% coverage on Windows because all tests use shell scripts (`#!/bin/sh`) which are skipped on Windows; this is the primary cause of loop package dropping from 97.7% to 81.0% on Windows
 - `SaveState` rename error tested by creating a directory at the state file path — `os.Rename(tempFile, directory)` fails on all platforms; `regent.saveState` error emit tested by blocking `.ralph` with a regular file
 - `RunPostIterationTests` "Failed to start tests" path tested via `t.Setenv("PATH", "")` to prevent shell binary lookup (same pattern as `TestRunTests_ShellNotFound`)

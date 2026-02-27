@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -335,6 +336,50 @@ func TestSpecNewCmdWithEditor(t *testing.T) {
 	path := filepath.Join(dir, "specs", "editor-test.md")
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("expected spec file at %s: %v", path, err)
+	}
+}
+
+func TestSpecNewCmdExisting(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	t.Setenv("EDITOR", "")
+
+	// Create spec first.
+	cmd1 := specNewCmd()
+	if err := cmd1.RunE(cmd1, []string{"my-feature"}); err != nil {
+		t.Fatalf("first specNewCmd RunE: %v", err)
+	}
+
+	// Second creation with same name should fail with "already exists" error.
+	cmd2 := specNewCmd()
+	err := cmd2.RunE(cmd2, []string{"my-feature"})
+	if err == nil {
+		t.Fatal("expected error when spec already exists")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("error should mention 'already exists', got: %v", err)
+	}
+}
+
+func TestSpecListCmd_SpecsNotDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// On Windows, os.ReadDir on a regular file returns an IsNotExist-like error,
+		// so spec.List returns nil rather than propagating the error. The error path
+		// covered by this test is only reachable on Unix.
+		t.Skip("ReadDir on a regular file returns IsNotExist on Windows")
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	// Create a regular file named "specs" so ReadDir returns a non-IsNotExist error.
+	if err := os.WriteFile(filepath.Join(dir, "specs"), []byte("not a dir"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cmd := specListCmd()
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when specs/ is a regular file, not a directory")
 	}
 }
 
