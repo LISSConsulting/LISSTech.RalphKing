@@ -234,6 +234,39 @@ func TestInitCmdIdempotent(t *testing.T) {
 	}
 }
 
+func TestInitCmd_ScaffoldError(t *testing.T) {
+	// Trigger ScaffoldProject returning an error by creating .gitignore as a
+	// directory. Pre-create all files that scaffold checks before .gitignore so
+	// the function progresses past them and reaches the .gitignore read step.
+	dir := t.TempDir()
+	t.Chdir(dir)
+	for name, content := range map[string]string{
+		"ralph.toml": "x",
+		"PLAN.md":    "x",
+		"BUILD.md":   "x",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatalf("WriteFile %s: %v", name, err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "specs"), 0755); err != nil {
+		t.Fatalf("MkdirAll specs: %v", err)
+	}
+	// .gitignore as a directory → os.ReadFile returns a non-IsNotExist error.
+	if err := os.MkdirAll(filepath.Join(dir, ".gitignore"), 0755); err != nil {
+		t.Fatalf("MkdirAll .gitignore: %v", err)
+	}
+
+	cmd := initCmd()
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when ScaffoldProject fails")
+	}
+	if !strings.Contains(err.Error(), ".gitignore") {
+		t.Errorf("error should mention .gitignore, got: %v", err)
+	}
+}
+
 func TestStatusCmdExecution(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
