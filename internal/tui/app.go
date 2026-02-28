@@ -305,6 +305,7 @@ func (m Model) handleLogEntry(msg logEntryMsg) (tea.Model, tea.Cmd) {
 			Commit:   entry.Commit,
 		}
 		m.iterationsPanel = m.iterationsPanel.AddIteration(summary).SetCurrent(0)
+		m.secondary = m.secondary.AddIteration(summary)
 
 	case loop.LogDone, loop.LogStopped:
 		if m.loopState.CanTransitionTo(StateIdle) {
@@ -327,6 +328,9 @@ func (m Model) handleLogEntry(msg logEntryMsg) (tea.Model, tea.Cmd) {
 	switch entry.Kind {
 	case loop.LogRegent:
 		m.secondary = m.secondary.AppendLine(rendered, panels.TabRegent)
+		if strings.Contains(rendered, "Tests") || strings.Contains(rendered, "Reverted") {
+			m.secondary = m.secondary.AppendLine(rendered, panels.TabTests)
+		}
 	case loop.LogGitPull, loop.LogGitPush:
 		m.secondary = m.secondary.AppendLine(rendered, panels.TabGit)
 		m.mainView = m.mainView.AppendLine(rendered)
