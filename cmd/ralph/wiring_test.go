@@ -224,7 +224,7 @@ func TestRunWithStateTracking_Success(t *testing.T) {
 	runner := git.NewRunner(dir)
 	lp := &loop.Loop{}
 
-	err := runWithStateTracking(context.Background(), lp, dir, runner, "build", func(_ context.Context) error {
+	err := runWithStateTracking(context.Background(), lp, dir, runner, "build", nil, func(_ context.Context) error {
 		return nil
 	})
 	if err != nil {
@@ -250,7 +250,7 @@ func TestRunWithStateTracking_Error(t *testing.T) {
 	lp := &loop.Loop{}
 
 	want := errors.New("build failed")
-	got := runWithStateTracking(context.Background(), lp, dir, runner, "build", func(_ context.Context) error {
+	got := runWithStateTracking(context.Background(), lp, dir, runner, "build", nil, func(_ context.Context) error {
 		return want
 	})
 	if !errors.Is(got, want) {
@@ -272,7 +272,7 @@ func TestRunWithStateTracking_ContextCanceled(t *testing.T) {
 	runner := git.NewRunner(dir)
 	lp := &loop.Loop{}
 
-	err := runWithStateTracking(context.Background(), lp, dir, runner, "build", func(_ context.Context) error {
+	err := runWithStateTracking(context.Background(), lp, dir, runner, "build", nil, func(_ context.Context) error {
 		return context.Canceled
 	})
 	if !errors.Is(err, context.Canceled) {
@@ -296,7 +296,7 @@ func TestRunWithStateTracking_EventsForwarded(t *testing.T) {
 
 	// The run func sends events through lp.Events, which is set by runWithStateTracking
 	// before calling run. The drain goroutine processes all events before returning.
-	err := runWithStateTracking(context.Background(), lp, dir, runner, "plan", func(_ context.Context) error {
+	err := runWithStateTracking(context.Background(), lp, dir, runner, "plan", nil, func(_ context.Context) error {
 		lp.Events <- loop.LogEntry{Iteration: 3, TotalCost: 1.50, Branch: "feat/test", Mode: "build"}
 		return nil
 	})
@@ -341,7 +341,7 @@ func TestRunWithRegent_Success(t *testing.T) {
 	runner := git.NewRunner(dir)
 	lp := &loop.Loop{}
 
-	err := runWithRegent(context.Background(), lp, regentTestConfig(1), runner, dir, func(_ context.Context) error {
+	err := runWithRegent(context.Background(), lp, regentTestConfig(1), runner, dir, nil, func(_ context.Context) error {
 		return nil
 	})
 	if err != nil {
@@ -364,7 +364,7 @@ func TestRunWithRegent_MaxRetriesExceeded(t *testing.T) {
 	lp := &loop.Loop{}
 
 	runErr := errors.New("loop crashed")
-	err := runWithRegent(context.Background(), lp, regentTestConfig(0), runner, dir, func(_ context.Context) error {
+	err := runWithRegent(context.Background(), lp, regentTestConfig(0), runner, dir, nil, func(_ context.Context) error {
 		return runErr
 	})
 	if err == nil {
@@ -384,7 +384,7 @@ func TestRunWithRegent_ContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately so Regent exits on first check
 
-	err := runWithRegent(ctx, lp, regentTestConfig(1), runner, dir, func(_ context.Context) error {
+	err := runWithRegent(ctx, lp, regentTestConfig(1), runner, dir, nil, func(_ context.Context) error {
 		return nil
 	})
 	if !errors.Is(err, context.Canceled) {
@@ -400,7 +400,7 @@ func TestRunWithRegent_LoopEventsUpdateState(t *testing.T) {
 
 	// Non-Regent events emitted by the run func flow through the drain goroutine's
 	// rgt.UpdateState path. Verify they are captured in the persisted state.
-	err := runWithRegent(context.Background(), lp, regentTestConfig(1), runner, dir, func(_ context.Context) error {
+	err := runWithRegent(context.Background(), lp, regentTestConfig(1), runner, dir, nil, func(_ context.Context) error {
 		lp.Events <- loop.LogEntry{Iteration: 5, TotalCost: 2.50, Branch: "main"}
 		return nil
 	})

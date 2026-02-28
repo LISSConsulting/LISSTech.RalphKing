@@ -14,12 +14,13 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui"
 )
 
 // runWithRegent runs the loop under Regent supervision without TUI.
 // Events are drained to stdout.
-func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRunner *git.Runner, dir string, run regent.RunFunc) error {
+func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRunner *git.Runner, dir string, sw store.Writer, run regent.RunFunc) error {
 	events := make(chan loop.LogEntry, 128)
 	lp.Events = events
 
@@ -31,6 +32,9 @@ func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRu
 	go func() {
 		defer close(drainDone)
 		for entry := range events {
+			if sw != nil {
+				_ = sw.Append(entry)
+			}
 			if entry.Kind != loop.LogRegent {
 				rgt.UpdateState(entry)
 			}
@@ -52,7 +56,7 @@ func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRu
 // runWithRegentTUI runs the loop under Regent supervision with TUI display.
 // Loop events are forwarded through the Regent for state/hang tracking, then
 // sent to the TUI. Regent messages are sent directly to the TUI channel.
-func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRunner *git.Runner, dir string, run regent.RunFunc) error {
+func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRunner *git.Runner, dir string, sw store.Writer, run regent.RunFunc) error {
 	loopEvents := make(chan loop.LogEntry, 128)
 	tuiEvents := make(chan loop.LogEntry, 128)
 
@@ -74,6 +78,9 @@ func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gi
 	go func() {
 		defer close(forwardDone)
 		for entry := range loopEvents {
+			if sw != nil {
+				_ = sw.Append(entry)
+			}
 			rgt.UpdateState(entry)
 			select {
 			case tuiEvents <- entry:
@@ -130,7 +137,7 @@ func finishTUI(program *tea.Program) error {
 // runWithStateTracking runs the loop without Regent supervision in no-TUI mode,
 // draining events to stdout and persisting state to .ralph/regent-state.json
 // so that `ralph status` works even when the Regent is disabled.
-func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, run regent.RunFunc) error {
+func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, sw store.Writer, run regent.RunFunc) error {
 	events := make(chan loop.LogEntry, 128)
 	lp.Events = events
 
@@ -141,6 +148,9 @@ func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRun
 	go func() {
 		defer close(drainDone)
 		for entry := range events {
+			if sw != nil {
+				_ = sw.Append(entry)
+			}
 			fmt.Fprintln(os.Stdout, formatLogLine(entry))
 			st.trackEntry(entry)
 		}
@@ -156,7 +166,7 @@ func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRun
 
 // runWithTUIAndState runs the loop without Regent supervision with TUI display,
 // forwarding events through a state tracker so `ralph status` works.
-func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, accentColor string, projectName string, run regent.RunFunc) error {
+func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, accentColor string, projectName string, sw store.Writer, run regent.RunFunc) error {
 	loopEvents := make(chan loop.LogEntry, 128)
 	tuiEvents := make(chan loop.LogEntry, 128)
 
@@ -179,6 +189,9 @@ func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunne
 	go func() {
 		defer close(forwardDone)
 		for entry := range loopEvents {
+			if sw != nil {
+				_ = sw.Append(entry)
+			}
 			st.trackEntry(entry)
 			select {
 			case tuiEvents <- entry:

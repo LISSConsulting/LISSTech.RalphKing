@@ -15,6 +15,7 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/notify"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
 )
 
 // executeLoop loads config, builds the loop, and runs it in the given mode.
@@ -62,21 +63,29 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 		lp.NotificationHook = n.Hook
 	}
 
+	var sw store.Writer
+	if s, err := store.NewJSONL(filepath.Join(dir, ".ralph", "logs")); err != nil {
+		fmt.Fprintf(os.Stderr, "ralph: session log unavailable: %v\n", err)
+	} else {
+		sw = s
+		defer s.Close()
+	}
+
 	runFn := func(ctx context.Context) error {
 		return lp.Run(ctx, mode, maxOverride)
 	}
 
 	if !cfg.Regent.Enabled {
 		if noTUI {
-			return runWithStateTracking(ctx, lp, dir, gitRunner, string(mode), runFn)
+			return runWithStateTracking(ctx, lp, dir, gitRunner, string(mode), sw, runFn)
 		}
-		return runWithTUIAndState(ctx, lp, dir, gitRunner, string(mode), cfg.TUI.AccentColor, cfg.Project.Name, runFn)
+		return runWithTUIAndState(ctx, lp, dir, gitRunner, string(mode), cfg.TUI.AccentColor, cfg.Project.Name, sw, runFn)
 	}
 
 	if noTUI {
-		return runWithRegent(ctx, lp, cfg, gitRunner, dir, runFn)
+		return runWithRegent(ctx, lp, cfg, gitRunner, dir, sw, runFn)
 	}
-	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, runFn)
+	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, sw, runFn)
 }
 
 // executeSmartRun runs plan if CHRONICLE.md doesn't exist, then build.
@@ -110,6 +119,14 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 		lp.NotificationHook = n.Hook
 	}
 
+	var sw store.Writer
+	if s, err := store.NewJSONL(filepath.Join(dir, ".ralph", "logs")); err != nil {
+		fmt.Fprintf(os.Stderr, "ralph: session log unavailable: %v\n", err)
+	} else {
+		sw = s
+		defer s.Close()
+	}
+
 	smartRunFn := func(ctx context.Context) error {
 		// Check inside the closure so Regent retries re-evaluate whether
 		// the plan file exists (it may have been created by a prior attempt).
@@ -125,15 +142,15 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 
 	if !cfg.Regent.Enabled {
 		if noTUI {
-			return runWithStateTracking(ctx, lp, dir, gitRunner, "run", smartRunFn)
+			return runWithStateTracking(ctx, lp, dir, gitRunner, "run", sw, smartRunFn)
 		}
-		return runWithTUIAndState(ctx, lp, dir, gitRunner, "run", cfg.TUI.AccentColor, cfg.Project.Name, smartRunFn)
+		return runWithTUIAndState(ctx, lp, dir, gitRunner, "run", cfg.TUI.AccentColor, cfg.Project.Name, sw, smartRunFn)
 	}
 
 	if noTUI {
-		return runWithRegent(ctx, lp, cfg, gitRunner, dir, smartRunFn)
+		return runWithRegent(ctx, lp, cfg, gitRunner, dir, sw, smartRunFn)
 	}
-	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, smartRunFn)
+	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, sw, smartRunFn)
 }
 
 // showStatus reads .ralph/regent-state.json and prints a formatted summary.

@@ -1,9 +1,21 @@
 # Feature Specification: Panel-Based TUI Redesign
 
-**Feature Branch**: `002-tui-redesign`
+**Feature Branch**: `003-tui-redesign`
 **Created**: 2026-02-26
 **Status**: Draft
 **Input**: Redesign the RalphKing TUI in the likeness of lazygit and lazydocker — a multi-panel, keyboard-driven terminal dashboard for monitoring and controlling the spec-driven AI coding loop and The Regent supervisor.
+
+## Clarifications
+
+### Session 2026-02-28
+
+- Q: How should `store.Reader` handle malformed/truncated JSONL lines (e.g., after a Regent kill mid-write)? → A: Skip malformed lines silently, log warning to stderr.
+- Q: Should the existing TUI code be replaced wholesale or incrementally refactored? → A: Clean replacement — delete old TUI files, write new from scratch. Old code is recoverable from git history.
+- Q: What retention policy should the store apply to session log files in `.ralph/logs/`? → A: Keep last N session logs (default 20), delete oldest on startup. N is configurable via `ralph.toml`.
+- Q: What should happen when the terminal is smaller than the 80×24 minimum? → A: Show a centered "Terminal too small — resize to at least 80×24" message instead of rendering the layout.
+- Q: Should `LoopState` transitions be strictly defined or open? → A: Strict state machine — define allowed transitions explicitly.
+
+---
 
 ## Context
 
@@ -51,6 +63,7 @@ Key patterns to port from lazydocker:
 - **No new dependencies beyond bubbles** — `charmbracelet/bubbles` (list, viewport, textinput, spinner) is permitted as it's the official bubbletea component library. All other deps require justification per constitution
 - **Wiring extended minimally** — `cmd/ralph/wiring.go` orchestration gains a `store.Writer` that taps the event stream alongside the existing Regent state tracker and TUI forwarding. The forwarding goroutine appends each entry to the store before sending to the TUI channel. No structural change to the channel topology
 - **Agent interface unchanged** — `internal/claude/`, `internal/loop/`, `internal/regent/` packages are not modified
+- **Clean TUI replacement** — The existing `internal/tui/` files (`model.go`, `styles.go`, `model_test.go`) are deleted and replaced by the new multi-panel architecture. No incremental migration or parallel implementation. Old code is recoverable from git history
 
 ---
 
@@ -160,7 +173,10 @@ The secondary panel (bottom-right) provides tabbed access to Regent log, git log
 
 - What happens when the JSONL session log grows very large (thousands of iterations)? → The TUI builds an in-memory index of byte offsets per iteration on startup (scan for `LogIterStart` markers). Individual iteration logs are read on demand via `ReadAt`, not loaded into memory all at once. Session log files are per-session, so a single file covers one `ralph build` invocation including Regent restarts.
 - What happens when the `.ralph/logs/` directory doesn't exist? → The store creates it on first write (`os.MkdirAll`). Read operations return empty results rather than errors.
-- What happens when two Ralph instances write to the same session log? → They don't. Each session gets a unique filename based on PID + timestamp (`<unix-ts>-<pid>.jsonl`). The Regent restarts Ralph within the same process, so the PID and session ID remain stable across restarts. → All panels recalculate dimensions on `tea.WindowSizeMsg`. Content reflows. Minimum terminal size: 80×24.
+- What happens when `.ralph/logs/` accumulates many session files? → On startup, the store lists existing session logs, sorts by filename (which embeds timestamp), and deletes the oldest files exceeding the retention limit (default 20, configurable via `log_retention` in `ralph.toml`).
+- What happens when two Ralph instances write to the same session log? → They don't. Each session gets a unique filename based on PID + timestamp (`<unix-ts>-<pid>.jsonl`). The Regent restarts Ralph within the same process, so the PID and session ID remain stable across restarts.
+- What happens when a terminal resize occurs? → All panels recalculate dimensions on `tea.WindowSizeMsg`. Content reflows. Minimum terminal size: 80×24.
+- What happens when the Regent kills Ralph mid-write and the JSONL session log contains a truncated final line? → `store.Reader` skips malformed lines silently during index building and iteration reads, logging a warning to stderr. Since `Append` calls `file.Sync()` after each complete line, only the in-flight write at kill time can be partial — all prior lines are guaranteed intact.
 - What happens when the event channel fills faster than the TUI renders? → The existing non-blocking send in `loop.emit()` and the 128-capacity buffer remain. The TUI drains as fast as bubbletea's event loop runs. Events dropped by the buffer are lost (acceptable — they are also written to Regent state).
 - What happens when no specs exist? → Specs panel shows "No specs. Press n to create one."
 - What happens when `$EDITOR` is unset and the operator presses `e`? → Show inline message "Set $EDITOR to open specs" in the footer. Do not crash.
@@ -184,7 +200,7 @@ The secondary panel (bottom-right) provides tabbed access to Regent log, git log
 - **FR-010**: All existing `LogKind` types MUST render in the TUI: `LogInfo`, `LogIterStart`, `LogToolUse`, `LogIterComplete`, `LogError`, `LogGitPull`, `LogGitPush`, `LogDone`, `LogStopped`, `LogRegent`.
 - **FR-011**: Tool-use lines MUST be color-coded per existing `styles.go` scheme: reads=blue, writes=green, bash=yellow, errors=red, Regent=orange.
 - **FR-012**: `--no-tui` flag MUST continue to work, producing the existing plain-text timestamped output to stdout.
-- **FR-013**: Layout MUST be responsive to terminal size via `tea.WindowSizeMsg`. Minimum supported size: 80×24.
+- **FR-013**: Layout MUST be responsive to terminal size via `tea.WindowSizeMsg`. Minimum supported size: 80×24. When the terminal is below minimum, the TUI MUST render a centered "Terminal too small — resize to at least 80×24" message instead of the panel layout.
 - **FR-014**: `tea.WithAltScreen()` MUST be used (already the case) to preserve the user's terminal on exit.
 - **FR-015**: The TUI MUST support suspending to `$EDITOR` via `tea.Suspend` and resume cleanly after editor exit.
 - **FR-016**: Every `LogEntry` emitted during a session MUST be persisted to a JSONL session log at `.ralph/logs/<session-id>.jsonl` before being forwarded to the TUI.
@@ -194,6 +210,7 @@ The secondary panel (bottom-right) provides tabbed access to Regent log, git log
 - **FR-020**: `--no-tui` mode MUST also write to the JSONL session log so that headless runs produce reviewable history.
 - **FR-021**: Session log filenames MUST be deterministic per session (`<unix-timestamp>-<pid>.jsonl`) so that the Regent's restart cycle appends to the same file rather than creating a new one.
 - **FR-022**: The `LogEntry` struct MUST be serialized with `encoding/json` using the existing field names. No schema migration is needed — the struct is the schema.
+- **FR-023**: The store MUST enforce a configurable session log retention policy: keep the last N session logs (default 20), deleting the oldest on startup. N is configurable via `log_retention` in `ralph.toml`.
 
 ### Key Entities
 
@@ -281,6 +298,34 @@ type Model struct {
 }
 ```
 
+#### LoopState Transitions
+
+`LoopState` follows a strict state machine. Invalid transitions are no-ops (logged as warnings).
+
+```
+idle ──→ planning ──→ building ──→ idle (success)
+  │         │            │
+  │         │            ├──→ failed ──→ idle (user restart)
+  │         │            │
+  │         │            └──→ regentRestart ──→ building
+  │         │
+  │         └──→ failed ──→ idle
+  │
+  └──→ building ──→ (same as above)
+```
+
+| From | To | Trigger |
+|------|----|---------|
+| `idle` | `planning` | User presses `p` or smart-run starts planning |
+| `idle` | `building` | User presses `b` or `ralph build` starts |
+| `planning` | `building` | Plan phase completes, build begins |
+| `planning` | `failed` | Plan phase errors |
+| `building` | `idle` | All iterations complete successfully |
+| `building` | `failed` | Unrecoverable error or user presses `x` |
+| `building` | `regentRestart` | Regent kills loop (hang/crash/test failure) |
+| `regentRestart` | `building` | Regent relaunches loop |
+| `failed` | `idle` | User acknowledges or presses `b`/`R` to restart |
+
 The root `Update` dispatches `tea.KeyMsg` to the focused panel's update function. Global keys (`tab`, `1-4`, `q`, `?`) are handled before dispatch. `logEntryMsg` is broadcast to all sub-models that need it (iterations panel, main view output, secondary Regent tab, header state). When the iterations panel requests a past iteration's output, the main view reads from `store.Reader` rather than memory.
 
 ### Session Log Store (`internal/store/`)
@@ -353,7 +398,7 @@ The sync-per-write cost is acceptable because events arrive at human-readable fr
 
 **Read path** (`IterationLog`):
 1. On first read (or after detecting new bytes via `file.Stat`), scan the file line-by-line building an in-memory index: `map[int]offsetRange` where `offsetRange` is `{startByte, endByte}` for each iteration's `LogIterStart` to `LogIterComplete` span.
-2. To read iteration N: `file.ReadAt` from `index[N].startByte` to `index[N].endByte`, split lines, `json.Unmarshal` each.
+2. To read iteration N: `file.ReadAt` from `index[N].startByte` to `index[N].endByte`, split lines, `json.Unmarshal` each. Malformed lines (e.g., truncated by a mid-write kill) are skipped with a warning to stderr.
 3. Index is cached and extended incrementally — only scan new bytes past the last known offset.
 
 This avoids loading the full log for large sessions while keeping the implementation simple (no B-tree, no WAL, just sequential scan + offset bookkeeping).
@@ -396,7 +441,7 @@ mainHeight    = bodyHeight * 65 / 100
 secondaryHeight = bodyHeight - mainHeight
 ```
 
-When `width < 80`: collapse to single-column stacked layout.
+When `width < 80` or `height < 24`: render a centered "Terminal too small — resize to at least 80×24" message. No panel layout is attempted.
 
 ### Event Flow (store added to existing wiring)
 
