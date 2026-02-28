@@ -16,7 +16,7 @@ func TestFormatLogLine(t *testing.T) {
 	ts := time.Date(2026, 2, 23, 14, 23, 1, 0, time.UTC)
 
 	tests := []struct {
-		name string
+		name  string
 		entry loop.LogEntry
 		want  string
 	}{

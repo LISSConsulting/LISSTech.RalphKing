@@ -100,8 +100,8 @@ func TestFormatScaffoldResult(t *testing.T) {
 			contains: []string{"All files already exist"},
 		},
 		{
-			name:    "single file created",
-			created: []string{"ralph.toml"},
+			name:     "single file created",
+			created:  []string{"ralph.toml"},
 			contains: []string{"Created ralph.toml"},
 			excludes: []string{"already exist"},
 		},

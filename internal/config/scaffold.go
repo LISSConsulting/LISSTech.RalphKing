@@ -54,14 +54,15 @@ func ScaffoldProject(dir string) ([]string, error) {
 	const gitignoreEntry = ".ralph/regent-state.json"
 	gitignorePath := filepath.Join(dir, ".gitignore")
 	existing, err := os.ReadFile(gitignorePath)
-	if os.IsNotExist(err) {
+	switch {
+	case os.IsNotExist(err):
 		if writeErr := os.WriteFile(gitignorePath, []byte(gitignoreEntry+"\n"), 0644); writeErr != nil {
 			return created, fmt.Errorf("scaffold: write %s: %w", gitignorePath, writeErr)
 		}
 		created = append(created, gitignorePath)
-	} else if err != nil {
+	case err != nil:
 		return created, fmt.Errorf("scaffold: read %s: %w", gitignorePath, err)
-	} else if !strings.Contains(string(existing), gitignoreEntry) {
+	case !strings.Contains(string(existing), gitignoreEntry):
 		content := string(existing)
 		if len(content) > 0 && content[len(content)-1] != '\n' {
 			content += "\n"

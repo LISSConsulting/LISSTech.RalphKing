@@ -79,13 +79,14 @@ func (m Model) renderFooter() string {
 
 	left := fmt.Sprintf("[⬆ pull] [⬇ push]  last commit: %s", commit)
 	var right string
-	if m.stopRequested {
+	switch {
+	case m.stopRequested:
 		right = "⏹ stopping after iteration…  q to force quit"
-	} else if m.scrollOffset > 0 && m.newBelow > 0 {
+	case m.scrollOffset > 0 && m.newBelow > 0:
 		right = fmt.Sprintf("↓%d new  ↑%d  j/k scroll  s to stop  q to quit", m.newBelow, m.scrollOffset)
-	} else if m.scrollOffset > 0 {
+	case m.scrollOffset > 0:
 		right = fmt.Sprintf("↑%d  j/k scroll  s to stop  q to quit", m.scrollOffset)
-	} else {
+	default:
 		right = "s to stop  q to quit"
 	}
 
