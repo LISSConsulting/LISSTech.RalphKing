@@ -1683,3 +1683,59 @@ func TestMouseWheelIgnoresOtherButtons(t *testing.T) {
 		t.Errorf("expected scrollOffset unchanged after mouse click, got %d", m.scrollOffset)
 	}
 }
+
+// TestRenderLineToolInputNarrowWidthClamp verifies that the LogToolUse case clamps
+// maxInput to 20 when the terminal is narrower than 52 columns (width-32 < 20).
+func TestRenderLineToolInputNarrowWidthClamp(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	m.width = 30 // maxInput = 30-32 = -2 → clamped to 20
+	now := time.Date(2026, 2, 28, 10, 0, 0, 0, time.UTC)
+
+	longInput := strings.Repeat("a", 50)
+	entry := loop.LogEntry{
+		Kind:      loop.LogToolUse,
+		Timestamp: now,
+		ToolName:  "Read",
+		ToolInput: longInput,
+	}
+	rendered := m.renderLine(logLine{entry: entry})
+
+	// At clamp width=20 the input is truncated to 19 chars + ellipsis.
+	want := strings.Repeat("a", 19) + "…"
+	if !strings.Contains(rendered, want) {
+		t.Errorf("narrow-width LogToolUse should truncate input to 19+ellipsis, got: %s", rendered)
+	}
+	if strings.Contains(rendered, longInput) {
+		t.Errorf("full 50-char input should not appear at narrow width, got: %s", rendered)
+	}
+}
+
+// TestRenderLineLogTextNarrowWidthClamp verifies that the LogText case clamps
+// maxText to 20 when the terminal is narrower than 37 columns (width-17 < 20).
+func TestRenderLineLogTextNarrowWidthClamp(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	m.width = 30 // maxText = 30-17 = 13 → clamped to 20
+	now := time.Date(2026, 2, 28, 10, 0, 0, 0, time.UTC)
+
+	longText := strings.Repeat("z", 50)
+	entry := loop.LogEntry{
+		Kind:      loop.LogText,
+		Timestamp: now,
+		Message:   longText,
+	}
+	rendered := m.renderLine(logLine{entry: entry})
+
+	// At clamp width=20 the text is truncated to 19 runes + ellipsis.
+	want := strings.Repeat("z", 19) + "…"
+	if !strings.Contains(rendered, want) {
+		t.Errorf("narrow-width LogText should truncate text to 19+ellipsis, got: %s", rendered)
+	}
+	if strings.Contains(rendered, longText) {
+		t.Errorf("full 50-char text should not appear at narrow width, got: %s", rendered)
+	}
+	if !strings.Contains(rendered, "💭") {
+		t.Errorf("narrow-width LogText should still contain 💭 icon, got: %s", rendered)
+	}
+}

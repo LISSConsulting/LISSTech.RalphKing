@@ -14,7 +14,7 @@
 | Cost control | `claude.max_turns` config (0 = unlimited), `--max-turns` CLI passthrough | v0.0.26 |
 | Scaffolding | `ralph init` creates ralph.toml + PROMPT_plan.md + PROMPT_build.md + specs/ (idempotent) | v0.0.28 |
 | CI/CD | Go 1.24, version injection, race detection, release workflow (cross-compiled binaries on tag push), golangci-lint (go-critic + gofmt) in CI & release | 0.0.7, 0.0.19, v0.0.30 |
-| Test coverage | Git 93.2%, TUI 99.5%, loop 81.0% (runner.Run skipped on Windows), claude 97.8%, regent 94.7%, config 91.3%, spec 94.9%, cmd/ralph 71.5% (ceiling: TUI/OS fns at 0%) | 0.0.6, 0.0.14, 0.0.16, v0.0.32, v0.0.36–v0.0.40, v0.0.56, v0.0.58, v0.0.59 |
+| Test coverage | Git 93.2%, TUI 99.5%, loop 81.0% (runner.Run skipped on Windows), claude 97.8%, regent 94.7%, config 92.1%, spec 96.2%, cmd/ralph 71.8% (ceiling: TUI/OS fns at 0%) | 0.0.6, 0.0.14, 0.0.16, v0.0.32, v0.0.36–v0.0.40, v0.0.56, v0.0.58–v0.0.63 |
 | Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, prompt files, extract `classifyResult`/`needsPlanPhase`/`formatStatus`/`formatLogLine`/`formatSpecList`/`formatScaffoldResult` pure functions with table-driven tests, command tree structure tests, end-to-end command execution tests (cmd/ralph 8.8% → 41.8%); added `runWithStateTracking`/`runWithRegent`/`openEditor` tests (41.8% → 53.4%); added `executeLoop`/`executeSmartRun` integration tests + plan/build/run RunE tests (53.4% → 70.7%); added config-invalid/regent-enabled/corrupted-state-file tests for `executeSmartRun` and `showStatus` (70.7% → 72.0%) | 0.0.9, v0.0.21, v0.0.33–v0.0.38 |
 
 Specs implemented: `ralph-core.md`, `the-regent.md`.
@@ -87,7 +87,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - `Pull()` surfaces `rebase --abort` errors in the merge-failure message for better diagnostics; if abort fails AND merge fails, both errors are reported
 - `pushIfNeeded` handles `LastCommit()` errors with `"(unknown)"` fallback instead of showing empty commit info
 - `signalContext()` selects on both signal channel and `ctx.Done()` to prevent goroutine leaks; calls `signal.Stop()` on exit
-- TUI truncates tool names >14 chars with `"…"` to preserve columnar log layout; tool input and LogText truncation adapts to `m.width` (`maxInput = m.width - 32`, `maxText = m.width - 17`, min 20) so lines always fit the terminal without a fixed character ceiling
+- TUI truncates tool names >14 chars with `"…"` to preserve columnar log layout; tool input and LogText truncation adapts to `m.width` (`maxInput = m.width - 32`, `maxText = m.width - 17`, min 20) so lines always fit the terminal without a fixed character ceiling; clamp paths (width < 52 for ToolUse, width < 37 for LogText) tested via `m.width = 30` directly on the model struct before calling `renderLine`
 - `classifyResult(state)` is a pure function returning `statusResult` enum — six-state classification (no-state, running, pass, fail-with-errors, plain-fail) with documented priority order; `showStatus` delegates to it
 - `needsPlanPhase(info, statErr)` is a pure function encoding the plan-skip condition: file missing OR empty; used by `executeSmartRun`'s closure
 - `formatStatus(state, now)` is a pure function rendering status output as a string; `now` parameter pins time for deterministic tests; `showStatus` delegates to it
