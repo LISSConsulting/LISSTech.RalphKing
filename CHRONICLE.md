@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **Specs 001+002 fully implemented; spec 003 multi-panel TUI MVP complete (Phases 1–3, T001–T027) + T024 spec editor + T025 spec creation overlay. Phases 4–8 partially in progress.** All 12 packages pass; go vet clean; tests green.
+> Current state: **Specs 001+002 fully implemented; spec 003 fully complete (T001–T045, all phases). CI lint fixed (golangci-lint pinned to v2.1.6). PR #5 open for review.** All 12 packages pass; go vet clean; golangci-lint 0 issues; tests green.
 
 ## Completed Work
 
@@ -14,7 +14,7 @@
 | State & status | Formatted status display, running-state detection, stateTracker live persistence (non-Regent paths), Regent context-cancel persistence, `detectStatus` fallback | 0.0.8, 0.0.13–0.0.16, v0.0.24–v0.0.25 |
 | Cost control | `claude.max_turns` config (0 = unlimited), `--max-turns` CLI passthrough | v0.0.26 |
 | Scaffolding | `ralph init` creates ralph.toml + PROMPT_plan.md + PROMPT_build.md + specs/ (idempotent) | v0.0.28 |
-| CI/CD | Go 1.24, version injection, race detection, release workflow (cross-compiled binaries on tag push), golangci-lint (go-critic + gofmt) in CI & release | 0.0.7, 0.0.19, v0.0.30 |
+| CI/CD | Go 1.24, version injection, race detection, release workflow (cross-compiled binaries on tag push), golangci-lint (go-critic + gofmt) in CI & release; CI lint action pinned to golangci-lint v2.1.6 to fix config-verify failure (`version: latest` resolved to v1.64.8 which rejected v2 config schema) | 0.0.7, 0.0.19, v0.0.30, v0.0.87 |
 | Test coverage | Git 93.2%, TUI 97.0% (internal/tui; +9.5pp via comprehensive new tests v0.0.86), loop 98.6% (cross-platform runner.Run tests via self-exec init()), claude 97.8%, regent 95.9%, config 93.1%, spec 96.2%, notify 100.0%, cmd/ralph 71.4% (+2.3pp via loopController.runLoop tests v0.0.85) | 0.0.6, 0.0.14, 0.0.16, v0.0.32, v0.0.36–v0.0.40, v0.0.56, v0.0.58–v0.0.63, v0.0.65, v0.0.68, v0.0.70, v0.0.71, v0.0.72, v0.0.75, v0.0.83, v0.0.84, v0.0.86 |
 | Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, prompt files, extract `classifyResult`/`needsPlanPhase`/`formatStatus`/`formatLogLine`/`formatSpecList`/`formatScaffoldResult` pure functions with table-driven tests, command tree structure tests, end-to-end command execution tests (cmd/ralph 8.8% → 41.8%); added `runWithStateTracking`/`runWithRegent`/`openEditor` tests (41.8% → 53.4%); added `executeLoop`/`executeSmartRun` integration tests + plan/build/run RunE tests (53.4% → 70.7%); added config-invalid/regent-enabled/corrupted-state-file tests for `executeSmartRun` and `showStatus` (70.7% → 72.0%) | 0.0.9, v0.0.21, v0.0.33–v0.0.38 |
 
@@ -159,6 +159,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - `sw != nil` branch in drain goroutines (`runWithStateTracking`, `runWithRegent`) covered by passing a real `store.NewJSONL` instance constructed in a temp dir; all WithStore tests follow the same pattern: `initGitRepo → NewJSONL → pass to function → send events in run func → close store with defer`
 - `loopController.runLoop` goroutine body covered by `TestLoopController_StartLoop_ForwardGoroutine`: `initGitRepo` + create PLAN.md so `loop.Run` reads the prompt and calls `git.CurrentBranch()` before emitting `LogInfo` (which exercises sw.Append + tuiSend channel send); without a real Claude binary, the loop fails at iteration start after emitting the initial event; plan/smart/build modes each have their own test (plan: no git/prompt → fast fail; smart: tests both needsPlanPhase paths via presence/absence of CHRONICLE.md)
 - Store-unavailable path in `executeLoop`/`executeSmartRun` covered by creating `.ralph` as a regular file before calling the function; `os.MkdirAll(".ralph/logs")` fails because `.ralph` is not a directory on both Unix and Windows; `store.NewJSONL` returns error → `fmt.Fprintf(os.Stderr, "session log unavailable")` executes → loop continues with `sw=nil`; loop then fails at git `CurrentBranch` (no git repo in temp dir) providing the expected non-nil error
+- `golangci-lint-action@v6` with `version: latest` resolves to v1.x (v1.64.8) which does not support the v2 config schema (`version: "2"`, `formatters:`, `linters.settings`). Fix: pin `version: v2.1.6` (or any v2.x.x) in `ci.yml`. Never use `version: latest` when the repo has committed to a v2 config format.
 
 ## Out of Scope (for now)
 
