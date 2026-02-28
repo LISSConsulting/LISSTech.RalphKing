@@ -4,7 +4,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -695,5 +697,35 @@ func TestShowStatus_CorruptedStateFile(t *testing.T) {
 	err := showStatus()
 	if err == nil {
 		t.Fatal("expected error for corrupted state file")
+	}
+}
+
+// TestSignalContext_SIGTERMCancelsContext covers the cancel() call inside the
+// `case <-sigs:` branch of signalContext. Sending SIGTERM to ourselves is safe
+// because signal.Notify suppresses the default termination behavior while the
+// channel is registered; the signal is delivered to the channel instead.
+func TestSignalContext_SIGTERMCancelsContext(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// On Windows, syscall.SIGTERM maps to TerminateProcess, which immediately
+		// kills the process. Skipping rather than risking the test binary crash.
+		t.Skip("SIGTERM cannot be sent to self safely on Windows")
+	}
+
+	ctx, cancel := signalContext()
+	defer cancel()
+
+	proc, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatalf("FindProcess: %v", err)
+	}
+	if err := proc.Signal(syscall.SIGTERM); err != nil {
+		t.Fatalf("Signal(SIGTERM): %v", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		// Context was cancelled by the signal handler goroutine — test passes.
+	case <-time.After(2 * time.Second):
+		t.Fatal("context not cancelled after sending SIGTERM to self")
 	}
 }

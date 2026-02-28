@@ -23,7 +23,7 @@ Specs implemented: `ralph-core.md`, `the-regent.md`.
 
 | Priority | Item | Location | Notes |
 |----------|------|----------|-------|
-| Info | cmd/ralph coverage ceiling at 72.4% | `cmd/ralph/wiring.go` — `runWithRegentTUI`, `finishTUI`, `runWithTUIAndState`; `cmd/ralph/main.go` — `main`; `cmd/ralph/quit_unix.go`/`quit_windows.go` — `registerQuitHandler` | These functions require a real TTY (bubbletea) or are OS-level signal handlers. Not actionable without a bubbletea headless test mode. `internal/loop` runner.Run at 0% on Windows (shell script tests skipped); loop overall 82.0%. Remaining partial-coverage gaps (git.Stash "No local changes" path, regent.SaveState marshal/createTemp/write/close errors) are not reliably testable on modern git/cross-platform. |
+| Info | cmd/ralph coverage ceiling at 72.4% | `cmd/ralph/wiring.go` — `runWithRegentTUI`, `finishTUI`, `runWithTUIAndState`; `cmd/ralph/main.go` — `main`; `cmd/ralph/quit_unix.go`/`quit_windows.go` — `registerQuitHandler` | These functions require a real TTY (bubbletea) or are OS-level signal handlers. Not actionable without a bubbletea headless test mode. `internal/loop` runner.Run at 0% on Windows (shell script tests skipped); loop overall 82.0%. Remaining partial-coverage gaps (git.Stash "No local changes" path, regent.SaveState marshal/createTemp/write/close errors) are not reliably testable on modern git/cross-platform. `signalContext` signal-cancel path covered on Linux CI by `TestSignalContext_SIGTERMCancelsContext` (skipped on Windows). |
 
 ## v2 Improvement Backlog (from GitHub Issues #1 and #2)
 
@@ -140,6 +140,7 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - `ScaffoldProject` write error paths (PLAN.md, BUILD.md, CHRONICLE.md, .gitignore create/append) require non-writable parent directory; `os.chmod` approach is Unix-only and not reliable in CI; these paths remain at 0% as residual gaps
 - `loop.Run` `CurrentBranch` error path covered by `TestRunCurrentBranchError`; `mockGit` gained `branchErr` field so `CurrentBranch()` can return an error; loop coverage 81.3%→82.0%; `loop.go:Run` 96.7%→100%
 - `notify/post` `http.NewRequest` error path covered by `TestPost_InvalidURL`; null byte in URL (`"http://host\x00/path"`) triggers `NewRequest` failure; since `notifier_test.go` is in `package notify`, the `Notifier` struct is directly instantiated with the invalid URL bypassing the validated `New()` constructor; notify package 95.0%→100%
+- `signalContext` signal-triggered `cancel()` path (the `case <-sigs:` branch) cannot be covered on Windows (SIGTERM maps to TerminateProcess); `TestSignalContext_SIGTERMCancelsContext` sends SIGTERM to self on Linux/CI — safe because `signal.Notify` suppresses the default termination behavior while the channel is registered; test is skipped on Windows; improves `signalContext` to 100% on Linux CI
 
 ## Out of Scope (for now)
 
