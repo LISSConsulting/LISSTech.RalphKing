@@ -3,7 +3,9 @@ package tui
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -142,6 +144,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case panels.SpecSelectedMsg:
 		return m.handleSpecSelected(msg)
+	case panels.EditSpecRequestMsg:
+		return m.handleEditSpecRequest(msg)
+	case panels.CreateSpecRequestMsg:
+		return m.handleCreateSpecRequest(msg)
+	case specsRefreshedMsg:
+		return m.handleSpecsRefreshed(msg)
 	case panels.IterationSelectedMsg:
 		return m.handleIterationSelected(msg)
 	case iterationLogLoadedMsg:
@@ -294,6 +302,41 @@ func (m Model) handleLogEntry(msg logEntryMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleSpecSelected(msg panels.SpecSelectedMsg) (tea.Model, tea.Cmd) {
 	content := m.readSpecContent(msg.Spec)
 	m.mainView = m.mainView.ShowSpec(content)
+	return m, nil
+}
+
+func (m Model) handleEditSpecRequest(msg panels.EditSpecRequestMsg) (tea.Model, tea.Cmd) {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		return m, nil
+	}
+	path := msg.Path
+	if !filepath.IsAbs(path) && m.workDir != "" {
+		path = filepath.Join(m.workDir, path)
+	}
+	parts := strings.Fields(editor)
+	args := append(parts[1:], path)
+	cmd := exec.Command(parts[0], args...) //nolint:gosec
+	workDir := m.workDir
+	return m, tea.ExecProcess(cmd, func(_ error) tea.Msg {
+		specs, _ := spec.List(workDir)
+		return specsRefreshedMsg{Specs: specs}
+	})
+}
+
+func (m Model) handleCreateSpecRequest(msg panels.CreateSpecRequestMsg) (tea.Model, tea.Cmd) {
+	workDir := m.workDir
+	name := msg.Name
+	return m, func() tea.Msg {
+		_, _ = spec.New(workDir, name)
+		specs, _ := spec.List(workDir)
+		return specsRefreshedMsg{Specs: specs}
+	}
+}
+
+func (m Model) handleSpecsRefreshed(msg specsRefreshedMsg) (tea.Model, tea.Cmd) {
+	specsW, specsH := innerDims(m.layout.Specs)
+	m.specsPanel = panels.NewSpecsPanel(msg.Specs, specsW, specsH)
 	return m, nil
 }
 

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui/panels"
 )
 
 func newTestModel() Model {
@@ -219,6 +222,74 @@ func TestView_Normal_DoesNotPanic(t *testing.T) {
 	view := m2.View()
 	if view == "" {
 		t.Error("View() should not return empty string")
+	}
+}
+
+func TestUpdate_EditSpecRequest_NoEditor(t *testing.T) {
+	t.Setenv("EDITOR", "")
+	m := newTestModel()
+	_, cmd := m.Update(panels.EditSpecRequestMsg{Path: "specs/foo.md"})
+	if cmd != nil {
+		t.Error("EditSpecRequestMsg with no EDITOR should return nil cmd")
+	}
+}
+
+func TestUpdate_EditSpecRequest_WithEditor(t *testing.T) {
+	t.Setenv("EDITOR", "true")
+	m := newTestModel()
+	_, cmd := m.Update(panels.EditSpecRequestMsg{Path: "specs/foo.md"})
+	if cmd == nil {
+		t.Error("EditSpecRequestMsg with EDITOR set should return a non-nil cmd")
+	}
+}
+
+func TestUpdate_CreateSpecRequest_ReturnsRefresh(t *testing.T) {
+	dir := t.TempDir()
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "TestProject", dir, nil, nil)
+
+	_, cmd := m.Update(panels.CreateSpecRequestMsg{Name: "my-spec"})
+	if cmd == nil {
+		t.Fatal("CreateSpecRequestMsg should return a cmd")
+	}
+	msg := cmd()
+	refreshed, ok := msg.(specsRefreshedMsg)
+	if !ok {
+		t.Fatalf("expected specsRefreshedMsg, got %T", msg)
+	}
+	// The spec file should have been created.
+	found := false
+	for _, s := range refreshed.Specs {
+		if s.Name == "my-spec" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("refreshed spec list should contain 'my-spec'; got %v", refreshed.Specs)
+	}
+	// File should exist on disk.
+	if _, err := filepath.Glob(filepath.Join(dir, "specs", "my-spec.md")); err != nil {
+		t.Errorf("spec file not created: %v", err)
+	}
+}
+
+func TestUpdate_SpecsRefreshed_UpdatesPanel(t *testing.T) {
+	m := newTestModel()
+	// Panel starts with no specs.
+	if m.specsPanel.SelectedSpec() != nil {
+		t.Fatal("setup: expected empty specs panel")
+	}
+	newSpecs := []spec.SpecFile{
+		{Name: "alpha", Path: "specs/alpha.md"},
+	}
+	updated, _ := m.Update(specsRefreshedMsg{Specs: newSpecs})
+	m2 := updated.(Model)
+	sel := m2.specsPanel.SelectedSpec()
+	if sel == nil {
+		t.Fatal("after specsRefreshedMsg, panel should have a selected spec")
+	}
+	if sel.Name != "alpha" {
+		t.Errorf("selected spec name = %q, want %q", sel.Name, "alpha")
 	}
 }
 

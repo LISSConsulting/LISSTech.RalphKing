@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
 )
 
@@ -52,6 +54,98 @@ func TestSpecsPanel_SetSize(t *testing.T) {
 	p = p.SetSize(100, 30)
 	if p.width != 100 || p.height != 30 {
 		t.Errorf("SetSize: got %dx%d, want 100x30", p.width, p.height)
+	}
+}
+
+func TestSpecsPanel_EKey_EmitsEditRequest(t *testing.T) {
+	specs := []spec.SpecFile{makeSpec("foo", "specs/foo.md", spec.StatusNotStarted)}
+	p := NewSpecsPanel(specs, 80, 20)
+	_, cmd := p.Update(keyMsg("e"))
+	if cmd == nil {
+		t.Fatal("'e' key on selected spec should return a cmd")
+	}
+	msg := cmd()
+	req, ok := msg.(EditSpecRequestMsg)
+	if !ok {
+		t.Fatalf("expected EditSpecRequestMsg, got %T", msg)
+	}
+	if req.Path != "specs/foo.md" {
+		t.Errorf("EditSpecRequestMsg.Path = %q, want %q", req.Path, "specs/foo.md")
+	}
+}
+
+func TestSpecsPanel_EKey_EmptyPanel_NoCmd(t *testing.T) {
+	p := NewSpecsPanel(nil, 80, 20)
+	_, cmd := p.Update(keyMsg("e"))
+	if cmd != nil {
+		t.Error("'e' on empty panel should return nil cmd")
+	}
+}
+
+func TestSpecsPanel_NKey_ActivatesInput(t *testing.T) {
+	p := NewSpecsPanel(nil, 80, 20)
+	p2, _ := p.Update(keyMsg("n"))
+	if !p2.inputActive {
+		t.Error("'n' key should activate inputActive")
+	}
+	view := p2.View()
+	if !strings.Contains(view, "New spec name:") {
+		t.Errorf("View() when inputActive should show prompt; got %q", view)
+	}
+}
+
+func TestSpecsPanel_NKey_Submit_EmitsCreateRequest(t *testing.T) {
+	p := NewSpecsPanel(nil, 80, 20)
+	// Activate input.
+	p, _ = p.Update(keyMsg("n"))
+	// Type a name character by character.
+	p, _ = p.Update(keyMsg("t"))
+	p, _ = p.Update(keyMsg("e"))
+	p, _ = p.Update(keyMsg("s"))
+	p, _ = p.Update(keyMsg("t"))
+	// Submit.
+	p2, cmd := p.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("enter with typed name should return a cmd")
+	}
+	msg := cmd()
+	req, ok := msg.(CreateSpecRequestMsg)
+	if !ok {
+		t.Fatalf("expected CreateSpecRequestMsg, got %T", msg)
+	}
+	if req.Name != "test" {
+		t.Errorf("CreateSpecRequestMsg.Name = %q, want %q", req.Name, "test")
+	}
+	if p2.inputActive {
+		t.Error("inputActive should be false after submission")
+	}
+}
+
+func TestSpecsPanel_NKey_EmptySubmit_NoCmd(t *testing.T) {
+	p := NewSpecsPanel(nil, 80, 20)
+	p, _ = p.Update(keyMsg("n"))
+	// Submit immediately without typing anything.
+	p2, cmd := p.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Error("enter with empty name should return nil cmd")
+	}
+	if !p2.inputActive {
+		t.Error("inputActive should remain true after empty submit")
+	}
+}
+
+func TestSpecsPanel_NKey_Esc_Cancels(t *testing.T) {
+	p := NewSpecsPanel(nil, 80, 20)
+	p, _ = p.Update(keyMsg("n"))
+	if !p.inputActive {
+		t.Fatal("setup: inputActive should be true after 'n'")
+	}
+	p2, cmd := p.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd != nil {
+		t.Error("esc should return nil cmd")
+	}
+	if p2.inputActive {
+		t.Error("inputActive should be false after esc")
 	}
 }
 
