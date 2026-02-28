@@ -259,6 +259,16 @@ func TestInitFile(t *testing.T) {
 			t.Error("expected error when ralph.toml already exists")
 		}
 	})
+
+	t.Run("write error returns error", func(t *testing.T) {
+		// Pass a non-existent subdirectory — os.WriteFile fails because the
+		// parent directory does not exist.
+		dir := filepath.Join(t.TempDir(), "nonexistent")
+		_, err := InitFile(dir)
+		if err == nil {
+			t.Error("expected error when directory does not exist")
+		}
+	})
 }
 
 func TestLoadUnknownKeys(t *testing.T) {
