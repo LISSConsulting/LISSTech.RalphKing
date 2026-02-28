@@ -738,3 +738,66 @@ func TestRunPostIterationTests_RunTestsError(t *testing.T) {
 		t.Error("should not revert when RunTests returns a non-ExitError")
 	}
 }
+
+func TestFlushState(t *testing.T) {
+	dir := t.TempDir()
+	cfg := defaultTestRegentConfig()
+	events := make(chan loop.LogEntry, 128)
+	rgt := New(cfg, dir, &mockGit{}, events)
+
+	rgt.UpdateState(loop.LogEntry{Iteration: 7, TotalCost: 3.14, Branch: "main"})
+	rgt.FlushState()
+
+	state, err := LoadState(dir)
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if state.Iteration != 7 {
+		t.Errorf("Iteration = %d, want 7", state.Iteration)
+	}
+	if state.TotalCostUSD != 3.14 {
+		t.Errorf("TotalCostUSD = %f, want 3.14", state.TotalCostUSD)
+	}
+	if state.Branch != "main" {
+		t.Errorf("Branch = %q, want %q", state.Branch, "main")
+	}
+}
+
+func TestSupervise_ContextCancelDuringBackoff(t *testing.T) {
+	// Cancel context after "Ralph exited with error" is emitted, which means we
+	// have passed the ctx.Err() check at line 83 and will enter the backoff select.
+	// This covers the case <-ctx.Done() branch inside the backoff wait.
+	dir := t.TempDir()
+	cfg := defaultTestRegentConfig()
+	cfg.MaxRetries = 3
+	cfg.RetryBackoffSeconds = 10 // long backoff ensures ctx.Done fires before time.After
+	events := make(chan loop.LogEntry, 128)
+	rgt := New(cfg, dir, &mockGit{branch: "main"}, events)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Watch events: cancel once "Ralph exited with error" is observed so that the
+	// main goroutine is guaranteed to be at (or heading into) the backoff select.
+	go func() {
+		for e := range events {
+			if e.Kind == loop.LogRegent && strings.Contains(e.Message, "Ralph exited with error") {
+				cancel()
+				return
+			}
+		}
+	}()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- rgt.Supervise(ctx, func(_ context.Context) error {
+			return errors.New("fail")
+		})
+		close(events)
+	}()
+
+	err := <-errCh
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got: %v", err)
+	}
+}
