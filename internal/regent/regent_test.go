@@ -763,6 +763,30 @@ func TestFlushState(t *testing.T) {
 	}
 }
 
+func TestEmitOnClosedChannelDoesNotPanic(t *testing.T) {
+	// Regression: emit must not panic when the events channel has been closed.
+	// This occurs in runWithRegent when the drain goroutine calls UpdateState →
+	// saveState → emit after close(events) has already been called.
+	events := make(chan loop.LogEntry, 1)
+	rgt := New(defaultTestRegentConfig(), t.TempDir(), &mockGit{}, events)
+	close(events)
+	rgt.emit("message after channel close") // must not panic
+}
+
+func TestSaveStateOnClosedChannelDoesNotPanic(t *testing.T) {
+	// Regression: when SaveState fails (blocked .ralph dir) and the events
+	// channel has already been closed, saveState must not panic on the emit call.
+	dir := t.TempDir()
+	events := make(chan loop.LogEntry, 1)
+	rgt := New(defaultTestRegentConfig(), dir, &mockGit{}, events)
+
+	if err := os.WriteFile(filepath.Join(dir, stateDirName), []byte("block"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	close(events)
+	rgt.saveState() // SaveState fails → emit called → must not panic
+}
+
 func TestSupervise_ContextCancelDuringBackoff(t *testing.T) {
 	// Cancel context after "Ralph exited with error" is emitted, which means we
 	// have passed the ctx.Err() check at line 83 and will enter the backoff select.

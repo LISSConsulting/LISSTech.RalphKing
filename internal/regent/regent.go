@@ -256,6 +256,11 @@ func (r *Regent) emit(msg string) {
 		Timestamp: time.Now(),
 		Message:   msg,
 	}
+	// Sending to a closed channel panics in Go even in a non-blocking select.
+	// This can happen when saveState is called from the runWithRegent drain goroutine
+	// after close(events): the goroutine still processes buffered entries, which
+	// trigger UpdateState → saveState → emit on the already-closed channel.
+	defer func() { _ = recover() }()
 	select {
 	case r.events <- entry:
 	default:
