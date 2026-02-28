@@ -36,6 +36,7 @@ func (m *mockAgent) Run(_ context.Context, _ string, _ claude.RunOptions) (<-cha
 // mockGit is a test double for GitOps.
 type mockGit struct {
 	branch         string
+	branchErr      error // error returned by CurrentBranch
 	dirty          bool
 	diffFromRemote bool
 	pullErr        error
@@ -53,7 +54,7 @@ type mockGit struct {
 	stashPopCalls int
 }
 
-func (m *mockGit) CurrentBranch() (string, error)        { return m.branch, nil }
+func (m *mockGit) CurrentBranch() (string, error)        { return m.branch, m.branchErr }
 func (m *mockGit) HasUncommittedChanges() (bool, error)  { return m.dirty, m.dirtyErr }
 func (m *mockGit) Pull(_ string) error                   { m.pullCalls++; return m.pullErr }
 func (m *mockGit) Push(_ string) error                   { m.pushCalls++; return m.pushErr }
@@ -185,6 +186,22 @@ func TestRun(t *testing.T) {
 			t.Errorf("error should contain agent message, got: %v", err)
 		}
 	})
+}
+
+func TestRunCurrentBranchError(t *testing.T) {
+	agent := &mockAgent{}
+	git := &mockGit{branchErr: errors.New("not a git repository")}
+	cfg := defaultTestConfig()
+
+	lp, _ := setupTestLoop(t, agent, git, cfg)
+	err := lp.Run(context.Background(), ModePlan, 0)
+
+	if err == nil {
+		t.Fatal("expected error when CurrentBranch fails")
+	}
+	if !strings.Contains(err.Error(), "not a git repository") {
+		t.Errorf("error should mention cause, got: %v", err)
+	}
 }
 
 func TestIteration(t *testing.T) {

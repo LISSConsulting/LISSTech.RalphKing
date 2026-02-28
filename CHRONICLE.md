@@ -14,7 +14,7 @@
 | Cost control | `claude.max_turns` config (0 = unlimited), `--max-turns` CLI passthrough | v0.0.26 |
 | Scaffolding | `ralph init` creates ralph.toml + PROMPT_plan.md + PROMPT_build.md + specs/ (idempotent) | v0.0.28 |
 | CI/CD | Go 1.24, version injection, race detection, release workflow (cross-compiled binaries on tag push), golangci-lint (go-critic + gofmt) in CI & release | 0.0.7, 0.0.19, v0.0.30 |
-| Test coverage | Git 93.2%, TUI 99.5%, loop 81.3% (runner.Run skipped on Windows), claude 97.8%, regent 95.9%, config 93.1%, spec 96.2%, notify 95.0%, cmd/ralph 72.4% | 0.0.6, 0.0.14, 0.0.16, v0.0.32, v0.0.36–v0.0.40, v0.0.56, v0.0.58–v0.0.63, v0.0.65, v0.0.68, v0.0.70, v0.0.71 |
+| Test coverage | Git 93.2%, TUI 99.5%, loop 82.0% (runner.Run skipped on Windows), claude 97.8%, regent 95.9%, config 93.1%, spec 96.2%, notify 100.0%, cmd/ralph 72.4% | 0.0.6, 0.0.14, 0.0.16, v0.0.32, v0.0.36–v0.0.40, v0.0.56, v0.0.58–v0.0.63, v0.0.65, v0.0.68, v0.0.70, v0.0.71, v0.0.72 |
 | Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, prompt files, extract `classifyResult`/`needsPlanPhase`/`formatStatus`/`formatLogLine`/`formatSpecList`/`formatScaffoldResult` pure functions with table-driven tests, command tree structure tests, end-to-end command execution tests (cmd/ralph 8.8% → 41.8%); added `runWithStateTracking`/`runWithRegent`/`openEditor` tests (41.8% → 53.4%); added `executeLoop`/`executeSmartRun` integration tests + plan/build/run RunE tests (53.4% → 70.7%); added config-invalid/regent-enabled/corrupted-state-file tests for `executeSmartRun` and `showStatus` (70.7% → 72.0%) | 0.0.9, v0.0.21, v0.0.33–v0.0.38 |
 
 Specs implemented: `ralph-core.md`, `the-regent.md`.
@@ -23,7 +23,7 @@ Specs implemented: `ralph-core.md`, `the-regent.md`.
 
 | Priority | Item | Location | Notes |
 |----------|------|----------|-------|
-| Info | cmd/ralph coverage ceiling at 72.4% | `cmd/ralph/wiring.go` — `runWithRegentTUI`, `finishTUI`, `runWithTUIAndState`; `cmd/ralph/main.go` — `main`; `cmd/ralph/quit_unix.go`/`quit_windows.go` — `registerQuitHandler` | These functions require a real TTY (bubbletea) or are OS-level signal handlers. Not actionable without a bubbletea headless test mode. `internal/loop` runner.Run at 0% on Windows (shell script tests skipped); loop overall 81.3%. Remaining partial-coverage gaps (git.Stash "No local changes" path, regent.SaveState marshal/createTemp/write/close errors) are not reliably testable on modern git/cross-platform. |
+| Info | cmd/ralph coverage ceiling at 72.4% | `cmd/ralph/wiring.go` — `runWithRegentTUI`, `finishTUI`, `runWithTUIAndState`; `cmd/ralph/main.go` — `main`; `cmd/ralph/quit_unix.go`/`quit_windows.go` — `registerQuitHandler` | These functions require a real TTY (bubbletea) or are OS-level signal handlers. Not actionable without a bubbletea headless test mode. `internal/loop` runner.Run at 0% on Windows (shell script tests skipped); loop overall 82.0%. Remaining partial-coverage gaps (git.Stash "No local changes" path, regent.SaveState marshal/createTemp/write/close errors) are not reliably testable on modern git/cross-platform. |
 
 ## v2 Improvement Backlog (from GitHub Issues #1 and #2)
 
@@ -138,6 +138,8 @@ These items originate from user feedback. Items requiring new specs are noted; b
 - `InitFile` write error path covered by passing `filepath.Join(t.TempDir(), "nonexistent")` as dir — `os.WriteFile` fails because the parent directory doesn't exist; this is cross-platform and doesn't require permission manipulation; `InitFile` 85.7%→100%, config 92.3%→93.1%
 - `loop.emit` `NotificationHook` path covered by `TestEmitCallsNotificationHook` in `event_test.go`; verifies hook is called for every emitted entry regardless of Events/Log configuration; loop coverage 80.6%→81.3%
 - `ScaffoldProject` write error paths (PLAN.md, BUILD.md, CHRONICLE.md, .gitignore create/append) require non-writable parent directory; `os.chmod` approach is Unix-only and not reliable in CI; these paths remain at 0% as residual gaps
+- `loop.Run` `CurrentBranch` error path covered by `TestRunCurrentBranchError`; `mockGit` gained `branchErr` field so `CurrentBranch()` can return an error; loop coverage 81.3%→82.0%; `loop.go:Run` 96.7%→100%
+- `notify/post` `http.NewRequest` error path covered by `TestPost_InvalidURL`; null byte in URL (`"http://host\x00/path"`) triggers `NewRequest` failure; since `notifier_test.go` is in `package notify`, the `Notifier` struct is directly instantiated with the invalid URL bypassing the validated `New()` constructor; notify package 95.0%→100%
 
 ## Out of Scope (for now)
 

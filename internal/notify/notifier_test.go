@@ -187,6 +187,17 @@ func TestHook_FallbackTitle(t *testing.T) {
 	}
 }
 
+func TestPost_InvalidURL(t *testing.T) {
+	// A null byte in the URL causes http.NewRequest to return an error.
+	// post() must not panic and must return silently.
+	n := &Notifier{
+		url:    "http://host\x00/path",
+		title:  "test",
+		client: &http.Client{},
+	}
+	n.post("message") // must not panic
+}
+
 func TestHook_PostFailureSilent(t *testing.T) {
 	// Point at a server that is already closed → connection refused.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
