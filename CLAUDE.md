@@ -1,4 +1,4 @@
-# CLAUDE.md — RalphKing
+﻿# CLAUDE.md — RalphKing
 
 Spec-driven AI coding loop CLI in Go. Ralph runs Claude Code against specs in a continuous loop; The Regent supervises for crashes, hangs, and test regressions.
 
