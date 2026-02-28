@@ -7,10 +7,10 @@ type Rect struct {
 
 // Layout holds the computed panel geometry for a given terminal size.
 type Layout struct {
-	Header, Footer     Rect
-	Specs, Iterations  Rect
-	Main, Secondary    Rect
-	TooSmall           bool // true when terminal is below the minimum 80×24
+	Header, Footer    Rect
+	Specs, Iterations Rect
+	Main, Secondary   Rect
+	TooSmall          bool // true when terminal is below the minimum 80×24
 }
 
 // Calculate computes the panel layout for a terminal of the given dimensions.

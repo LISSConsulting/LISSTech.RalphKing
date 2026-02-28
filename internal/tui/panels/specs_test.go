@@ -1,9 +1,11 @@
 package panels
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
@@ -147,6 +149,68 @@ func TestSpecsPanel_NKey_Esc_Cancels(t *testing.T) {
 	if p2.inputActive {
 		t.Error("inputActive should be false after esc")
 	}
+}
+
+func TestSpecItem_Description(t *testing.T) {
+	item := specItem{sf: makeSpec("foo", "specs/foo.md", spec.StatusDone)}
+	if got := item.Description(); got != "specs/foo.md" {
+		t.Errorf("Description() = %q, want %q", got, "specs/foo.md")
+	}
+}
+
+func TestSpecItem_FilterValue(t *testing.T) {
+	item := specItem{sf: makeSpec("bar", "specs/bar.md", spec.StatusDone)}
+	if got := item.FilterValue(); got != "bar" {
+		t.Errorf("FilterValue() = %q, want %q", got, "bar")
+	}
+}
+
+func TestSpecDelegate_Update(t *testing.T) {
+	d := specDelegate{}
+	l := list.New(nil, d, 80, 20)
+	cmd := d.Update(nil, &l)
+	if cmd != nil {
+		t.Error("specDelegate.Update() should return nil cmd")
+	}
+}
+
+func TestSpecDelegate_Render_WrongType(t *testing.T) {
+	d := specDelegate{}
+	l := list.New(nil, d, 80, 20)
+	var buf bytes.Buffer
+	d.Render(&buf, l, 0, iterItem{})
+	if buf.Len() != 0 {
+		t.Error("Render() with wrong item type should not write anything")
+	}
+}
+
+func TestSpecsPanel_Update_JK_Enter(t *testing.T) {
+	specs := []spec.SpecFile{
+		makeSpec("spec-a", "specs/spec-a.md", spec.StatusNotStarted),
+		makeSpec("spec-b", "specs/spec-b.md", spec.StatusNotStarted),
+	}
+	p := NewSpecsPanel(specs, 80, 20)
+
+	// j key — may emit SpecSelectedMsg.
+	_, _ = p.Update(keyMsg("j"))
+
+	// k key — may emit SpecSelectedMsg.
+	_, _ = p.Update(keyMsg("k"))
+
+	// enter key — should emit SpecSelectedMsg.
+	_, cmd := p.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("enter on non-empty panel should return cmd")
+	}
+	if _, ok := cmd().(SpecSelectedMsg); !ok {
+		t.Errorf("enter should emit SpecSelectedMsg, got %T", cmd())
+	}
+
+	// Default key in normal mode — delegates to list.
+	_, _ = p.Update(keyMsg("x"))
+
+	// Non-key message — delegates to list.
+	_, _ = p.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
 }
 
 func TestSpecItem_Title_ContainsStatusSymbol(t *testing.T) {

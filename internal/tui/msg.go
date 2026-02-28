@@ -30,6 +30,3 @@ type iterationLogLoadedMsg struct {
 
 // specsRefreshedMsg carries refreshed spec list after creation/edit.
 type specsRefreshedMsg struct{ Specs []spec.SpecFile }
-
-// loopStateTransitionMsg requests a state transition.
-type loopStateTransitionMsg struct{ To LoopState }

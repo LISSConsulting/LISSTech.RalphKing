@@ -56,7 +56,7 @@ func (d specDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	} else {
 		s = "  " + s
 	}
-	fmt.Fprint(w, s)
+	_, _ = fmt.Fprint(w, s)
 }
 
 // SpecsPanel displays a navigable list of spec files.
@@ -122,9 +122,8 @@ func (p SpecsPanel) SetSize(w, h int) SpecsPanel {
 func (p SpecsPanel) Update(msg tea.Msg) (SpecsPanel, tea.Cmd) {
 	// When the name-input overlay is active, route messages there first.
 	if p.inputActive {
-		switch msg := msg.(type) {
-		case tea.KeyMsg:
-			switch msg.String() {
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			switch keyMsg.String() {
 			case "esc":
 				p.inputActive = false
 				p.input.Blur()

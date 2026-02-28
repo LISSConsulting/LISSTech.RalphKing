@@ -74,7 +74,7 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 		}
 		sw = s
 		sr = s
-		defer s.Close()
+		defer func() { _ = s.Close() }()
 	}
 
 	runFn := func(ctx context.Context) error {
@@ -136,7 +136,7 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 		}
 		sw = s
 		sr = s
-		defer s.Close()
+		defer func() { _ = s.Close() }()
 	}
 
 	smartRunFn := func(ctx context.Context) error {
@@ -312,7 +312,7 @@ func executeDashboard() error {
 		}
 		sw = s
 		sr = s
-		defer s.Close()
+		defer func() { _ = s.Close() }()
 	}
 
 	return runDashboard(ctx, cfg, dir, sw, sr)

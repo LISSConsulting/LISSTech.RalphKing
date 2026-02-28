@@ -10,10 +10,9 @@ import (
 
 func TestNewTheme_DefaultAccent(t *testing.T) {
 	th := NewTheme("")
-	// Styles should be non-zero (lipgloss styles have non-trivial internal state).
-	if th.AccentHeaderStyle().String() == "" {
-		// lipgloss styles render even when empty — just verify it doesn't panic.
-	}
+	// Styles should be non-zero (lipgloss styles have non-trivial internal state);
+	// just verify the call doesn't panic.
+	_ = th.AccentHeaderStyle()
 	_ = th.AccentBorderStyle()
 	_ = th.DimBorderStyle()
 	_ = th.PanelBorderStyle(true)

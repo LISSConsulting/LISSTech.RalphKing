@@ -26,10 +26,10 @@ var secondaryTabLabels = []string{"Regent", "Git", "Tests", "Cost"}
 // SecondaryPanel is the secondary (right-bottom) panel with Regent/git/test/cost tabs.
 type SecondaryPanel struct {
 	tabbar    components.TabBar
-	regent    components.LogView         // Regent supervisor messages
-	gitLog    components.LogView         // Git operation messages
-	tests     components.LogView         // Test output from Regent entries
-	costData  []store.IterationSummary   // Per-iteration cost accumulator
+	regent    components.LogView       // Regent supervisor messages
+	gitLog    components.LogView       // Git operation messages
+	tests     components.LogView       // Test output from Regent entries
+	costData  []store.IterationSummary // Per-iteration cost accumulator
 	width     int
 	height    int
 	activeTab SecondaryTab

@@ -4,21 +4,21 @@ import "testing"
 
 func TestCalculate(t *testing.T) {
 	tests := []struct {
-		name        string
-		width       int
-		height      int
-		tooSmall    bool
-		sidebarW    int
-		rightW      int
-		bodyH       int
-		specsH      int
-		itersH      int
-		mainH       int
-		secH        int
+		name     string
+		width    int
+		height   int
+		tooSmall bool
+		sidebarW int
+		rightW   int
+		bodyH    int
+		specsH   int
+		itersH   int
+		mainH    int
+		secH     int
 	}{
 		{
-			name:     "80x24 minimum viable",
-			width:    80, height: 24,
+			name:  "80x24 minimum viable",
+			width: 80, height: 24,
 			tooSmall: false,
 			sidebarW: 24, // clamp to min 24 (80*25/100=20 → clamped to 24)
 			rightW:   56,
@@ -29,8 +29,8 @@ func TestCalculate(t *testing.T) {
 			secH:     8,  // 22 - 14
 		},
 		{
-			name:     "120x40",
-			width:    120, height: 40,
+			name:  "120x40",
+			width: 120, height: 40,
 			tooSmall: false,
 			sidebarW: 30, // 120*25/100=30 (in range)
 			rightW:   90,
@@ -41,8 +41,8 @@ func TestCalculate(t *testing.T) {
 			secH:     14, // 38-24
 		},
 		{
-			name:     "200x60",
-			width:    200, height: 60,
+			name:  "200x60",
+			width: 200, height: 60,
 			tooSmall: false,
 			sidebarW: 35, // 200*25/100=50 → clamped to max 35
 			rightW:   165,
@@ -53,18 +53,18 @@ func TestCalculate(t *testing.T) {
 			secH:     21, // 58-37
 		},
 		{
-			name:     "79x24 too small (width)",
-			width:    79, height: 24,
+			name:  "79x24 too small (width)",
+			width: 79, height: 24,
 			tooSmall: true,
 		},
 		{
-			name:     "80x23 too small (height)",
-			width:    80, height: 23,
+			name:  "80x23 too small (height)",
+			width: 80, height: 23,
 			tooSmall: true,
 		},
 		{
-			name:     "0x0 too small",
-			width:    0, height: 0,
+			name:  "0x0 too small",
+			width: 0, height: 0,
 			tooSmall: true,
 		},
 	}

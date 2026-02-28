@@ -68,7 +68,7 @@ func (d iterDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 	} else {
 		s = "  " + s
 	}
-	fmt.Fprint(w, s)
+	_, _ = fmt.Fprint(w, s)
 }
 
 // NewIterationsPanel creates an empty iterations panel.

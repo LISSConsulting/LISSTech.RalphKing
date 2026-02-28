@@ -20,7 +20,7 @@ func TestNewJSONL_CreatesFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewJSONL: %v", err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -41,7 +41,7 @@ func TestNewJSONL_CreatesDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewJSONL on non-existent dir: %v", err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	if _, err := os.Stat(dir); err != nil {
 		t.Errorf("expected dir to exist after NewJSONL: %v", err)
@@ -54,7 +54,7 @@ func TestAppendAndIterationLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	now := time.Now()
 	entries := []loop.LogEntry{
@@ -98,7 +98,7 @@ func TestIterations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	now := time.Now()
 	for i := 1; i <= 3; i++ {
@@ -137,7 +137,7 @@ func TestIterationsReturnsCopy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	now := time.Now()
 	_ = s.Append(loop.LogEntry{Kind: loop.LogIterStart, Iteration: 1, Timestamp: now})
@@ -158,7 +158,7 @@ func TestSessionSummary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	now := time.Now()
 	_ = s.Append(loop.LogEntry{Kind: loop.LogInfo, Branch: "feat/test", Commit: "abc123", Timestamp: now})
@@ -197,7 +197,7 @@ func TestSessionSummary_Empty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	sum, err := s.SessionSummary()
 	if err != nil {
@@ -220,7 +220,7 @@ func TestIterationLog_NotFound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	_, err = s.IterationLog(42)
 	if err == nil {
@@ -234,7 +234,7 @@ func TestIterationLog_InProgress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	// Write LogIterStart but not LogIterComplete
 	now := time.Now()
@@ -254,7 +254,7 @@ func TestIterationLog_EntriesBetweenIterations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	// Write entries interleaved with info messages outside iterations
 	now := time.Now()
@@ -312,7 +312,7 @@ func TestIterations_Empty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	iters, err := s.Iterations()
 	if err != nil {
@@ -357,7 +357,7 @@ func TestIterationLog_CompleteWithoutStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	// Write LogIterComplete without a preceding LogIterStart.
 	// The index should ignore this entry (no pending iteration).
@@ -468,7 +468,7 @@ func TestIterationLog_MalformedLineSkipped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	now := time.Now()
 	_ = s.Append(loop.LogEntry{Kind: loop.LogIterStart, Iteration: 1, Timestamp: now})
@@ -560,7 +560,7 @@ func TestAppend_RoundTripsAllFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	now := time.Now().Truncate(time.Millisecond) // JSON uses millisecond precision
 	orig := loop.LogEntry{

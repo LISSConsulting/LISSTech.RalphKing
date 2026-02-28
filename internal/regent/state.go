@@ -70,17 +70,17 @@ func SaveState(dir string, s State) error {
 		return fmt.Errorf("regent: create temp state: %w", err)
 	}
 	if _, writeErr := tmp.Write(data); writeErr != nil {
-		tmp.Close()
-		os.Remove(tmp.Name())
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
 		return fmt.Errorf("regent: write state: %w", writeErr)
 	}
 	if closeErr := tmp.Close(); closeErr != nil {
-		os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name())
 		return fmt.Errorf("regent: close state: %w", closeErr)
 	}
 	path := filepath.Join(stateDir, stateFileName)
 	if renameErr := os.Rename(tmp.Name(), path); renameErr != nil {
-		os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name())
 		return fmt.Errorf("regent: finalize state: %w", renameErr)
 	}
 	return nil

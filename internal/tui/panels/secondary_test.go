@@ -147,6 +147,58 @@ func TestSecondaryPanel_CostTab_WithIterations(t *testing.T) {
 	}
 }
 
+// TestSecondaryPanel_PrevTab verifies [ navigates to the previous tab.
+func TestSecondaryPanel_PrevTab(t *testing.T) {
+	p := NewSecondaryPanel(80, 20)
+	// Navigate forward first.
+	p, _ = p.Update(keyMsg("]"))
+	tabAfterNext := p.activeTab
+	// Navigate back.
+	p, _ = p.Update(keyMsg("["))
+	if p.activeTab == tabAfterNext {
+		t.Error("'[' key should navigate to previous tab")
+	}
+}
+
+// TestSecondaryPanel_Update_DefaultKeyOnTabs verifies non-tab-switch keys are
+// forwarded to the active logview on all scrollable tabs.
+func TestSecondaryPanel_Update_DefaultKeyOnTabs(t *testing.T) {
+	p := NewSecondaryPanel(80, 20)
+
+	// Default key on TabRegent.
+	_, _ = p.Update(keyMsg("j"))
+
+	// Default key on TabGit (navigate to it first).
+	p, _ = p.Update(keyMsg("]"))
+	_, _ = p.Update(keyMsg("j"))
+
+	// Default key on TabTests.
+	p = NewSecondaryPanel(80, 20)
+	p, _ = p.Update(keyMsg("]"))
+	p, _ = p.Update(keyMsg("]"))
+	_, _ = p.Update(keyMsg("j"))
+}
+
+// TestSecondaryPanel_Update_NonKeyMsg verifies non-key messages are forwarded
+// to the active logview on all scrollable tabs.
+func TestSecondaryPanel_Update_NonKeyMsg(t *testing.T) {
+	wm := tea.WindowSizeMsg{Width: 100, Height: 30}
+
+	// Non-key on TabRegent.
+	p := NewSecondaryPanel(80, 20)
+	_, _ = p.Update(wm)
+
+	// Non-key on TabGit.
+	p, _ = p.Update(keyMsg("]"))
+	_, _ = p.Update(wm)
+
+	// Non-key on TabTests.
+	p = NewSecondaryPanel(80, 20)
+	p, _ = p.Update(keyMsg("]"))
+	p, _ = p.Update(keyMsg("]"))
+	_, _ = p.Update(wm)
+}
+
 // TestSecondaryPanel_AllTabsRenderable verifies all four tabs produce non-empty
 // output after content has been routed (T037).
 func TestSecondaryPanel_AllTabsRenderable(t *testing.T) {

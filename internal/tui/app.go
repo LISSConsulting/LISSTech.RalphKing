@@ -357,8 +357,10 @@ func (m Model) handleEditSpecRequest(msg panels.EditSpecRequestMsg) (tea.Model, 
 		path = filepath.Join(m.workDir, path)
 	}
 	parts := strings.Fields(editor)
-	args := append(parts[1:], path)
-	cmd := exec.Command(parts[0], args...) //nolint:gosec
+	cmdArgs := make([]string, len(parts)-1, len(parts))
+	copy(cmdArgs, parts[1:])
+	cmdArgs = append(cmdArgs, path)
+	cmd := exec.Command(parts[0], cmdArgs...) //nolint:gosec
 	workDir := m.workDir
 	return m, tea.ExecProcess(cmd, func(_ error) tea.Msg {
 		specs, _ := spec.List(workDir)

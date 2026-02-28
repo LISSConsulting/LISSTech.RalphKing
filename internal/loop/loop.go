@@ -314,7 +314,7 @@ func (l *Loop) emit(entry LogEntry) {
 		w = os.Stdout
 	}
 	ts := entry.Timestamp.Format("15:04:05")
-	fmt.Fprintf(w, "[%s]  %s\n", ts, entry.Message)
+	_, _ = fmt.Fprintf(w, "[%s]  %s\n", ts, entry.Message)
 }
 
 func (l *Loop) modeConfig(mode Mode) (promptFile string, maxIter int) {

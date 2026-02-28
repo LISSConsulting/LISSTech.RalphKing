@@ -70,19 +70,19 @@ func (j *JSONL) Append(entry loop.LogEntry) error {
 	if err != nil {
 		return fmt.Errorf("store: marshal: %w", err)
 	}
-	line := append(data, '\n')
+	data = append(data, '\n')
 
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
 	lineOffset := j.pos
-	if _, err := j.file.Write(line); err != nil {
+	if _, err := j.file.Write(data); err != nil {
 		return fmt.Errorf("store: write: %w", err)
 	}
 	if err := j.file.Sync(); err != nil {
 		return fmt.Errorf("store: sync: %w", err)
 	}
-	lineLen := int64(len(line))
+	lineLen := int64(len(data))
 	j.pos += lineLen
 	j.idx.onAppend(entry, lineOffset, lineLen)
 	if entry.Branch != "" {

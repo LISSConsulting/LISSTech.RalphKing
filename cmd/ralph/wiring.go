@@ -40,7 +40,7 @@ func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRu
 			if entry.Kind != loop.LogRegent {
 				rgt.UpdateState(entry)
 			}
-			fmt.Fprintln(os.Stdout, formatLogLine(entry))
+			_, _ = fmt.Fprintln(os.Stdout, formatLogLine(entry))
 		}
 	}()
 
@@ -154,7 +154,7 @@ func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRun
 			if sw != nil {
 				_ = sw.Append(entry)
 			}
-			fmt.Fprintln(os.Stdout, formatLogLine(entry))
+			_, _ = fmt.Fprintln(os.Stdout, formatLogLine(entry))
 			st.trackEntry(entry)
 		}
 	}()
