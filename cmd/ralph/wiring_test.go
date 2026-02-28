@@ -551,6 +551,125 @@ func TestLoopController_StartLoop_WhenIdle(t *testing.T) {
 	}
 }
 
+// waitForIdle polls until ctrl.IsRunning() returns false or the deadline passes.
+func waitForIdle(t *testing.T, ctrl *loopController) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) && ctrl.IsRunning() {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if ctrl.IsRunning() {
+		t.Error("runLoop goroutine should finish quickly when loop fails fast")
+	}
+}
+
+func TestLoopController_StartLoop_PlanMode(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// PLAN.md absent — runLoop falls into case "plan" then fails fast.
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+
+	ctrl := &loopController{
+		cfg:       cfg,
+		dir:       dir,
+		gitRunner: git.NewRunner(dir),
+		outerCtx:  context.Background(),
+	}
+
+	ctrl.StartLoop("plan")
+	waitForIdle(t, ctrl)
+}
+
+func TestLoopController_StartLoop_SmartMode_NoPlan(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// No CHRONICLE.md — needsPlanPhase returns true, plan path is taken.
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+
+	ctrl := &loopController{
+		cfg:       cfg,
+		dir:       dir,
+		gitRunner: git.NewRunner(dir),
+		outerCtx:  context.Background(),
+	}
+
+	ctrl.StartLoop("smart")
+	waitForIdle(t, ctrl)
+}
+
+func TestLoopController_StartLoop_SmartMode_WithChronicle(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// CHRONICLE.md exists and is non-empty — needsPlanPhase returns false,
+	// plan is skipped and build path is taken directly.
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+	writeExecTestFile(t, dir, "CHRONICLE.md", "# Chronicle\n## Completed Work\n")
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+
+	ctrl := &loopController{
+		cfg:       cfg,
+		dir:       dir,
+		gitRunner: git.NewRunner(dir),
+		outerCtx:  context.Background(),
+	}
+
+	ctrl.StartLoop("smart")
+	waitForIdle(t, ctrl)
+}
+
+func TestLoopController_StartLoop_ForwardGoroutine(t *testing.T) {
+	// This test exercises the event-forwarding goroutine inside runLoop:
+	// sw.Append and tuiSend channel paths run when the loop emits at least one
+	// event. That requires a git repo (CurrentBranch succeeds) and a prompt
+	// file (ReadFile succeeds) so loop.Run reaches the emit(LogInfo) call
+	// before failing to exec the Claude binary.
+	dir := t.TempDir()
+	t.Chdir(dir)
+	initGitRepo(t, dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+
+	logsDir := filepath.Join(dir, ".ralph", "logs")
+	sw, err := store.NewJSONL(logsDir)
+	if err != nil {
+		t.Fatalf("store.NewJSONL: %v", err)
+	}
+	defer func() { _ = sw.Close() }()
+
+	tuiSend := make(chan loop.LogEntry, 128)
+
+	ctrl := &loopController{
+		cfg:       cfg,
+		dir:       dir,
+		gitRunner: git.NewRunner(dir),
+		sw:        sw,
+		tuiSend:   tuiSend,
+		outerCtx:  context.Background(),
+	}
+
+	ctrl.StartLoop("plan")
+	waitForIdle(t, ctrl)
+}
+
 // initGitRepo creates a minimal git repo in dir for tests that need git operations.
 func initGitRepo(t *testing.T, dir string) {
 	t.Helper()
