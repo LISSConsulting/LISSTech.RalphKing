@@ -11,7 +11,8 @@ import (
 // DetectProjectName tries to infer the project name from common project
 // manifest files in dir. It checks pyproject.toml, package.json, and
 // Cargo.toml in that order, returning the first non-empty name found.
-// Returns "" if no name can be determined; errors are silently ignored.
+// Falls back to the directory base name if no manifest provides a name.
+// Errors from manifest files are silently ignored.
 func DetectProjectName(dir string) string {
 	if name := detectFromPyproject(dir); name != "" {
 		return name
@@ -19,7 +20,10 @@ func DetectProjectName(dir string) string {
 	if name := detectFromPackageJSON(dir); name != "" {
 		return name
 	}
-	return detectFromCargo(dir)
+	if name := detectFromCargo(dir); name != "" {
+		return name
+	}
+	return filepath.Base(dir)
 }
 
 type pyprojectTOML struct {

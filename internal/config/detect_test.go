@@ -6,17 +6,42 @@ import (
 	"testing"
 )
 
+func TestDetectProjectNameDirectoryFallback(t *testing.T) {
+	t.Run("no manifest files returns directory base name", func(t *testing.T) {
+		dir := t.TempDir()
+		// Rename to a predictable name by creating a subdirectory.
+		named := filepath.Join(dir, "my-project")
+		if err := os.Mkdir(named, 0755); err != nil {
+			t.Fatal(err)
+		}
+		got := DetectProjectName(named)
+		if got != "my-project" {
+			t.Errorf("DetectProjectName() = %q, want %q", got, "my-project")
+		}
+	})
+
+	t.Run("all manifests missing name falls back to dir name", func(t *testing.T) {
+		named := filepath.Join(t.TempDir(), "rust-app")
+		if err := os.Mkdir(named, 0755); err != nil {
+			t.Fatal(err)
+		}
+		// Cargo.toml exists but has no name field.
+		if err := os.WriteFile(filepath.Join(named, "Cargo.toml"), []byte("[package]\nversion = \"0.1.0\"\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		got := DetectProjectName(named)
+		if got != "rust-app" {
+			t.Errorf("DetectProjectName() = %q, want %q", got, "rust-app")
+		}
+	})
+}
+
 func TestDetectProjectName(t *testing.T) {
 	tests := []struct {
 		name  string
 		files map[string]string // filename -> content
 		want  string
 	}{
-		{
-			name:  "no manifest files returns empty",
-			files: map[string]string{},
-			want:  "",
-		},
 		{
 			name: "pyproject.toml PEP 621 [project] name",
 			files: map[string]string{
@@ -173,20 +198,23 @@ name = "should-not-appear"
 		}
 	})
 
-	t.Run("no manifest files leaves project.name empty", func(t *testing.T) {
-		dir := t.TempDir()
-		writeFile(t, filepath.Join(dir, "ralph.toml"), `[plan]
+	t.Run("no manifest files falls back to directory name", func(t *testing.T) {
+		base := filepath.Join(t.TempDir(), "my-project")
+		if err := os.Mkdir(base, 0755); err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, filepath.Join(base, "ralph.toml"), `[plan]
 prompt_file = "PLAN.md"
 [build]
 prompt_file = "BUILD.md"
 `)
 
-		cfg, err := Load(filepath.Join(dir, "ralph.toml"))
+		cfg, err := Load(filepath.Join(base, "ralph.toml"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if cfg.Project.Name != "" {
-			t.Errorf("Project.Name = %q, want empty", cfg.Project.Name)
+		if cfg.Project.Name != "my-project" {
+			t.Errorf("Project.Name = %q, want %q", cfg.Project.Name, "my-project")
 		}
 	})
 }
