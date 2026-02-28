@@ -537,6 +537,38 @@ func TestIterationLog_MalformedLineSkipped(t *testing.T) {
 	}
 }
 
+func TestIterationSummary_CommitFromComplete(t *testing.T) {
+	// The onAppend index updates Commit on the summary when LogIterComplete
+	// carries a non-empty Commit (e.g. after the loop commits to git).
+	dir := t.TempDir()
+	s, err := store.NewJSONL(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+
+	now := time.Now()
+	_ = s.Append(loop.LogEntry{Kind: loop.LogIterStart, Iteration: 1, Timestamp: now})
+	_ = s.Append(loop.LogEntry{
+		Kind:      loop.LogIterComplete,
+		Iteration: 1,
+		CostUSD:   0.01,
+		Commit:    "deadbeef",
+		Timestamp: now,
+	})
+
+	iters, err := s.Iterations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(iters) != 1 {
+		t.Fatalf("expected 1 iteration, got %d", len(iters))
+	}
+	if iters[0].Commit != "deadbeef" {
+		t.Errorf("Commit: expected %q, got %q", "deadbeef", iters[0].Commit)
+	}
+}
+
 // splitLines returns the byte content of each line (without the trailing '\n')
 // from data. An empty trailing line from a final '\n' is omitted.
 func splitLines(data []byte) [][]byte {
