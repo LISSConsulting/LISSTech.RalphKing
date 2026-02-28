@@ -63,11 +63,17 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 		lp.NotificationHook = n.Hook
 	}
 
+	logsDir := filepath.Join(dir, ".ralph", "logs")
 	var sw store.Writer
-	if s, err := store.NewJSONL(filepath.Join(dir, ".ralph", "logs")); err != nil {
+	var sr store.Reader
+	if s, err := store.NewJSONL(logsDir); err != nil {
 		fmt.Fprintf(os.Stderr, "ralph: session log unavailable: %v\n", err)
 	} else {
+		if retErr := store.EnforceRetention(logsDir, cfg.TUI.LogRetention); retErr != nil {
+			fmt.Fprintf(os.Stderr, "ralph: log retention: %v\n", retErr)
+		}
 		sw = s
+		sr = s
 		defer s.Close()
 	}
 
@@ -79,13 +85,13 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 		if noTUI {
 			return runWithStateTracking(ctx, lp, dir, gitRunner, string(mode), sw, runFn)
 		}
-		return runWithTUIAndState(ctx, lp, dir, gitRunner, string(mode), cfg.TUI.AccentColor, cfg.Project.Name, sw, runFn)
+		return runWithTUIAndState(ctx, lp, dir, gitRunner, string(mode), cfg.TUI.AccentColor, cfg.Project.Name, sw, sr, runFn)
 	}
 
 	if noTUI {
 		return runWithRegent(ctx, lp, cfg, gitRunner, dir, sw, runFn)
 	}
-	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, sw, runFn)
+	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, sw, sr, runFn)
 }
 
 // executeSmartRun runs plan if CHRONICLE.md doesn't exist, then build.
@@ -119,11 +125,17 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 		lp.NotificationHook = n.Hook
 	}
 
+	logsDir := filepath.Join(dir, ".ralph", "logs")
 	var sw store.Writer
-	if s, err := store.NewJSONL(filepath.Join(dir, ".ralph", "logs")); err != nil {
+	var sr store.Reader
+	if s, err := store.NewJSONL(logsDir); err != nil {
 		fmt.Fprintf(os.Stderr, "ralph: session log unavailable: %v\n", err)
 	} else {
+		if retErr := store.EnforceRetention(logsDir, cfg.TUI.LogRetention); retErr != nil {
+			fmt.Fprintf(os.Stderr, "ralph: log retention: %v\n", retErr)
+		}
 		sw = s
+		sr = s
 		defer s.Close()
 	}
 
@@ -144,13 +156,13 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 		if noTUI {
 			return runWithStateTracking(ctx, lp, dir, gitRunner, "run", sw, smartRunFn)
 		}
-		return runWithTUIAndState(ctx, lp, dir, gitRunner, "run", cfg.TUI.AccentColor, cfg.Project.Name, sw, smartRunFn)
+		return runWithTUIAndState(ctx, lp, dir, gitRunner, "run", cfg.TUI.AccentColor, cfg.Project.Name, sw, sr, smartRunFn)
 	}
 
 	if noTUI {
 		return runWithRegent(ctx, lp, cfg, gitRunner, dir, sw, smartRunFn)
 	}
-	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, sw, smartRunFn)
+	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, sw, sr, smartRunFn)
 }
 
 // showStatus reads .ralph/regent-state.json and prints a formatted summary.

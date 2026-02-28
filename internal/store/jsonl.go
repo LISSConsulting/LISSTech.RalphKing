@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -133,11 +136,46 @@ func (j *JSONL) IterationLog(n int) ([]loop.LogEntry, error) {
 		}
 		var e loop.LogEntry
 		if err := json.Unmarshal(line, &e); err != nil {
-			return nil, fmt.Errorf("store: unmarshal: %w", err)
+			log.Printf("store: skipping malformed line in iteration %d: %v", n, err)
+			continue
 		}
 		entries = append(entries, e)
 	}
 	return entries, nil
+}
+
+// EnforceRetention removes the oldest session log files in dir, keeping at most
+// maxKeep files. If maxKeep is 0, no files are removed. Returns nil if dir does
+// not exist or is empty.
+func EnforceRetention(dir string, maxKeep int) error {
+	if maxKeep <= 0 {
+		return nil
+	}
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("store: read dir %q: %w", dir, err)
+	}
+
+	var files []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".jsonl") {
+			files = append(files, e.Name())
+		}
+	}
+
+	sort.Strings(files) // timestamp-prefixed names sort chronologically
+
+	toDelete := len(files) - maxKeep
+	for i := 0; i < toDelete; i++ {
+		path := filepath.Join(dir, files[i])
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("store: remove %q: %w", path, err)
+		}
+	}
+	return nil
 }
 
 // SessionSummary returns metadata about the current session derived from

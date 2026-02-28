@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -372,6 +373,185 @@ func TestIterationLog_CompleteWithoutStart(t *testing.T) {
 	if len(iters) != 0 {
 		t.Errorf("expected 0 completed iterations, got %d", len(iters))
 	}
+}
+
+func TestEnforceRetention(t *testing.T) {
+	// createFiles creates n fake .jsonl files named 0000000000-N.jsonl
+	// (stable lexicographic = chronological order) and returns the dir.
+	createFiles := func(t *testing.T, n int) string {
+		t.Helper()
+		dir := t.TempDir()
+		for i := 0; i < n; i++ {
+			name := fmt.Sprintf("%010d-%d.jsonl", i, i)
+			if err := os.WriteFile(filepath.Join(dir, name), []byte("{}"), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return dir
+	}
+
+	countFiles := func(t *testing.T, dir string) int {
+		t.Helper()
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		count := 0
+		for _, e := range entries {
+			if filepath.Ext(e.Name()) == ".jsonl" {
+				count++
+			}
+		}
+		return count
+	}
+
+	tests := []struct {
+		name      string
+		nFiles    int
+		maxKeep   int
+		wantFiles int
+	}{
+		{"zero files, keep 20", 0, 20, 0},
+		{"fewer than limit", 5, 20, 5},
+		{"exactly at limit", 20, 20, 20},
+		{"one over limit", 21, 20, 20},
+		{"many over limit", 50, 20, 20},
+		{"keep 0 means unlimited", 50, 0, 50},
+		{"keep 1 keeps newest", 5, 1, 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := createFiles(t, tt.nFiles)
+			if err := store.EnforceRetention(dir, tt.maxKeep); err != nil {
+				t.Fatalf("EnforceRetention: %v", err)
+			}
+			got := countFiles(t, dir)
+			if got != tt.wantFiles {
+				t.Errorf("want %d files remaining, got %d", tt.wantFiles, got)
+			}
+		})
+	}
+
+	t.Run("non-existent dir returns nil", func(t *testing.T) {
+		err := store.EnforceRetention(filepath.Join(t.TempDir(), "no-such-dir"), 5)
+		if err != nil {
+			t.Errorf("expected nil for missing dir, got: %v", err)
+		}
+	})
+
+	t.Run("oldest files are deleted", func(t *testing.T) {
+		dir := createFiles(t, 5)
+		if err := store.EnforceRetention(dir, 2); err != nil {
+			t.Fatal(err)
+		}
+		// After keeping 2, the oldest 3 (0000000000-0, ...-1, ...-2) should be gone.
+		for i := 0; i < 3; i++ {
+			name := fmt.Sprintf("%010d-%d.jsonl", i, i)
+			if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+				t.Errorf("expected file %s to be deleted", name)
+			}
+		}
+		// Newest 2 (...-3, ...-4) should remain.
+		for i := 3; i < 5; i++ {
+			name := fmt.Sprintf("%010d-%d.jsonl", i, i)
+			if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+				t.Errorf("expected file %s to remain: %v", name, err)
+			}
+		}
+	})
+}
+
+func TestIterationLog_MalformedLineSkipped(t *testing.T) {
+	dir := t.TempDir()
+	s, err := store.NewJSONL(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	now := time.Now()
+	_ = s.Append(loop.LogEntry{Kind: loop.LogIterStart, Iteration: 1, Timestamp: now})
+	// Append two tool entries so we can corrupt the first and still get the second.
+	_ = s.Append(loop.LogEntry{Kind: loop.LogToolUse, Iteration: 1, ToolName: "Read", Timestamp: now})
+	_ = s.Append(loop.LogEntry{Kind: loop.LogToolUse, Iteration: 1, ToolName: "Write", Timestamp: now})
+	_ = s.Append(loop.LogEntry{Kind: loop.LogIterComplete, Iteration: 1, CostUSD: 0.01, Timestamp: now})
+
+	// Locate the JSONL file written by this store.
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) == 0 {
+		t.Fatalf("expected at least 1 file in dir: %v", err)
+	}
+	path := filepath.Join(dir, entries[0].Name())
+
+	// Read file contents; Go opens with FILE_SHARE_READ so this succeeds even
+	// while the store still holds an open handle.
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+
+	// Split into lines and corrupt line index 1 (first ToolUse entry) with
+	// garbage of the EXACT SAME BYTE LENGTH so that all byte-offset indices
+	// tracked by the in-memory index remain valid.
+	lines := splitLines(data) // [[bytes...], ...]
+	if len(lines) < 4 {
+		t.Fatalf("expected ≥4 lines in JSONL, got %d", len(lines))
+	}
+	targetLine := lines[1] // first ToolUse line (not including the trailing \n)
+	if len(targetLine) < 1 {
+		t.Fatalf("target line is empty")
+	}
+	// Build a same-length replacement that is invalid JSON.
+	replacement := make([]byte, len(targetLine))
+	copy(replacement, []byte("{BADLINE"))
+	for i := 8; i < len(replacement); i++ {
+		replacement[i] = 'X'
+	}
+	// replacement does NOT end with '}', so it is invalid JSON regardless of length.
+
+	// Compute byte offset of line 1 (after line 0 and its newline).
+	offset := int64(len(lines[0]) + 1) // +1 for the '\n' after line 0
+
+	// Open a second handle to the file and overwrite line 1 in place.
+	f2, openErr := os.OpenFile(path, os.O_RDWR, 0644)
+	if openErr != nil {
+		t.Skipf("cannot open file with second handle (file locking?): %v", openErr)
+	}
+	if _, writeErr := f2.WriteAt(replacement, offset); writeErr != nil {
+		_ = f2.Close()
+		t.Skipf("WriteAt failed (file locking?): %v", writeErr)
+	}
+	_ = f2.Close()
+
+	// IterationLog re-reads the byte range from disk via ReadAt. The malformed
+	// line should be logged and skipped; the remaining 3 valid entries survive.
+	got, err := s.IterationLog(1)
+	if err != nil {
+		t.Fatalf("IterationLog with malformed line: %v", err)
+	}
+	// Expected: LogIterStart + LogToolUse(Write) + LogIterComplete = 3 entries.
+	// (The malformed Read line is silently skipped.)
+	if len(got) != 3 {
+		t.Errorf("expected 3 entries (malformed line skipped), got %d", len(got))
+	}
+}
+
+// splitLines returns the byte content of each line (without the trailing '\n')
+// from data. An empty trailing line from a final '\n' is omitted.
+func splitLines(data []byte) [][]byte {
+	var lines [][]byte
+	start := 0
+	for i, b := range data {
+		if b == '\n' {
+			lines = append(lines, data[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(data) {
+		lines = append(lines, data[start:])
+	}
+	return lines
 }
 
 func TestAppend_RoundTripsAllFields(t *testing.T) {

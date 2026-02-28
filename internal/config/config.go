@@ -41,7 +41,8 @@ type NotificationsConfig struct {
 
 // TUIConfig controls the terminal UI appearance.
 type TUIConfig struct {
-	AccentColor string `toml:"accent_color"`
+	AccentColor  string `toml:"accent_color"`
+	LogRetention int    `toml:"log_retention"` // number of session logs to keep; 0 = unlimited
 }
 
 // ProjectConfig identifies the project.
@@ -125,6 +126,9 @@ func (c *Config) Validate() error {
 	if c.TUI.AccentColor != "" && !hexColorRe.MatchString(c.TUI.AccentColor) {
 		errs = append(errs, fmt.Errorf("tui.accent_color must be a hex color (e.g. \"#7D56F4\")"))
 	}
+	if c.TUI.LogRetention < 0 {
+		errs = append(errs, fmt.Errorf("tui.log_retention must be >= 0 (0 = unlimited)"))
+	}
 
 	if c.Notifications.URL != "" {
 		u, parseErr := url.ParseRequestURI(c.Notifications.URL)
@@ -165,7 +169,8 @@ func Defaults() Config {
 			HangTimeoutSeconds:    300,
 		},
 		TUI: TUIConfig{
-			AccentColor: DefaultAccentColor,
+			AccentColor:  DefaultAccentColor,
+			LogRetention: 20,
 		},
 		Notifications: NotificationsConfig{
 			URL:        "",
@@ -275,6 +280,7 @@ hang_timeout_seconds = 300
 
 [tui]
 accent_color = "#7D56F4"  # hex color for header/accent elements
+log_retention = 20        # number of session logs to keep; 0 = unlimited
 
 [notifications]
 url = ""           # ntfy.sh topic URL or any HTTP webhook (empty = disabled)

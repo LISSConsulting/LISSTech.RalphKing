@@ -14,6 +14,7 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui"
 )
@@ -56,7 +57,7 @@ func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRu
 // runWithRegentTUI runs the loop under Regent supervision with TUI display.
 // Loop events are forwarded through the Regent for state/hang tracking, then
 // sent to the TUI. Regent messages are sent directly to the TUI channel.
-func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRunner *git.Runner, dir string, sw store.Writer, run regent.RunFunc) error {
+func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRunner *git.Runner, dir string, sw store.Writer, sr store.Reader, run regent.RunFunc) error {
 	loopEvents := make(chan loop.LogEntry, 128)
 	tuiEvents := make(chan loop.LogEntry, 128)
 
@@ -70,7 +71,8 @@ func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gi
 	rgt := regent.New(cfg.Regent, dir, gitRunner, tuiEvents)
 	lp.PostIteration = rgt.RunPostIterationTests
 
-	model := tui.New(tuiEvents, cfg.TUI.AccentColor, cfg.Project.Name, dir, requestStop)
+	specFiles, _ := spec.List(dir)
+	model := tui.New(tuiEvents, sr, cfg.TUI.AccentColor, cfg.Project.Name, dir, specFiles, requestStop)
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	// Forward loop events → regent state update → TUI
@@ -166,7 +168,7 @@ func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRun
 
 // runWithTUIAndState runs the loop without Regent supervision with TUI display,
 // forwarding events through a state tracker so `ralph status` works.
-func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, accentColor string, projectName string, sw store.Writer, run regent.RunFunc) error {
+func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, accentColor string, projectName string, sw store.Writer, sr store.Reader, run regent.RunFunc) error {
 	loopEvents := make(chan loop.LogEntry, 128)
 	tuiEvents := make(chan loop.LogEntry, 128)
 
@@ -181,7 +183,8 @@ func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunne
 	st := newStateTracker(dir, mode, gitRunner)
 	st.save()
 
-	model := tui.New(tuiEvents, accentColor, projectName, dir, requestStop)
+	specFiles, _ := spec.List(dir)
+	model := tui.New(tuiEvents, sr, accentColor, projectName, dir, specFiles, requestStop)
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	// Forward loop events → state tracking → TUI

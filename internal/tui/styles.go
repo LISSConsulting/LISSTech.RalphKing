@@ -1,7 +1,11 @@
 // Package tui provides a bubbletea + lipgloss terminal UI for the Ralph loop.
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 // defaultAccentColor is the default accent color (indigo).
 const defaultAccentColor = "#7D56F4"
@@ -20,9 +24,6 @@ var (
 // Styles used across the TUI. Accent-dependent styles (header, git) live
 // on the Model and are computed from the configured accent color at creation.
 var (
-	footerStyle = lipgloss.NewStyle().
-			Foreground(colorGray)
-
 	timestampStyle = lipgloss.NewStyle().
 			Foreground(colorGray)
 
@@ -52,6 +53,15 @@ var (
 	reasoningStyle = lipgloss.NewStyle().
 			Foreground(colorGray)
 )
+
+// singleLine replaces newline sequences with a space so every log entry
+// renders as exactly one terminal line.
+func singleLine(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	return s
+}
 
 // toolIcon returns the emoji icon for a given tool name.
 func toolIcon(toolName string) string {

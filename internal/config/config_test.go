@@ -31,6 +31,7 @@ func TestDefaults(t *testing.T) {
 		{"regent.rollback_on_test_failure", cfg.Regent.RollbackOnTestFailure, false},
 		{"regent.test_command", cfg.Regent.TestCommand, ""},
 		{"tui.accent_color", cfg.TUI.AccentColor, DefaultAccentColor},
+		{"tui.log_retention", cfg.TUI.LogRetention, 20},
 		{"notifications.url", cfg.Notifications.URL, ""},
 		{"notifications.on_complete", cfg.Notifications.OnComplete, true},
 		{"notifications.on_error", cfg.Notifications.OnError, true},
@@ -80,6 +81,7 @@ hang_timeout_seconds = 600
 
 [tui]
 accent_color = "#FF0000"
+log_retention = 10
 `
 		path := filepath.Join(dir, "ralph.toml")
 		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
@@ -113,6 +115,7 @@ accent_color = "#FF0000"
 			{"regent.retry_backoff_seconds", cfg.Regent.RetryBackoffSeconds, 60},
 			{"regent.hang_timeout_seconds", cfg.Regent.HangTimeoutSeconds, 600},
 			{"tui.accent_color", cfg.TUI.AccentColor, "#FF0000"},
+			{"tui.log_retention", cfg.TUI.LogRetention, 10},
 		}
 
 		for _, tt := range tests {
@@ -336,6 +339,7 @@ retry_backoff_seconds = 30
 hang_timeout_seconds = 300
 [tui]
 accent_color = "#FF0000"
+log_retention = 20
 `,
 		},
 		{
@@ -488,6 +492,19 @@ func TestValidate(t *testing.T) {
 				c.Regent.Enabled = true
 				c.Regent.HangTimeoutSeconds = 0
 			},
+		},
+		{
+			name:    "negative tui.log_retention",
+			modify:  func(c *Config) { c.TUI.LogRetention = -1 },
+			wantErr: "tui.log_retention must be >= 0",
+		},
+		{
+			name:   "zero tui.log_retention is valid (unlimited)",
+			modify: func(c *Config) { c.TUI.LogRetention = 0 },
+		},
+		{
+			name:   "positive tui.log_retention is valid",
+			modify: func(c *Config) { c.TUI.LogRetention = 10 },
 		},
 		{
 			name:    "invalid tui.accent_color",
