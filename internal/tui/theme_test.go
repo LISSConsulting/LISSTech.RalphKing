@@ -166,6 +166,20 @@ func TestRenderLogLine_NewlinesStripped(t *testing.T) {
 	}
 }
 
+// TestRenderLogLine_LogIterComplete_NoSubtype covers the else branch in
+// the LogIterComplete case (Subtype == "").
+func TestRenderLogLine_LogIterComplete_NoSubtype(t *testing.T) {
+	th := NewTheme("")
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	entry := loop.LogEntry{Kind: loop.LogIterComplete, Timestamp: now, Iteration: 5, CostUSD: 0.12, Duration: 3.4}
+	rendered := th.RenderLogLine(entry, 120)
+	for _, want := range []string{"iteration 5 complete", "$0.12", "3.4s"} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("RenderLogLine() missing %q in: %q", want, rendered)
+		}
+	}
+}
+
 func TestRenderLogLinePkgFunc(t *testing.T) {
 	th := NewTheme("")
 	now := time.Now()

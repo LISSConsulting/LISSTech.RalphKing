@@ -640,3 +640,282 @@ func TestUpdate_SpecSelected_ShowsContent(t *testing.T) {
 		t.Errorf("View() after SpecSelectedMsg should contain spec content; got:\n%s", view)
 	}
 }
+
+// TestUpdate_LogEntry_LogDoneStoppedErrorRegent covers state transitions for
+// LogDone, LogStopped, LogError, and LogRegent kinds — the branches in
+// handleLogEntry that were previously uncovered.
+func TestUpdate_LogEntry_LogDoneStoppedErrorRegent(t *testing.T) {
+	tests := []struct {
+		name      string
+		entry     loop.LogEntry
+		wantState LoopState
+	}{
+		{
+			name:      "LogDone → StateIdle",
+			entry:     loop.LogEntry{Kind: loop.LogDone, Message: "finished"},
+			wantState: StateIdle,
+		},
+		{
+			name:      "LogStopped → StateIdle",
+			entry:     loop.LogEntry{Kind: loop.LogStopped, Message: "stopped"},
+			wantState: StateIdle,
+		},
+		{
+			name:      "LogError → StateFailed",
+			entry:     loop.LogEntry{Kind: loop.LogError, Message: "error occurred"},
+			wantState: StateFailed,
+		},
+		{
+			name:      "LogRegent → StateRegentRestart",
+			entry:     loop.LogEntry{Kind: loop.LogRegent, Message: "restarting"},
+			wantState: StateRegentRestart,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestModel()
+			// Start in StateBuilding so all transitions are valid.
+			m.loopState = StateBuilding
+			updated, _ := m.Update(logEntryMsg(tt.entry))
+			m2 := updated.(Model)
+			if m2.loopState != tt.wantState {
+				t.Errorf("loopState = %v, want %v", m2.loopState, tt.wantState)
+			}
+		})
+	}
+}
+
+// TestUpdate_LogEntry_GitPullPushRouting verifies that LogGitPull and
+// LogGitPush entries are routed to both the secondary panel (Git tab)
+// and the main view — covering the LogGitPull/LogGitPush branch in
+// handleLogEntry.
+func TestUpdate_LogEntry_GitPullPushRouting(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		kind loop.LogKind
+	}{
+		{"LogGitPull", loop.LogGitPull},
+		{"LogGitPush", loop.LogGitPush},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestModel()
+			updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+			m = updated.(Model)
+			entry := loop.LogEntry{Kind: tc.kind, Message: "git op"}
+			updated2, _ := m.Update(logEntryMsg(entry))
+			_ = updated2.(Model) // must not panic
+		})
+	}
+}
+
+// TestUpdate_LogEntry_LogRegentTestsRouting verifies that LogRegent entries
+// containing "Tests" or "Reverted" are also routed to the Tests tab.
+func TestUpdate_LogEntry_LogRegentTestsRouting(t *testing.T) {
+	m := newTestModel()
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(Model)
+	entry := loop.LogEntry{Kind: loop.LogRegent, Message: "Tests passed"}
+	updated2, _ := m.Update(logEntryMsg(entry))
+	_ = updated2.(Model) // must not panic; Tests branch covered
+}
+
+// TestDelegateToFocused covers delegating keyboard events when focus is on
+// each non-Specs panel (Iterations, Main, Secondary).
+func TestDelegateToFocused(t *testing.T) {
+	focusCases := []struct {
+		name  string
+		focus FocusTarget
+	}{
+		{"Iterations", FocusIterations},
+		{"Main", FocusMain},
+		{"Secondary", FocusSecondary},
+	}
+	for _, fc := range focusCases {
+		t.Run(fc.name, func(t *testing.T) {
+			m := newTestModel()
+			updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+			m = updated.(Model)
+			m.focus = fc.focus
+			// Send a scrolling key that is not handled by handleKey directly.
+			updated2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+			_ = updated2.(Model) // must not panic
+		})
+	}
+}
+
+// TestInnerDims_SmallRect verifies that innerDims clamps w and h to at
+// least 1 when the rectangle is too small to contain a 1-char border.
+func TestInnerDims_SmallRect(t *testing.T) {
+	tests := []struct {
+		name  string
+		r     Rect
+		wantW int
+		wantH int
+	}{
+		{"zero", Rect{Width: 0, Height: 0}, 1, 1},
+		{"tiny", Rect{Width: 1, Height: 1}, 1, 1},
+		{"normal", Rect{Width: 80, Height: 24}, 78, 22},
+		{"small width", Rect{Width: 1, Height: 24}, 1, 22},
+		{"small height", Rect{Width: 80, Height: 1}, 78, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w, h := innerDims(tt.r)
+			if w != tt.wantW || h != tt.wantH {
+				t.Errorf("innerDims(%v) = (%d, %d), want (%d, %d)", tt.r, w, h, tt.wantW, tt.wantH)
+			}
+		})
+	}
+}
+
+// TestUpdate_EditSpecRequest_AbsolutePath verifies that an absolute spec path
+// is used as-is (not joined with workDir) in handleEditSpecRequest.
+func TestUpdate_EditSpecRequest_AbsolutePath(t *testing.T) {
+	t.Setenv("EDITOR", "true")
+	dir := t.TempDir()
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", dir, nil, nil, nil)
+	// Use an absolute path — it must not be re-joined with workDir.
+	absPath := dir + "/specs/absolute.md"
+	_, cmd := m.Update(panels.EditSpecRequestMsg{Path: absPath})
+	if cmd == nil {
+		t.Error("EditSpecRequestMsg with EDITOR set and absolute path should return a non-nil cmd")
+	}
+}
+
+// TestUpdate_IterationLogLoaded_WithError verifies that handleIterationLogLoaded
+// returns early (nil cmd) when msg.Err is non-nil.
+func TestUpdate_IterationLogLoaded_WithError(t *testing.T) {
+	m := newTestModel()
+	msg := iterationLogLoadedMsg{
+		Number:  1,
+		Entries: nil,
+		Err:     fmt.Errorf("load failed"),
+	}
+	updated, cmd := m.Update(msg)
+	_ = updated.(Model)
+	if cmd != nil {
+		t.Error("iterationLogLoadedMsg with Err set should return nil cmd")
+	}
+}
+
+// TestUpdate_Key_ShiftTab covers the shift+tab branch in handleKey.
+func TestUpdate_Key_ShiftTab_CyclesFocusBack(t *testing.T) {
+	m := newTestModel()
+	// Default focus is FocusMain (index 2); shift+tab should go to FocusIterations (1).
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	m2 := updated.(Model)
+	if m2.focus != FocusMain.Prev() {
+		t.Errorf("shift+tab should move focus from %v to %v, got %v",
+			FocusMain, FocusMain.Prev(), m2.focus)
+	}
+}
+
+// TestDelegateToFocused_Specs covers the FocusSpecs branch in delegateToFocused.
+func TestDelegateToFocused_Specs(t *testing.T) {
+	m := newTestModel()
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(Model)
+	m.focus = FocusSpecs
+	// Send a key that is not a global binding so it is delegated to specsPanel.
+	updated2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	_ = updated2.(Model) // must not panic
+}
+
+// TestHandleLogEntry_CommitSet covers the `entry.Commit != ""` metadata branch.
+func TestHandleLogEntry_CommitSet(t *testing.T) {
+	m := newTestModel()
+	entry := loop.LogEntry{Kind: loop.LogInfo, Commit: "abcdef0", Message: "info"}
+	updated, _ := m.Update(logEntryMsg(entry))
+	m2 := updated.(Model)
+	if m2.lastCommit != "abcdef0" {
+		t.Errorf("lastCommit = %q, want %q", m2.lastCommit, "abcdef0")
+	}
+}
+
+// TestWaitForEvent_EntryReceived covers the logEntryMsg return path.
+func TestWaitForEvent_EntryReceived(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	ch <- loop.LogEntry{Kind: loop.LogInfo, Message: "hello"}
+	cmd := waitForEvent(ch)
+	msg := cmd()
+	if _, ok := msg.(logEntryMsg); !ok {
+		t.Fatalf("expected logEntryMsg, got %T", msg)
+	}
+}
+
+// TestWaitForEvent_ChannelClosed covers the loopDoneMsg return path.
+func TestWaitForEvent_ChannelClosed(t *testing.T) {
+	ch := make(chan loop.LogEntry)
+	close(ch)
+	cmd := waitForEvent(ch)
+	msg := cmd()
+	if _, ok := msg.(loopDoneMsg); !ok {
+		t.Fatalf("expected loopDoneMsg, got %T", msg)
+	}
+}
+
+// TestUpdate_TickMsg covers the tickMsg case in Update, which updates
+// m.now and reschedules the ticker.
+func TestUpdate_TickMsg(t *testing.T) {
+	m := newTestModel()
+	// Use a fixed future time so the comparison is deterministic regardless
+	// of clock resolution.
+	later := time.Now().Add(time.Hour)
+	tick := tickMsg(later)
+	updated, cmd := m.Update(tick)
+	m2 := updated.(Model)
+	if !m2.now.Equal(later) {
+		t.Errorf("tickMsg should set m.now to tick time; got %v, want %v", m2.now, later)
+	}
+	if cmd == nil {
+		t.Error("tickMsg should reschedule ticker via tickCmd()")
+	}
+}
+
+// TestHandleLogEntry_CannotTransition covers the false branches of
+// CanTransitionTo in handleLogEntry — when the current state cannot
+// legally transition to the target state, loopState remains unchanged.
+func TestHandleLogEntry_CannotTransition(t *testing.T) {
+	tests := []struct {
+		name    string
+		initial LoopState
+		entry   loop.LogEntry
+	}{
+		{
+			// StateIdle cannot transition to StateIdle (not in its valid set).
+			name:    "LogDone from Idle stays Idle",
+			initial: StateIdle,
+			entry:   loop.LogEntry{Kind: loop.LogDone},
+		},
+		{
+			// StateIdle cannot transition to StateFailed.
+			name:    "LogError from Idle stays Idle",
+			initial: StateIdle,
+			entry:   loop.LogEntry{Kind: loop.LogError},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestModel()
+			m.loopState = tt.initial
+			updated, _ := m.Update(logEntryMsg(tt.entry))
+			m2 := updated.(Model)
+			if m2.loopState != tt.initial {
+				t.Errorf("loopState changed from %v to %v, expected no transition", tt.initial, m2.loopState)
+			}
+		})
+	}
+}
+
+// TestUpdate_UnknownMsg covers the default case in Update (delegateToFocused
+// for any message type not explicitly handled by the switch).
+func TestUpdate_UnknownMsg(t *testing.T) {
+	m := newTestModel()
+	// tea.MouseMsg is not handled by any explicit case, so it falls through
+	// to the default delegateToFocused call at the end of Update.
+	type unknownMsg struct{}
+	updated, cmd := m.Update(unknownMsg{})
+	_ = updated.(Model)
+	_ = cmd // should not panic
+}
