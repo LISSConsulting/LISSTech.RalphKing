@@ -35,14 +35,15 @@ type GitOps interface {
 
 // Loop orchestrates the prompt -> claude -> parse -> git iteration cycle.
 type Loop struct {
-	Agent         claude.Agent
-	Git           GitOps
-	Config        *config.Config
-	Log           io.Writer       // output destination; defaults to os.Stdout
-	Events        chan<- LogEntry // optional: structured event sink for TUI
-	Dir           string          // working directory for prompt file resolution
-	PostIteration func()          // optional: called after each iteration (e.g., test-gated rollback)
-	StopAfter     <-chan struct{}  // optional: closed to request graceful stop after current iteration
+	Agent            claude.Agent
+	Git              GitOps
+	Config           *config.Config
+	Log              io.Writer       // output destination; defaults to os.Stdout
+	Events           chan<- LogEntry // optional: structured event sink for TUI
+	Dir              string          // working directory for prompt file resolution
+	PostIteration    func()          // optional: called after each iteration (e.g., test-gated rollback)
+	StopAfter        <-chan struct{}  // optional: closed to request graceful stop after current iteration
+	NotificationHook func(LogEntry)  // optional: called on every emitted event for external notifications
 }
 
 // Run executes the loop in the given mode. It runs iterations until the
@@ -292,10 +293,14 @@ func (l *Loop) pushIfNeeded(branch string) error {
 // emit sends a structured log entry. When Events is set, it sends to the
 // channel for TUI consumption. Otherwise, it writes formatted text to Log.
 // The channel send is non-blocking to prevent deadlock if the TUI exits
-// while the loop is still draining events.
+// while the loop is still draining events. NotificationHook, when set, is
+// always called regardless of the TUI/log path.
 func (l *Loop) emit(entry LogEntry) {
 	if entry.Timestamp.IsZero() {
 		entry.Timestamp = time.Now()
+	}
+	if l.NotificationHook != nil {
+		l.NotificationHook(entry)
 	}
 	if l.Events != nil {
 		select {

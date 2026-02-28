@@ -13,6 +13,7 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/notify"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
 )
 
@@ -54,6 +55,11 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 		Git:    gitRunner,
 		Config: cfg,
 		Dir:    dir,
+	}
+	if cfg.Notifications.URL != "" {
+		n := notify.New(cfg.Notifications.URL, cfg.Project.Name,
+			cfg.Notifications.OnComplete, cfg.Notifications.OnError, cfg.Notifications.OnStop)
+		lp.NotificationHook = n.Hook
 	}
 
 	runFn := func(ctx context.Context) error {
@@ -97,6 +103,11 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 		Git:    gitRunner,
 		Config: cfg,
 		Dir:    dir,
+	}
+	if cfg.Notifications.URL != "" {
+		n := notify.New(cfg.Notifications.URL, cfg.Project.Name,
+			cfg.Notifications.OnComplete, cfg.Notifications.OnError, cfg.Notifications.OnStop)
+		lp.NotificationHook = n.Hook
 	}
 
 	smartRunFn := func(ctx context.Context) error {

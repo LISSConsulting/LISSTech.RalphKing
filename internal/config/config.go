@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,13 +21,22 @@ var hexColorRe = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 
 // Config is the top-level ralph.toml configuration.
 type Config struct {
-	Project ProjectConfig `toml:"project"`
-	Claude  ClaudeConfig  `toml:"claude"`
-	Plan    PlanConfig    `toml:"plan"`
-	Build   BuildConfig   `toml:"build"`
-	Git     GitConfig     `toml:"git"`
-	Regent  RegentConfig  `toml:"regent"`
-	TUI     TUIConfig     `toml:"tui"`
+	Project       ProjectConfig       `toml:"project"`
+	Claude        ClaudeConfig        `toml:"claude"`
+	Plan          PlanConfig          `toml:"plan"`
+	Build         BuildConfig         `toml:"build"`
+	Git           GitConfig           `toml:"git"`
+	Regent        RegentConfig        `toml:"regent"`
+	TUI           TUIConfig           `toml:"tui"`
+	Notifications NotificationsConfig `toml:"notifications"`
+}
+
+// NotificationsConfig controls webhook/ntfy.sh notifications.
+type NotificationsConfig struct {
+	URL        string `toml:"url"`
+	OnComplete bool   `toml:"on_complete"`
+	OnError    bool   `toml:"on_error"`
+	OnStop     bool   `toml:"on_stop"`
 }
 
 // TUIConfig controls the terminal UI appearance.
@@ -116,6 +126,13 @@ func (c *Config) Validate() error {
 		errs = append(errs, fmt.Errorf("tui.accent_color must be a hex color (e.g. \"#7D56F4\")"))
 	}
 
+	if c.Notifications.URL != "" {
+		u, parseErr := url.ParseRequestURI(c.Notifications.URL)
+		if parseErr != nil || (u.Scheme != "http" && u.Scheme != "https") {
+			errs = append(errs, fmt.Errorf("notifications.url must be a valid http or https URL"))
+		}
+	}
+
 	return errors.Join(errs...)
 }
 
@@ -149,6 +166,12 @@ func Defaults() Config {
 		},
 		TUI: TUIConfig{
 			AccentColor: DefaultAccentColor,
+		},
+		Notifications: NotificationsConfig{
+			URL:        "",
+			OnComplete: true,
+			OnError:    true,
+			OnStop:     true,
 		},
 	}
 }
@@ -252,6 +275,12 @@ hang_timeout_seconds = 300
 
 [tui]
 accent_color = "#7D56F4"  # hex color for header/accent elements
+
+[notifications]
+url = ""           # ntfy.sh topic URL or any HTTP webhook (empty = disabled)
+on_complete = true # notify on each iteration complete
+on_error = true    # notify on loop error
+on_stop = true     # notify when loop finishes or is stopped
 `
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return "", fmt.Errorf("config: write %s: %w", path, err)

@@ -652,6 +652,40 @@ func TestExecuteSmartRun_RegentEnabled_PromptMissing(t *testing.T) {
 	}
 }
 
+func TestExecuteLoop_NotificationsURLSet(t *testing.T) {
+	// With notifications.url set the notify wiring runs; loop still fails at
+	// git CurrentBranch() because there is no git repo in the temp dir.
+	dir := t.TempDir()
+	t.Chdir(dir)
+	cfg := testConfigNoRegent() + "\n[notifications]\nurl = \"http://127.0.0.1:0/webhook\"\n"
+	writeExecTestFile(t, dir, "ralph.toml", cfg)
+	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
+
+	err := executeLoop(loop.ModePlan, 1, true)
+	if err == nil {
+		t.Fatal("expected error from git operations")
+	}
+	if strings.Contains(err.Error(), "prompt file") {
+		t.Errorf("should not be a prompt-file error, got: %v", err)
+	}
+}
+
+func TestExecuteSmartRun_NotificationsURLSet(t *testing.T) {
+	// With notifications.url set the notify wiring runs; smartRun still fails
+	// at git operations because there is no git repo in the temp dir.
+	dir := t.TempDir()
+	t.Chdir(dir)
+	cfg := testConfigNoRegent() + "\n[notifications]\nurl = \"http://127.0.0.1:0/webhook\"\n"
+	writeExecTestFile(t, dir, "ralph.toml", cfg)
+	writeExecTestFile(t, dir, "CHRONICLE.md", "# Done\n\nSome content.\n")
+	writeExecTestFile(t, dir, "BUILD.md", "# Build\n")
+
+	err := executeSmartRun(1, true)
+	if err == nil {
+		t.Fatal("expected error from git operations")
+	}
+}
+
 func TestShowStatus_CorruptedStateFile(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
