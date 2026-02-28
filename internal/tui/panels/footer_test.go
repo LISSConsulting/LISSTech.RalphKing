@@ -32,7 +32,7 @@ func TestRenderFooter_EachFocusTarget(t *testing.T) {
 func TestRenderFooter_GlobalHintsAlwaysShown(t *testing.T) {
 	props := FooterProps{Focus: "main"}
 	rendered := RenderFooter(props, 200)
-	for _, global := range []string{"q:quit", "1-4:panel", "s:stop"} {
+	for _, global := range []string{"?:help", "q:quit", "1-4:panel", "s:stop"} {
 		if !strings.Contains(rendered, global) {
 			t.Errorf("global hint %q missing; got %q", global, rendered)
 		}

@@ -57,6 +57,9 @@ type Model struct {
 	requestStop   func()
 	stopRequested bool
 
+	// Help overlay
+	helpVisible bool
+
 	// Loop control (nil when launched from ralph build/plan/run)
 	controller LoopController
 
@@ -185,7 +188,15 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Help overlay absorbs the key press to dismiss it.
+	if m.helpVisible {
+		m.helpVisible = false
+		return m, nil
+	}
 	switch msg.String() {
+	case "?":
+		m.helpVisible = true
+		return m, nil
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "s":
@@ -446,6 +457,51 @@ func renderIterationSummary(s store.IterationSummary) []string {
 	return lines
 }
 
+// renderHelp renders a centered keybinding reference overlay.
+func (m Model) renderHelp() string {
+	lines := []string{
+		"Keyboard Shortcuts",
+		"",
+		"  GLOBAL",
+		"    ?           Show / hide this help",
+		"    q / ctrl+c  Quit",
+		"    s           Stop loop after current iteration",
+		"    tab         Cycle panel focus forward",
+		"    shift+tab   Cycle panel focus backward",
+		"    1-4         Jump to Specs / Iterations / Main / Secondary",
+		"",
+		"  LOOP CONTROL  (dashboard mode only)",
+		"    b           Start build loop",
+		"    p           Start plan loop",
+		"    R           Smart run (auto plan+build)",
+		"    x           Stop loop immediately",
+		"",
+		"  SPECS PANEL",
+		"    j / k       Navigate specs",
+		"    enter       View spec",
+		"    e           Edit spec in $EDITOR",
+		"    n           Create new spec",
+		"",
+		"  ITERATIONS PANEL",
+		"    j / k       Navigate iterations",
+		"    enter       Open iteration log",
+		"",
+		"  MAIN PANEL",
+		"    f           Toggle follow (auto-scroll)",
+		"    [ / ]       Cycle tabs",
+		"    ctrl+u/d    Page up / down",
+		"    j / k       Scroll line up / down",
+		"",
+		"  SECONDARY PANEL",
+		"    [ / ]       Cycle tabs",
+		"    j / k       Scroll",
+		"",
+		"  Press any key to close",
+	}
+	box := m.theme.AccentBorderStyle().Padding(1, 3).Render(strings.Join(lines, "\n"))
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+}
+
 // View renders the full multi-panel TUI.
 func (m Model) View() string {
 	if m.layout.TooSmall {
@@ -454,6 +510,10 @@ func (m Model) View() string {
 			Width(m.width).
 			Align(lipgloss.Center).
 			Render(msg)
+	}
+
+	if m.helpVisible {
+		return m.renderHelp()
 	}
 
 	header := panels.RenderHeader(panels.HeaderProps{

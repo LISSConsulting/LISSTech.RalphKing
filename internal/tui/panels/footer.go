@@ -40,7 +40,7 @@ func RenderFooter(props FooterProps, width int) string {
 		} else if props.ScrollOffset > 0 {
 			scrollHints = fmt.Sprintf("  ↑%d", props.ScrollOffset)
 		}
-		right = panelHints + scrollHints + "  q:quit  1-4:panel  s:stop"
+		right = panelHints + scrollHints + "  ?:help  q:quit  1-4:panel  s:stop"
 	}
 
 	gap := width - len(left) - len(right)

@@ -511,6 +511,64 @@ func TestUpdate_Key_Stop_StopsLoop(t *testing.T) {
 	}
 }
 
+func TestUpdate_Key_Help_Shows(t *testing.T) {
+	m := newTestModel()
+	if m.helpVisible {
+		t.Fatal("setup: helpVisible should be false initially")
+	}
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	m2 := updated.(Model)
+	if !m2.helpVisible {
+		t.Error("? key should set helpVisible=true")
+	}
+	if cmd != nil {
+		t.Error("? key should return nil cmd")
+	}
+}
+
+func TestUpdate_Key_Help_AnyKeyDismisses(t *testing.T) {
+	m := newTestModel()
+	m.helpVisible = true
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m2 := updated.(Model)
+	if m2.helpVisible {
+		t.Error("any key press when help visible should set helpVisible=false")
+	}
+}
+
+func TestUpdate_Key_Help_Toggle(t *testing.T) {
+	m := newTestModel()
+
+	// First ? shows help.
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	m2 := updated.(Model)
+	if !m2.helpVisible {
+		t.Error("first ? should show help")
+	}
+
+	// Second ? (treated as "any key") dismisses it.
+	updated2, _ := m2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	m3 := updated2.(Model)
+	if m3.helpVisible {
+		t.Error("second ? should dismiss help overlay")
+	}
+}
+
+func TestView_Help_ContainsKeyBindings(t *testing.T) {
+	m := newTestModel()
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m2 := updated.(Model)
+	m2.helpVisible = true
+
+	view := m2.View()
+	for _, want := range []string{"Keyboard Shortcuts", "GLOBAL", "LOOP CONTROL", "SPECS PANEL", "MAIN PANEL"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("help view should contain %q", want)
+		}
+	}
+}
+
 func TestUpdate_Key_Build_NoopWhenRunning(t *testing.T) {
 	ctrl := &mockLoopController{running: true}
 	ch := make(chan loop.LogEntry, 1)
