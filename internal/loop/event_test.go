@@ -205,6 +205,30 @@ func TestEmitPreservesExistingTimestamp(t *testing.T) {
 	}
 }
 
+func TestEmitCallsNotificationHook(t *testing.T) {
+	var received []LogEntry
+	lp := &Loop{
+		Config: &config.Config{},
+		Log:    &bytes.Buffer{},
+		NotificationHook: func(e LogEntry) {
+			received = append(received, e)
+		},
+	}
+
+	lp.emit(LogEntry{Kind: LogInfo, Message: "hello"})
+	lp.emit(LogEntry{Kind: LogError, Message: "oops"})
+
+	if len(received) != 2 {
+		t.Fatalf("expected 2 hook calls, got %d", len(received))
+	}
+	if received[0].Kind != LogInfo || received[0].Message != "hello" {
+		t.Errorf("unexpected first entry: %+v", received[0])
+	}
+	if received[1].Kind != LogError || received[1].Message != "oops" {
+		t.Errorf("unexpected second entry: %+v", received[1])
+	}
+}
+
 func TestEmitBranchAndIterationInEvents(t *testing.T) {
 	ch := make(chan LogEntry, 16)
 	agent := &mockAgent{
