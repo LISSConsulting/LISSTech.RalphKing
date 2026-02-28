@@ -3,17 +3,21 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui"
 )
 
 func TestNewStateTracker(t *testing.T) {
@@ -668,6 +672,29 @@ func TestLoopController_StartLoop_ForwardGoroutine(t *testing.T) {
 
 	ctrl.StartLoop("plan")
 	waitForIdle(t, ctrl)
+}
+
+// --- Tests for finishTUI ---
+
+// TestFinishTUI_Success verifies that finishTUI returns nil when the TUI exits
+// cleanly. Using tea.WithoutRenderer() + a pre-closed events channel + "q"
+// input lets the program start, transition to idle (loopDoneMsg from closed
+// channel), receive the quit key, and exit — all without a real TTY.
+func TestFinishTUI_Success(t *testing.T) {
+	dir := t.TempDir()
+	events := make(chan loop.LogEntry)
+	close(events) // simulate: loop finished before TUI starts
+
+	model := tui.New(events, nil, "", "", dir, nil, nil, nil)
+	program := tea.NewProgram(model,
+		tea.WithInput(strings.NewReader("q")),
+		tea.WithOutput(io.Discard),
+		tea.WithoutRenderer(),
+	)
+
+	if err := finishTUI(program); err != nil {
+		t.Fatalf("finishTUI: unexpected error: %v", err)
+	}
 }
 
 // initGitRepo creates a minimal git repo in dir for tests that need git operations.
