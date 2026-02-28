@@ -271,3 +271,10 @@ func (r *Regent) saveState() {
 		r.emit(fmt.Sprintf("Failed to save state: %v", err))
 	}
 }
+
+// FlushState persists the current in-memory state to disk. Callers should
+// invoke this after all UpdateState calls are complete to ensure the final
+// persisted state reflects all accumulated updates.
+func (r *Regent) FlushState() {
+	r.saveState()
+}

@@ -41,6 +41,11 @@ func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRu
 	err := rgt.Supervise(ctx, run)
 	close(events)
 	<-drainDone
+	// Flush persists any UpdateState changes made by the drain goroutine that
+	// may have raced with Supervise's own saveState call. After drainDone, all
+	// UpdateState calls are complete and a single flush produces the correct
+	// final state on disk.
+	rgt.FlushState()
 	return err
 }
 
