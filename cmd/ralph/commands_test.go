@@ -472,3 +472,24 @@ func TestRunCmdRunE_NoConfig(t *testing.T) {
 		t.Errorf("error should mention ralph.toml, got: %v", err)
 	}
 }
+
+// TestRootCmd_NoSubcommand_CallsDashboard exercises the rootCmd RunE body
+// (return executeDashboard()) by executing the root command with no subcommand.
+// Without ralph.toml present, executeDashboard fails early at config.Load,
+// making this test safe to run in any environment (no TTY required).
+func TestRootCmd_NoSubcommand_CallsDashboard(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	root := rootCmd()
+	root.SetArgs([]string{})
+	root.SilenceErrors = true
+	root.SilenceUsage = true
+
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("expected error when ralph.toml not found")
+	}
+	if !strings.Contains(err.Error(), "ralph.toml") {
+		t.Errorf("error should mention ralph.toml, got: %v", err)
+	}
+}
