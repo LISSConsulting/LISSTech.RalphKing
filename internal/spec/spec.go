@@ -48,8 +48,9 @@ type SpecFile struct {
 	Status Status
 }
 
-// List discovers all specs/*.md files and detects their status by cross-referencing
-// IMPLEMENTATION_PLAN.md. The dir argument is the project root directory.
+// List discovers specs/*.md and specs/*/*.md files (one level of subdirectories)
+// and detects their status by cross-referencing CHRONICLE.md.
+// The dir argument is the project root directory.
 func List(dir string) ([]SpecFile, error) {
 	specsDir := filepath.Join(dir, "specs")
 	entries, err := os.ReadDir(specsDir)
@@ -60,22 +61,44 @@ func List(dir string) ([]SpecFile, error) {
 		return nil, fmt.Errorf("read specs directory: %w", err)
 	}
 
-	planContent, _ := os.ReadFile(filepath.Join(dir, "IMPLEMENTATION_PLAN.md"))
+	planContent, _ := os.ReadFile(filepath.Join(dir, "CHRONICLE.md"))
 	plan := string(planContent)
 
 	var specs []SpecFile
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") || strings.HasPrefix(entry.Name(), ".") {
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+
+		if entry.IsDir() {
+			// Walk one level into subdirectory.
+			subEntries, subErr := os.ReadDir(filepath.Join(specsDir, entry.Name()))
+			if subErr != nil {
+				continue
+			}
+			for _, sub := range subEntries {
+				if sub.IsDir() || !strings.HasSuffix(sub.Name(), ".md") || strings.HasPrefix(sub.Name(), ".") {
+					continue
+				}
+				name := strings.TrimSuffix(sub.Name(), ".md")
+				specs = append(specs, SpecFile{
+					Name:   name,
+					Path:   filepath.Join("specs", entry.Name(), sub.Name()),
+					Status: detectStatus(sub.Name(), plan),
+				})
+			}
+			continue
+		}
+
+		if !strings.HasSuffix(entry.Name(), ".md") {
 			continue
 		}
 
 		name := strings.TrimSuffix(entry.Name(), ".md")
-		status := detectStatus(entry.Name(), plan)
-
 		specs = append(specs, SpecFile{
 			Name:   name,
 			Path:   filepath.Join("specs", entry.Name()),
-			Status: status,
+			Status: detectStatus(entry.Name(), plan),
 		})
 	}
 

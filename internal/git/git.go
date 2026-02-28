@@ -69,9 +69,14 @@ func (r *Runner) Push(branch string) error {
 }
 
 // Stash saves uncommitted changes to the stash.
+// Returns nil when there are no changes to stash ("No local changes to save").
 func (r *Runner) Stash() error {
 	_, err := r.run("stash", "push", "-m", "ralph-pre-pull-stash")
 	if err != nil {
+		// Some git versions exit non-zero when there is nothing to stash.
+		if strings.Contains(err.Error(), "No local changes to save") {
+			return nil
+		}
 		return fmt.Errorf("git stash: %w", err)
 	}
 	return nil

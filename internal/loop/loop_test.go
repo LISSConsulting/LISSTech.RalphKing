@@ -36,6 +36,7 @@ func (m *mockAgent) Run(_ context.Context, _ string, _ claude.RunOptions) (<-cha
 // mockGit is a test double for GitOps.
 type mockGit struct {
 	branch         string
+	branchErr      error // error returned by CurrentBranch
 	dirty          bool
 	diffFromRemote bool
 	pullErr        error
@@ -53,7 +54,7 @@ type mockGit struct {
 	stashPopCalls int
 }
 
-func (m *mockGit) CurrentBranch() (string, error)        { return m.branch, nil }
+func (m *mockGit) CurrentBranch() (string, error)        { return m.branch, m.branchErr }
 func (m *mockGit) HasUncommittedChanges() (bool, error)  { return m.dirty, m.dirtyErr }
 func (m *mockGit) Pull(_ string) error                   { m.pullCalls++; return m.pullErr }
 func (m *mockGit) Push(_ string) error                   { m.pushCalls++; return m.pushErr }
@@ -185,6 +186,22 @@ func TestRun(t *testing.T) {
 			t.Errorf("error should contain agent message, got: %v", err)
 		}
 	})
+}
+
+func TestRunCurrentBranchError(t *testing.T) {
+	agent := &mockAgent{}
+	git := &mockGit{branchErr: errors.New("not a git repository")}
+	cfg := defaultTestConfig()
+
+	lp, _ := setupTestLoop(t, agent, git, cfg)
+	err := lp.Run(context.Background(), ModePlan, 0)
+
+	if err == nil {
+		t.Fatal("expected error when CurrentBranch fails")
+	}
+	if !strings.Contains(err.Error(), "not a git repository") {
+		t.Errorf("error should mention cause, got: %v", err)
+	}
 }
 
 func TestIteration(t *testing.T) {
@@ -394,6 +411,87 @@ func TestLogOutput(t *testing.T) {
 			t.Error("log should contain error message")
 		}
 	})
+
+	t.Run("logs text events as reasoning", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{
+				claude.TextEvent("I'll start by reading the config file."),
+				claude.ResultEvent(0.10, 1.0, "success"),
+			},
+		}
+		git := &mockGit{branch: "main", lastCommit: "abc test"}
+		cfg := defaultTestConfig()
+		cfg.Plan.MaxIterations = 1
+
+		lp, buf := setupTestLoop(t, agent, git, cfg)
+		err := lp.Run(context.Background(), ModePlan, 0)
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		output := buf.String()
+		if !strings.Contains(output, "I'll start by reading the config file.") {
+			t.Error("log should contain text event message")
+		}
+	})
+
+	t.Run("empty text events are not logged", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{
+				claude.TextEvent(""),
+				claude.ResultEvent(0.05, 0.5, "success"),
+			},
+		}
+		git := &mockGit{branch: "main", lastCommit: "abc test"}
+		cfg := defaultTestConfig()
+		cfg.Plan.MaxIterations = 1
+
+		lp, buf := setupTestLoop(t, agent, git, cfg)
+		err := lp.Run(context.Background(), ModePlan, 0)
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		_ = buf // no assertions needed; just verify no panic
+	})
+}
+
+func TestTextEventInEventChannel(t *testing.T) {
+	ch := make(chan LogEntry, 16)
+	agent := &mockAgent{
+		events: []claude.Event{
+			claude.TextEvent("I'll examine the project structure first."),
+			claude.ResultEvent(0.10, 1.0, "success"),
+		},
+	}
+	git := &mockGit{branch: "main", lastCommit: "abc test"}
+	cfg := defaultTestConfig()
+	cfg.Plan.MaxIterations = 1
+
+	lp, _ := setupTestLoop(t, agent, git, cfg)
+	lp.Events = ch
+
+	err := lp.Run(context.Background(), ModePlan, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	close(ch)
+	var textEntry *LogEntry
+	for e := range ch {
+		e := e
+		if e.Kind == LogText {
+			textEntry = &e
+			break
+		}
+	}
+
+	if textEntry == nil {
+		t.Fatal("expected a LogText entry on the Events channel")
+	}
+	if textEntry.Message != "I'll examine the project structure first." {
+		t.Errorf("expected text message, got %q", textEntry.Message)
+	}
 }
 
 func TestSubtypeInLogOutput(t *testing.T) {
@@ -530,9 +628,17 @@ func TestSummarizeInput(t *testing.T) {
 		{"file_path", map[string]any{"file_path": "main.go"}, "main.go"},
 		{"command", map[string]any{"command": "go build"}, "go build"},
 		{"path", map[string]any{"path": "/tmp"}, "/tmp"},
+		{"url", map[string]any{"url": "https://example.com"}, "https://example.com"},
+		{"pattern", map[string]any{"pattern": "*.go"}, "*.go"},
+		{"description", map[string]any{"description": "Run tests"}, "Run tests"},
+		{"prompt", map[string]any{"prompt": "Write a test"}, "Write a test"},
+		{"query", map[string]any{"query": "golang errors"}, "golang errors"},
+		{"notebook_path", map[string]any{"notebook_path": "nb.ipynb"}, "nb.ipynb"},
+		{"task_id", map[string]any{"task_id": "abc123"}, "abc123"},
 		{"empty", map[string]any{"other": "value"}, ""},
 		{"nil", nil, ""},
-		{"prefers file_path", map[string]any{"file_path": "a.go", "command": "ls"}, "a.go"},
+		{"prefers file_path over command", map[string]any{"file_path": "a.go", "command": "ls"}, "a.go"},
+		{"prefers description over prompt", map[string]any{"description": "short", "prompt": "long text"}, "short"},
 	}
 
 	for _, tt := range tests {
@@ -617,6 +723,42 @@ func TestPostIteration(t *testing.T) {
 			t.Errorf("expected push to happen before hook, pushCalls at hook time = %d", pushCountAtHook)
 		}
 	})
+}
+
+func TestInitialCommitInEvent(t *testing.T) {
+	// Verifies that the very first log event includes the current HEAD commit,
+	// so the TUI footer shows it from startup instead of showing "—".
+	agent := &mockAgent{
+		events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
+	}
+	git := &mockGit{branch: "main", lastCommit: "abc123 initial"}
+	cfg := defaultTestConfig()
+	cfg.Plan.MaxIterations = 1
+	cfg.Git.AutoPush = false // no push — commit must come from initial emit
+
+	ch := make(chan LogEntry, 32)
+	lp, _ := setupTestLoop(t, agent, git, cfg)
+	lp.Events = ch
+
+	err := lp.Run(context.Background(), ModePlan, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	close(ch)
+
+	var found bool
+	for e := range ch {
+		if e.Kind == LogInfo && e.Commit != "" {
+			found = true
+			if e.Commit != "abc123 initial" {
+				t.Errorf("expected commit 'abc123 initial', got %q", e.Commit)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("expected initial LogInfo event to have Commit set")
+	}
 }
 
 func TestIterLabel(t *testing.T) {
@@ -846,4 +988,78 @@ func TestEmitNilLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("nil Log should fall back to stdout without error, got: %v", err)
 	}
+}
+
+func TestRunStopAfter(t *testing.T) {
+	t.Run("stops after first iteration when channel is pre-closed", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 2.0, "success")},
+		}
+		git := &mockGit{branch: "main", lastCommit: "abc123 feat"}
+		cfg := defaultTestConfig()
+		cfg.Build.MaxIterations = 5 // would run 5 iterations without stop
+
+		lp, buf := setupTestLoop(t, agent, git, cfg)
+
+		// Close the channel before the loop starts — stop after first iteration.
+		stopCh := make(chan struct{})
+		close(stopCh)
+		lp.StopAfter = stopCh
+
+		err := lp.Run(context.Background(), ModeBuild, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// Should have run exactly one iteration before stopping
+		if agent.calls != 1 {
+			t.Errorf("expected 1 agent call, got %d", agent.calls)
+		}
+		// Log should contain the stop message
+		if !strings.Contains(buf.String(), "Stop requested") {
+			t.Errorf("log should contain stop message, got: %s", buf.String())
+		}
+	})
+
+	t.Run("runs multiple iterations when channel is not closed", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.05, 1.0, "success")},
+		}
+		git := &mockGit{branch: "main"}
+		cfg := defaultTestConfig()
+		cfg.Build.MaxIterations = 3
+
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+
+		// Channel present but never closed — should run all iterations normally.
+		stopCh := make(chan struct{})
+		lp.StopAfter = stopCh
+
+		err := lp.Run(context.Background(), ModeBuild, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if agent.calls != 3 {
+			t.Errorf("expected 3 agent calls, got %d", agent.calls)
+		}
+	})
+
+	t.Run("nil StopAfter runs all iterations", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.05, 1.0, "success")},
+		}
+		git := &mockGit{branch: "main"}
+		cfg := defaultTestConfig()
+		cfg.Build.MaxIterations = 2
+
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+		// lp.StopAfter is nil by default
+
+		err := lp.Run(context.Background(), ModeBuild, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if agent.calls != 2 {
+			t.Errorf("expected 2 agent calls, got %d", agent.calls)
+		}
+	})
 }

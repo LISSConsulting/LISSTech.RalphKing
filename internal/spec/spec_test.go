@@ -133,7 +133,7 @@ func TestList(t *testing.T) {
 			}
 
 			if tt.planContent != "" {
-				if err := os.WriteFile(filepath.Join(dir, "IMPLEMENTATION_PLAN.md"), []byte(tt.planContent), 0o644); err != nil {
+				if err := os.WriteFile(filepath.Join(dir, "CHRONICLE.md"), []byte(tt.planContent), 0o644); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -158,6 +158,135 @@ func TestList(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestList_SubdirLayout(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create specs/001-the-genesis/{ralph-core.md,the-regent.md}
+	subDir := filepath.Join(dir, "specs", "001-the-genesis")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"ralph-core.md", "the-regent.md"} {
+		if err := os.WriteFile(filepath.Join(subDir, f), []byte("# Spec"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Write a plan that marks ralph-core as completed and the-regent as remaining.
+	plan := `# Plan
+## Completed Work
+| Feature | Notes |
+|---------|-------|
+| Config | ralph-core.md |
+
+## Remaining Work
+- Hang detection — the-regent.md
+`
+	if err := os.WriteFile(filepath.Join(dir, "CHRONICLE.md"), []byte(plan), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	specs, err := List(dir)
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(specs) != 2 {
+		t.Fatalf("List() returned %d specs, want 2", len(specs))
+	}
+
+	byName := make(map[string]SpecFile, len(specs))
+	for _, s := range specs {
+		byName[s.Name] = s
+	}
+
+	wantPath := map[string]string{
+		"ralph-core": filepath.Join("specs", "001-the-genesis", "ralph-core.md"),
+		"the-regent": filepath.Join("specs", "001-the-genesis", "the-regent.md"),
+	}
+	wantStatus := map[string]Status{
+		"ralph-core": StatusDone,
+		"the-regent": StatusInProgress,
+	}
+
+	for name, want := range wantStatus {
+		s, ok := byName[name]
+		if !ok {
+			t.Errorf("spec %q not found in results", name)
+			continue
+		}
+		if s.Status != want {
+			t.Errorf("spec %q status = %v, want %v", name, s.Status, want)
+		}
+		if s.Path != wantPath[name] {
+			t.Errorf("spec %q path = %q, want %q", name, s.Path, wantPath[name])
+		}
+	}
+}
+
+func TestList_SubdirHiddenAndNested(t *testing.T) {
+	dir := t.TempDir()
+	specsDir := filepath.Join(dir, "specs")
+
+	// Flat spec
+	if err := os.MkdirAll(specsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(specsDir, "flat.md"), []byte("# Flat"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Subdirectory spec
+	sub := filepath.Join(specsDir, "v2")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "deep.md"), []byte("# Deep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Nested two levels deep — should be ignored.
+	nested := filepath.Join(sub, "further")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nested, "ignored.md"), []byte("# Ignored"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Hidden file inside subdirectory — should be ignored.
+	if err := os.WriteFile(filepath.Join(sub, ".hidden.md"), []byte("# Hidden"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	specs, err := List(dir)
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(specs) != 2 {
+		t.Fatalf("List() returned %d specs, want 2 (flat + one subdir)", len(specs))
+	}
+
+	byName := make(map[string]SpecFile, len(specs))
+	for _, s := range specs {
+		byName[s.Name] = s
+	}
+
+	if _, ok := byName["flat"]; !ok {
+		t.Error("flat spec not found")
+	}
+	if s, ok := byName["deep"]; !ok {
+		t.Error("deep spec not found")
+	} else if s.Path != filepath.Join("specs", "v2", "deep.md") {
+		t.Errorf("deep spec path = %q, want %q", s.Path, filepath.Join("specs", "v2", "deep.md"))
+	}
+	if _, ok := byName["ignored"]; ok {
+		t.Error("two-levels-deep spec should not be found")
+	}
+	if _, ok := byName[".hidden"]; ok {
+		t.Error("hidden spec should not be found")
 	}
 }
 
@@ -219,6 +348,23 @@ func TestDetectStatus(t *testing.T) {
 				t.Errorf("detectStatus(%q) = %v, want %v", tt.filename, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNew_SpecsDirIsFile(t *testing.T) {
+	dir := t.TempDir()
+	// Create a regular file where specs/ would be — MkdirAll returns ENOTDIR
+	specsPath := filepath.Join(dir, "specs")
+	if err := os.WriteFile(specsPath, []byte("not a dir"), 0644); err != nil {
+		t.Fatalf("setup WriteFile: %v", err)
+	}
+
+	_, err := New(dir, "my-feature")
+	if err == nil {
+		t.Fatal("expected error when specs/ is a regular file")
+	}
+	if !strings.Contains(err.Error(), "create specs directory") {
+		t.Errorf("error should mention 'create specs directory', got: %v", err)
 	}
 }
 

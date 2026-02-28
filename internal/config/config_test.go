@@ -18,9 +18,9 @@ func TestDefaults(t *testing.T) {
 		{"claude.model", cfg.Claude.Model, "sonnet"},
 		{"claude.max_turns", cfg.Claude.MaxTurns, 0},
 		{"claude.danger_skip_permissions", cfg.Claude.DangerSkipPermissions, true},
-		{"plan.prompt_file", cfg.Plan.PromptFile, "PROMPT_plan.md"},
+		{"plan.prompt_file", cfg.Plan.PromptFile, "PLAN.md"},
 		{"plan.max_iterations", cfg.Plan.MaxIterations, 3},
-		{"build.prompt_file", cfg.Build.PromptFile, "PROMPT_build.md"},
+		{"build.prompt_file", cfg.Build.PromptFile, "BUILD.md"},
 		{"build.max_iterations", cfg.Build.MaxIterations, 0},
 		{"git.auto_pull_rebase", cfg.Git.AutoPullRebase, true},
 		{"git.auto_push", cfg.Git.AutoPush, true},
@@ -31,6 +31,10 @@ func TestDefaults(t *testing.T) {
 		{"regent.rollback_on_test_failure", cfg.Regent.RollbackOnTestFailure, false},
 		{"regent.test_command", cfg.Regent.TestCommand, ""},
 		{"tui.accent_color", cfg.TUI.AccentColor, DefaultAccentColor},
+		{"notifications.url", cfg.Notifications.URL, ""},
+		{"notifications.on_complete", cfg.Notifications.OnComplete, true},
+		{"notifications.on_error", cfg.Notifications.OnError, true},
+		{"notifications.on_stop", cfg.Notifications.OnStop, true},
 	}
 
 	for _, tt := range tests {
@@ -253,6 +257,16 @@ func TestInitFile(t *testing.T) {
 		_, err := InitFile(dir)
 		if err == nil {
 			t.Error("expected error when ralph.toml already exists")
+		}
+	})
+
+	t.Run("write error returns error", func(t *testing.T) {
+		// Pass a non-existent subdirectory — os.WriteFile fails because the
+		// parent directory does not exist.
+		dir := filepath.Join(t.TempDir(), "nonexistent")
+		_, err := InitFile(dir)
+		if err == nil {
+			t.Error("expected error when directory does not exist")
 		}
 	})
 }
@@ -497,6 +511,28 @@ func TestValidate(t *testing.T) {
 		{
 			name:   "empty tui.accent_color uses default (valid)",
 			modify: func(c *Config) { c.TUI.AccentColor = "" },
+		},
+		{
+			name:   "empty notifications.url is valid (disabled)",
+			modify: func(c *Config) { c.Notifications.URL = "" },
+		},
+		{
+			name:   "valid https notifications.url",
+			modify: func(c *Config) { c.Notifications.URL = "https://ntfy.sh/my-topic" },
+		},
+		{
+			name:   "valid http notifications.url",
+			modify: func(c *Config) { c.Notifications.URL = "http://localhost:8080/webhook" },
+		},
+		{
+			name:    "invalid notifications.url not a url",
+			modify:  func(c *Config) { c.Notifications.URL = "not-a-url" },
+			wantErr: "notifications.url must be a valid http or https URL",
+		},
+		{
+			name:    "invalid notifications.url ftp scheme",
+			modify:  func(c *Config) { c.Notifications.URL = "ftp://example.com/webhook" },
+			wantErr: "notifications.url must be a valid http or https URL",
 		},
 	}
 

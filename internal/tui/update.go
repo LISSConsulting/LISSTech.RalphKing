@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
@@ -12,6 +14,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
+	case tea.MouseMsg:
+		return m.handleMouse(msg), nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -19,6 +24,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case logEntryMsg:
 		return m.handleLogEntry(msg)
+
+	case tickMsg:
+		m.now = time.Time(msg)
+		return m, tickCmd()
 
 	case loopDoneMsg:
 		m.done = true
@@ -37,6 +46,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
+	case "s":
+		if m.requestStop != nil && !m.stopRequested {
+			m.stopRequested = true
+			m.requestStop()
+		}
 	case "up", "k":
 		if m.scrollOffset < m.maxScrollOffset() {
 			m.scrollOffset++
@@ -63,6 +77,23 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleMouse(msg tea.MouseMsg) Model {
+	switch msg.Button {
+	case tea.MouseButtonWheelUp:
+		if m.scrollOffset < m.maxScrollOffset() {
+			m.scrollOffset++
+		}
+	case tea.MouseButtonWheelDown:
+		if m.scrollOffset > 0 {
+			m.scrollOffset--
+		}
+	}
+	if m.scrollOffset == 0 {
+		m.newBelow = 0
+	}
+	return m
+}
+
 func (m Model) handleLogEntry(msg logEntryMsg) (tea.Model, tea.Cmd) {
 	entry := (loop.LogEntry)(msg)
 
@@ -81,6 +112,9 @@ func (m Model) handleLogEntry(msg logEntryMsg) (tea.Model, tea.Cmd) {
 	}
 	if entry.TotalCost > 0 {
 		m.totalCost = entry.TotalCost
+	}
+	if entry.Kind == loop.LogIterComplete && entry.Duration > 0 {
+		m.lastDuration = entry.Duration
 	}
 	if entry.Commit != "" {
 		m.lastCommit = entry.Commit

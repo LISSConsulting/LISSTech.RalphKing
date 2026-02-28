@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -40,6 +41,11 @@ func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRu
 	err := rgt.Supervise(ctx, run)
 	close(events)
 	<-drainDone
+	// Flush persists any UpdateState changes made by the drain goroutine that
+	// may have raced with Supervise's own saveState call. After drainDone, all
+	// UpdateState calls are complete and a single flush produces the correct
+	// final state on disk.
+	rgt.FlushState()
 	return err
 }
 
@@ -50,12 +56,18 @@ func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gi
 	loopEvents := make(chan loop.LogEntry, 128)
 	tuiEvents := make(chan loop.LogEntry, 128)
 
+	// Graceful stop: TUI 's' key closes stopCh; loop checks it after each iteration.
+	stopCh := make(chan struct{})
+	var stopOnce sync.Once
+	requestStop := func() { stopOnce.Do(func() { close(stopCh) }) }
+	lp.StopAfter = stopCh
+
 	lp.Events = loopEvents
 	rgt := regent.New(cfg.Regent, dir, gitRunner, tuiEvents)
 	lp.PostIteration = rgt.RunPostIterationTests
 
-	model := tui.New(tuiEvents, cfg.TUI.AccentColor)
-	program := tea.NewProgram(model, tea.WithAltScreen())
+	model := tui.New(tuiEvents, cfg.TUI.AccentColor, cfg.Project.Name, dir, requestStop)
+	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	// Forward loop events → regent state update → TUI
 	forwardDone := make(chan struct{})
@@ -144,17 +156,23 @@ func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRun
 
 // runWithTUIAndState runs the loop without Regent supervision with TUI display,
 // forwarding events through a state tracker so `ralph status` works.
-func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, accentColor string, run regent.RunFunc) error {
+func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, accentColor string, projectName string, run regent.RunFunc) error {
 	loopEvents := make(chan loop.LogEntry, 128)
 	tuiEvents := make(chan loop.LogEntry, 128)
+
+	// Graceful stop: TUI 's' key closes stopCh; loop checks it after each iteration.
+	stopCh := make(chan struct{})
+	var stopOnce sync.Once
+	requestStop := func() { stopOnce.Do(func() { close(stopCh) }) }
+	lp.StopAfter = stopCh
 
 	lp.Events = loopEvents
 
 	st := newStateTracker(dir, mode, gitRunner)
 	st.save()
 
-	model := tui.New(tuiEvents, accentColor)
-	program := tea.NewProgram(model, tea.WithAltScreen())
+	model := tui.New(tuiEvents, accentColor, projectName, dir, requestStop)
+	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	// Forward loop events → state tracking → TUI
 	forwardDone := make(chan struct{})

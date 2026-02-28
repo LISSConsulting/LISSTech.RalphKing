@@ -4,7 +4,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -16,7 +18,7 @@ func TestFormatLogLine(t *testing.T) {
 	ts := time.Date(2026, 2, 23, 14, 23, 1, 0, time.UTC)
 
 	tests := []struct {
-		name string
+		name  string
 		entry loop.LogEntry
 		want  string
 	}{
@@ -194,7 +196,7 @@ type fakeFileInfo struct {
 	size int64
 }
 
-func (f fakeFileInfo) Name() string       { return "IMPLEMENTATION_PLAN.md" }
+func (f fakeFileInfo) Name() string       { return "CHRONICLE.md" }
 func (f fakeFileInfo) Size() int64        { return f.size }
 func (f fakeFileInfo) Mode() fs.FileMode  { return 0644 }
 func (f fakeFileInfo) ModTime() time.Time { return time.Time{} }
@@ -405,11 +407,11 @@ func TestFormatStatus(t *testing.T) {
 // git ops turned off so tests don't attempt network operations.
 func testConfigNoRegent() string {
 	return `[plan]
-prompt_file = "PROMPT_plan.md"
+prompt_file = "PLAN.md"
 max_iterations = 1
 
 [build]
-prompt_file = "PROMPT_build.md"
+prompt_file = "BUILD.md"
 max_iterations = 1
 
 [git]
@@ -425,11 +427,11 @@ enabled = false
 // max_retries=0 so it fails fast after one error without backoff.
 func testConfigWithRegent() string {
 	return `[plan]
-prompt_file = "PROMPT_plan.md"
+prompt_file = "PLAN.md"
 max_iterations = 1
 
 [build]
-prompt_file = "PROMPT_build.md"
+prompt_file = "BUILD.md"
 max_iterations = 1
 
 [git]
@@ -490,14 +492,14 @@ func TestExecuteLoop_RegentDisabled_PromptMissing(t *testing.T) {
 	initGitRepo(t, dir)
 	t.Chdir(dir)
 	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
-	// PROMPT_plan.md intentionally absent — loop.Run fails reading it.
+	// PLAN.md intentionally absent — loop.Run fails reading it.
 
 	err := executeLoop(loop.ModePlan, 1, true)
 	if err == nil {
 		t.Fatal("expected error when prompt file missing")
 	}
-	if !strings.Contains(err.Error(), "PROMPT_plan.md") {
-		t.Errorf("error should mention PROMPT_plan.md, got: %v", err)
+	if !strings.Contains(err.Error(), "PLAN.md") {
+		t.Errorf("error should mention PLAN.md, got: %v", err)
 	}
 }
 
@@ -506,12 +508,70 @@ func TestExecuteLoop_RegentEnabled_PromptMissing(t *testing.T) {
 	initGitRepo(t, dir)
 	t.Chdir(dir)
 	writeExecTestFile(t, dir, "ralph.toml", testConfigWithRegent())
-	// PROMPT_plan.md intentionally absent.
-	// Regent gives up after 0 retries and returns max-retries error.
+	// PLAN.md intentionally absent.
+	// Pre-flight check returns an error before Regent is initialised.
 
 	err := executeLoop(loop.ModePlan, 1, true)
 	if err == nil {
-		t.Fatal("expected error — Regent should give up (max_retries=0)")
+		t.Fatal("expected error when prompt file missing")
+	}
+	if !strings.Contains(err.Error(), "PLAN.md") {
+		t.Errorf("error should mention PLAN.md, got: %v", err)
+	}
+}
+
+func TestExecuteLoop_BuildMode_PromptMissing(t *testing.T) {
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+	t.Chdir(dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+	// BUILD.md intentionally absent — covers default case in mode switch.
+
+	err := executeLoop(loop.ModeBuild, 1, true)
+	if err == nil {
+		t.Fatal("expected error when build prompt file missing")
+	}
+	if !strings.Contains(err.Error(), "BUILD.md") {
+		t.Errorf("error should mention BUILD.md, got: %v", err)
+	}
+}
+
+func TestExecuteLoop_RegentDisabled_PromptExists_GitFails(t *testing.T) {
+	// Prompt file present (pre-flight passes) but no git repo, so loop fails at
+	// CurrentBranch(). Covers the noTUI/non-regent branch in executeLoop.
+	dir := t.TempDir()
+	// Deliberately no initGitRepo — git ops will fail.
+	t.Chdir(dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
+
+	err := executeLoop(loop.ModePlan, 1, true)
+	// Loop fails at git CurrentBranch — must be an error but not a prompt-file error.
+	if err == nil {
+		t.Fatal("expected error from git operations")
+	}
+	if strings.Contains(err.Error(), "prompt file") {
+		t.Errorf("should not be a prompt-file error, got: %v", err)
+	}
+}
+
+func TestExecuteLoop_RegentEnabled_PromptExists_GitFails(t *testing.T) {
+	// Prompt file present (pre-flight passes) but no git repo, so loop fails at
+	// CurrentBranch(). Regent gives up after 0 retries.
+	// Covers the noTUI/regent branch in executeLoop.
+	dir := t.TempDir()
+	// Deliberately no initGitRepo — git ops will fail.
+	t.Chdir(dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigWithRegent())
+	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
+
+	err := executeLoop(loop.ModePlan, 1, true)
+	// Regent gives up after 0 retries — must be an error.
+	if err == nil {
+		t.Fatal("expected error — Regent should give up after 0 retries")
+	}
+	if strings.Contains(err.Error(), "prompt file") {
+		t.Errorf("should not be a prompt-file error, got: %v", err)
 	}
 }
 
@@ -534,15 +594,15 @@ func TestExecuteSmartRun_NeedsPlan_PromptMissing(t *testing.T) {
 	initGitRepo(t, dir)
 	t.Chdir(dir)
 	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
-	// No IMPLEMENTATION_PLAN.md → needsPlanPhase returns true.
-	// No PROMPT_plan.md → plan phase fails reading it.
+	// No CHRONICLE.md → needsPlanPhase returns true.
+	// No PLAN.md → plan phase fails reading it.
 
 	err := executeSmartRun(1, true)
 	if err == nil {
 		t.Fatal("expected error when plan prompt file missing")
 	}
-	if !strings.Contains(err.Error(), "PROMPT_plan.md") {
-		t.Errorf("error should mention PROMPT_plan.md, got: %v", err)
+	if !strings.Contains(err.Error(), "PLAN.md") {
+		t.Errorf("error should mention PLAN.md, got: %v", err)
 	}
 }
 
@@ -551,16 +611,16 @@ func TestExecuteSmartRun_SkipPlan_BuildPromptMissing(t *testing.T) {
 	initGitRepo(t, dir)
 	t.Chdir(dir)
 	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
-	// Non-empty IMPLEMENTATION_PLAN.md → needsPlanPhase returns false.
-	writeExecTestFile(t, dir, "IMPLEMENTATION_PLAN.md", "# Plan\n\nSome content.\n")
-	// PROMPT_build.md absent → build loop fails reading it.
+	// Non-empty CHRONICLE.md → needsPlanPhase returns false.
+	writeExecTestFile(t, dir, "CHRONICLE.md", "# Plan\n\nSome content.\n")
+	// BUILD.md absent → build loop fails reading it.
 
 	err := executeSmartRun(1, true)
 	if err == nil {
 		t.Fatal("expected error when build prompt file missing")
 	}
-	if !strings.Contains(err.Error(), "PROMPT_build.md") {
-		t.Errorf("error should mention PROMPT_build.md, got: %v", err)
+	if !strings.Contains(err.Error(), "BUILD.md") {
+		t.Errorf("error should mention BUILD.md, got: %v", err)
 	}
 }
 
@@ -584,13 +644,47 @@ func TestExecuteSmartRun_RegentEnabled_PromptMissing(t *testing.T) {
 	initGitRepo(t, dir)
 	t.Chdir(dir)
 	writeExecTestFile(t, dir, "ralph.toml", testConfigWithRegent())
-	// No IMPLEMENTATION_PLAN.md → needsPlanPhase returns true.
-	// No PROMPT_plan.md → plan phase fails reading it.
+	// No CHRONICLE.md → needsPlanPhase returns true.
+	// No PLAN.md → plan phase fails reading it.
 	// Regent gives up after 0 retries and returns max-retries error.
 
 	err := executeSmartRun(1, true)
 	if err == nil {
 		t.Fatal("expected error — Regent should give up (max_retries=0)")
+	}
+}
+
+func TestExecuteLoop_NotificationsURLSet(t *testing.T) {
+	// With notifications.url set the notify wiring runs; loop still fails at
+	// git CurrentBranch() because there is no git repo in the temp dir.
+	dir := t.TempDir()
+	t.Chdir(dir)
+	cfg := testConfigNoRegent() + "\n[notifications]\nurl = \"http://127.0.0.1:0/webhook\"\n"
+	writeExecTestFile(t, dir, "ralph.toml", cfg)
+	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
+
+	err := executeLoop(loop.ModePlan, 1, true)
+	if err == nil {
+		t.Fatal("expected error from git operations")
+	}
+	if strings.Contains(err.Error(), "prompt file") {
+		t.Errorf("should not be a prompt-file error, got: %v", err)
+	}
+}
+
+func TestExecuteSmartRun_NotificationsURLSet(t *testing.T) {
+	// With notifications.url set the notify wiring runs; smartRun still fails
+	// at git operations because there is no git repo in the temp dir.
+	dir := t.TempDir()
+	t.Chdir(dir)
+	cfg := testConfigNoRegent() + "\n[notifications]\nurl = \"http://127.0.0.1:0/webhook\"\n"
+	writeExecTestFile(t, dir, "ralph.toml", cfg)
+	writeExecTestFile(t, dir, "CHRONICLE.md", "# Done\n\nSome content.\n")
+	writeExecTestFile(t, dir, "BUILD.md", "# Build\n")
+
+	err := executeSmartRun(1, true)
+	if err == nil {
+		t.Fatal("expected error from git operations")
 	}
 }
 
@@ -603,5 +697,35 @@ func TestShowStatus_CorruptedStateFile(t *testing.T) {
 	err := showStatus()
 	if err == nil {
 		t.Fatal("expected error for corrupted state file")
+	}
+}
+
+// TestSignalContext_SIGTERMCancelsContext covers the cancel() call inside the
+// `case <-sigs:` branch of signalContext. Sending SIGTERM to ourselves is safe
+// because signal.Notify suppresses the default termination behavior while the
+// channel is registered; the signal is delivered to the channel instead.
+func TestSignalContext_SIGTERMCancelsContext(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// On Windows, syscall.SIGTERM maps to TerminateProcess, which immediately
+		// kills the process. Skipping rather than risking the test binary crash.
+		t.Skip("SIGTERM cannot be sent to self safely on Windows")
+	}
+
+	ctx, cancel := signalContext()
+	defer cancel()
+
+	proc, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatalf("FindProcess: %v", err)
+	}
+	if err := proc.Signal(syscall.SIGTERM); err != nil {
+		t.Fatalf("Signal(SIGTERM): %v", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		// Context was cancelled by the signal handler goroutine — test passes.
+	case <-time.After(2 * time.Second):
+		t.Fatal("context not cancelled after sending SIGTERM to self")
 	}
 }

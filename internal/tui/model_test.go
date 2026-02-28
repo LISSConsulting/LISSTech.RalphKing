@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,7 +15,7 @@ import (
 
 func TestNew(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 
 	if m.width != 80 {
 		t.Errorf("expected default width 80, got %d", m.width)
@@ -28,7 +30,7 @@ func TestNew(t *testing.T) {
 
 func TestInit(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	cmd := m.Init()
 
 	if cmd == nil {
@@ -38,7 +40,7 @@ func TestInit(t *testing.T) {
 
 func TestUpdateWindowSize(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 
 	updated, cmd := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	model := updated.(Model)
@@ -56,7 +58,7 @@ func TestUpdateWindowSize(t *testing.T) {
 
 func TestUpdateLogEntry(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 
 	entry := logEntryMsg(loop.LogEntry{
 		Kind:      loop.LogIterStart,
@@ -93,7 +95,7 @@ func TestUpdateLogEntry(t *testing.T) {
 
 func TestUpdateCostTracking(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 
 	// Send running total
 	entry := logEntryMsg(loop.LogEntry{
@@ -111,9 +113,48 @@ func TestUpdateCostTracking(t *testing.T) {
 	}
 }
 
+func TestUpdateDurationTracking(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+
+	// Non-complete entries should not update lastDuration
+	nonComplete := logEntryMsg(loop.LogEntry{
+		Kind:      loop.LogInfo,
+		Timestamp: time.Now(),
+		Duration:  99.9,
+	})
+	updated, _ := m.Update(nonComplete)
+	m = updated.(Model)
+	if m.lastDuration != 0 {
+		t.Errorf("non-complete entry should not update lastDuration, got %.1f", m.lastDuration)
+	}
+
+	// LogIterComplete with duration > 0 should update lastDuration
+	complete := logEntryMsg(loop.LogEntry{
+		Kind:      loop.LogIterComplete,
+		Timestamp: time.Now(),
+		Iteration: 1,
+		CostUSD:   0.10,
+		Duration:  7.5,
+	})
+	updated, _ = m.Update(complete)
+	m = updated.(Model)
+	if m.lastDuration != 7.5 {
+		t.Errorf("expected lastDuration 7.5, got %.1f", m.lastDuration)
+	}
+
+	// Header should contain "last: 7.5s"; use wide terminal to avoid wrap.
+	updated, _ = m.Update(tea.WindowSizeMsg{Width: 200, Height: 24})
+	m = updated.(Model)
+	view := m.View()
+	if !strings.Contains(view, "last: 7.5s") {
+		t.Errorf("header should contain 'last: 7.5s', view: %s", view)
+	}
+}
+
 func TestUpdateLoopDone(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 
 	updated, _ := m.Update(loopDoneMsg{})
 	model := updated.(Model)
@@ -125,7 +166,7 @@ func TestUpdateLoopDone(t *testing.T) {
 
 func TestUpdateLoopErr(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 
 	testErr := &testError{msg: "something failed"}
 	updated, _ := m.Update(loopErrMsg{err: testErr})
@@ -154,7 +195,7 @@ func TestUpdateKeyQuit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ch := make(chan loop.LogEntry, 1)
-			m := New(ch, "")
+			m := New(ch, "", "", "", nil)
 
 			_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)})
 			if tt.key == "q" {
@@ -168,7 +209,7 @@ func TestUpdateKeyQuit(t *testing.T) {
 
 func TestUpdateCommitTracking(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 
 	entry := logEntryMsg(loop.LogEntry{
 		Kind:      loop.LogGitPush,
@@ -194,7 +235,7 @@ func (e *testError) Error() string { return e.msg }
 
 func TestViewRenders(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 
 	view := m.View()
 	if view == "" {
@@ -206,11 +247,15 @@ func TestViewRenders(t *testing.T) {
 	if !strings.Contains(view, "q to quit") {
 		t.Error("View should contain quit hint in footer")
 	}
+	// "last:" should not appear before any iteration completes
+	if strings.Contains(view, "last:") {
+		t.Error("header should not show 'last:' before any iteration completes")
+	}
 }
 
 func TestViewWithEntries(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 
 	// Add entries
 	entries := []loop.LogEntry{
@@ -263,7 +308,7 @@ func TestToolIcon(t *testing.T) {
 
 func TestRenderLineTypes(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	now := time.Date(2026, 2, 23, 14, 30, 0, 0, time.UTC)
 
 	tests := []struct {
@@ -330,7 +375,7 @@ func TestRenderLineTypes(t *testing.T) {
 
 func TestRenderHeaderContent(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	m.mode = "build"
 	m.branch = "feat/tui"
 	m.iteration = 3
@@ -349,7 +394,7 @@ func TestRenderHeaderContent(t *testing.T) {
 
 func TestRenderHeaderUnlimitedIterations(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	m.maxIter = 0
 
 	header := m.renderHeader()
@@ -360,7 +405,7 @@ func TestRenderHeaderUnlimitedIterations(t *testing.T) {
 
 func TestRenderFooterContent(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	m.lastCommit = "abc1234 feat(tui): colors"
 
 	footer := m.renderFooter()
@@ -375,7 +420,7 @@ func TestRenderFooterContent(t *testing.T) {
 
 func TestLogScrolling(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	m.height = 5 // header(1) + log(3) + footer(1)
 
 	// Add more lines than the log can display
@@ -400,7 +445,7 @@ func TestLogScrolling(t *testing.T) {
 
 func TestScrollUpDown(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	m.height = 5 // header(1) + log(3) + footer(1)
 
 	// Add 10 lines (more than log can display)
@@ -443,7 +488,7 @@ func TestScrollUpDown(t *testing.T) {
 
 func TestScrollUpBound(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	m.height = 5 // log height = 3
 
 	// Add 10 lines; max scroll offset = 10 - 3 = 7
@@ -466,7 +511,7 @@ func TestScrollUpBound(t *testing.T) {
 
 func TestScrollPageUpDown(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	m.height = 5 // log height = 3
 
 	for i := 0; i < 20; i++ {
@@ -499,7 +544,7 @@ func TestScrollPageUpDown(t *testing.T) {
 
 func TestScrollHomeEnd(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	m.height = 5 // log height = 3
 
 	for i := 0; i < 10; i++ {
@@ -525,7 +570,7 @@ func TestScrollHomeEnd(t *testing.T) {
 
 func TestScrollNoEffectWhenFewLines(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	m.height = 10 // log height = 8, but only 3 lines
 
 	for i := 0; i < 3; i++ {
@@ -544,7 +589,7 @@ func TestScrollNoEffectWhenFewLines(t *testing.T) {
 
 func TestScrollRenderShowsCorrectLines(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	m.height = 4 // log height = 2
 
 	for i := 0; i < 5; i++ {
@@ -576,7 +621,7 @@ func TestScrollRenderShowsCorrectLines(t *testing.T) {
 
 func TestScrollFooterIndicator(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 
 	// At bottom: no scroll indicator
 	footer := m.renderFooter()
@@ -612,7 +657,7 @@ func TestNewBelowIndicator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ch := make(chan loop.LogEntry, 1)
-			m := New(ch, "")
+			m := New(ch, "", "", "", nil)
 			m.scrollOffset = tt.scrollOffset
 			m.newBelow = tt.newBelow
 
@@ -639,7 +684,7 @@ func TestNewBelowIndicator(t *testing.T) {
 
 func TestNewBelowIncrements(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	m.height = 5 // log height = 3
 
 	// Add enough lines to allow scrolling
@@ -675,7 +720,7 @@ func TestNewBelowIncrements(t *testing.T) {
 
 func TestNewBelowNoIncrementAtBottom(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 
 	// At bottom (scrollOffset 0): newBelow should not increment
 	entry := logEntryMsg(loop.LogEntry{
@@ -704,7 +749,7 @@ func TestNewBelowResetsOnScrollToBottom(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ch := make(chan loop.LogEntry, 1)
-			m := New(ch, "")
+			m := New(ch, "", "", "", nil)
 			m.height = 5
 
 			for i := 0; i < 10; i++ {
@@ -733,7 +778,7 @@ func TestNewBelowResetsOnScrollToBottom(t *testing.T) {
 
 func TestNewBelowPersistsWhenStillScrolledUp(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	m.height = 5
 
 	for i := 0; i < 10; i++ {
@@ -761,7 +806,7 @@ func TestNewBelowPersistsWhenStillScrolledUp(t *testing.T) {
 
 func TestScrollHelpers(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	m.height = 5 // log height = 3
 
 	t.Run("logHeight", func(t *testing.T) {
@@ -845,7 +890,7 @@ func TestWaitForEventWithEntry(t *testing.T) {
 
 func TestRenderLineAllKinds(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	now := time.Date(2026, 2, 23, 14, 30, 0, 0, time.UTC)
 
 	tests := []struct {
@@ -892,7 +937,7 @@ func TestRenderLineAllKinds(t *testing.T) {
 
 func TestRenderLineLongToolName(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	now := time.Date(2026, 2, 23, 14, 30, 0, 0, time.UTC)
 
 	// Tool name longer than 14 chars should be truncated with ellipsis
@@ -918,9 +963,56 @@ func TestRenderLineLongToolName(t *testing.T) {
 	}
 }
 
+func TestRenderLineLongToolInput(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	now := time.Date(2026, 2, 23, 14, 30, 0, 0, time.UTC)
+
+	// Default width=80, prefix≈30, padding=2 → maxInput=48.
+	// Tool input longer than maxInput should be truncated with ellipsis.
+	longInput := strings.Repeat("a", 80)
+	entry := loop.LogEntry{
+		Kind:      loop.LogToolUse,
+		Timestamp: now,
+		ToolName:  "Read",
+		ToolInput: longInput,
+	}
+	rendered := m.renderLine(logLine{entry: entry})
+
+	// Should contain the truncated input (47 chars + ellipsis).
+	want := strings.Repeat("a", 47) + "…"
+	if !strings.Contains(rendered, want) {
+		t.Errorf("long tool input should be truncated with ellipsis, got: %s", rendered)
+	}
+	// Should NOT contain the full untruncated input.
+	if strings.Contains(rendered, longInput) {
+		t.Errorf("full tool input should not appear in output, got: %s", rendered)
+	}
+}
+
+func TestRenderLineShortToolInputUnchanged(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	now := time.Date(2026, 2, 23, 14, 30, 0, 0, time.UTC)
+
+	// Default width=80, maxInput=48. Input at exactly 48 chars should not be truncated.
+	exactInput := strings.Repeat("b", 48)
+	entry := loop.LogEntry{
+		Kind:      loop.LogToolUse,
+		Timestamp: now,
+		ToolName:  "Read",
+		ToolInput: exactInput,
+	}
+	rendered := m.renderLine(logLine{entry: entry})
+
+	if !strings.Contains(rendered, exactInput) {
+		t.Errorf("48-char tool input should not be truncated at width 80, got: %s", rendered)
+	}
+}
+
 func TestViewTinyHeight(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	m.height = 1 // logHeight would be -1, should clamp to 1
 
 	view := m.View()
@@ -934,7 +1026,7 @@ func TestViewTinyHeight(t *testing.T) {
 
 func TestRenderFooterNarrowWidth(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	m.width = 5 // too narrow; gap clamps to 2
 
 	footer := m.renderFooter()
@@ -945,7 +1037,7 @@ func TestRenderFooterNarrowWidth(t *testing.T) {
 
 func TestRenderLogEmpty(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 
 	// Empty lines → returns newline-padded string
 	log := m.renderLog(3)
@@ -957,7 +1049,7 @@ func TestRenderLogEmpty(t *testing.T) {
 
 func TestUpdateUnknownMsg(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 
 	// Unknown message type → no-op
 	updated, cmd := m.Update("unknown message type")
@@ -973,7 +1065,7 @@ func TestUpdateUnknownMsg(t *testing.T) {
 
 func TestRenderLogDefensiveScrollOffset(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	now := time.Now()
 
 	// Add 5 lines
@@ -994,7 +1086,7 @@ func TestRenderLogDefensiveScrollOffset(t *testing.T) {
 
 func TestRenderIterCompleteWithSubtype(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 	now := time.Date(2026, 2, 23, 14, 30, 0, 0, time.UTC)
 
 	tests := []struct {
@@ -1044,7 +1136,7 @@ func TestRenderIterCompleteWithSubtype(t *testing.T) {
 
 func TestNewDefaultAccentColor(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "")
+	m := New(ch, "", "", "", nil)
 
 	// Should use default indigo accent; verify header renders without panic
 	m.mode = "build"
@@ -1056,7 +1148,7 @@ func TestNewDefaultAccentColor(t *testing.T) {
 
 func TestNewCustomAccentColor(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, "#FF0000")
+	m := New(ch, "#FF0000", "", "", nil)
 
 	// Custom accent should render header and git lines without panic
 	m.mode = "plan"
@@ -1079,5 +1171,571 @@ func TestNewCustomAccentColor(t *testing.T) {
 	}})
 	if !strings.Contains(push, "Pushing main") {
 		t.Errorf("git push line with custom accent should render, got: %s", push)
+	}
+}
+
+func TestRenderHeaderShowsElapsedAndTime(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+
+	// Set deterministic time values
+	start := time.Date(2026, 2, 26, 10, 0, 0, 0, time.UTC)
+	m.startedAt = start
+	m.now = start.Add(2*time.Minute + 35*time.Second)
+
+	// Wide terminal to avoid wrap
+	m.width = 300
+	header := m.renderHeader()
+
+	if !strings.Contains(header, "elapsed: 2m35s") {
+		t.Errorf("header should contain 'elapsed: 2m35s', got: %s", header)
+	}
+	if !strings.Contains(header, "10:02") {
+		t.Errorf("header should contain current time '10:02', got: %s", header)
+	}
+}
+
+func TestRenderHeaderElapsedSeconds(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+
+	start := time.Date(2026, 2, 26, 9, 0, 0, 0, time.UTC)
+	m.startedAt = start
+	m.now = start.Add(45 * time.Second)
+	m.width = 300
+
+	header := m.renderHeader()
+	if !strings.Contains(header, "elapsed: 45s") {
+		t.Errorf("header should contain 'elapsed: 45s', got: %s", header)
+	}
+}
+
+func TestRenderHeaderElapsedHours(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+
+	start := time.Date(2026, 2, 26, 8, 0, 0, 0, time.UTC)
+	m.startedAt = start
+	m.now = start.Add(1*time.Hour + 30*time.Minute)
+	m.width = 300
+
+	header := m.renderHeader()
+	if !strings.Contains(header, "elapsed: 1h30m") {
+		t.Errorf("header should contain 'elapsed: 1h30m', got: %s", header)
+	}
+}
+
+func TestFormatElapsed(t *testing.T) {
+	tests := []struct {
+		d    time.Duration
+		want string
+	}{
+		{0, "0s"},
+		{5 * time.Second, "5s"},
+		{59 * time.Second, "59s"},
+		{time.Minute, "1m0s"},
+		{2*time.Minute + 35*time.Second, "2m35s"},
+		{59*time.Minute + 59*time.Second, "59m59s"},
+		{time.Hour, "1h0m"},
+		{1*time.Hour + 30*time.Minute, "1h30m"},
+		{2*time.Hour + 5*time.Minute, "2h5m"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			got := formatElapsed(tt.d)
+			if got != tt.want {
+				t.Errorf("formatElapsed(%v) = %q, want %q", tt.d, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTickMsgUpdatesNow(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+
+	fixedTime := time.Date(2026, 2, 26, 15, 30, 0, 0, time.UTC)
+	updated, cmd := m.Update(tickMsg(fixedTime))
+	m = updated.(Model)
+
+	if !m.now.Equal(fixedTime) {
+		t.Errorf("tickMsg should update now to %v, got %v", fixedTime, m.now)
+	}
+	if cmd == nil {
+		t.Error("tickMsg handler should return next tick command")
+	}
+}
+
+func TestRenderHeaderDefaultProjectName(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	m.width = 200
+
+	header := m.renderHeader()
+	if !strings.Contains(header, "RalphKing") {
+		t.Errorf("header should show 'RalphKing' when projectName is empty, got: %s", header)
+	}
+}
+
+func TestRenderHeaderCustomProjectName(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "MyAwesomeProject", "", nil)
+	m.width = 200
+
+	header := m.renderHeader()
+	if !strings.Contains(header, "MyAwesomeProject") {
+		t.Errorf("header should show project name when set, got: %s", header)
+	}
+	if strings.Contains(header, "RalphKing") {
+		t.Errorf("header should not show 'RalphKing' when projectName is set, got: %s", header)
+	}
+}
+
+func TestRenderHeaderShowsWorkDir(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "/home/user/projects/my-app", nil)
+	m.width = 300
+
+	header := m.renderHeader()
+	if !strings.Contains(header, "dir:") {
+		t.Errorf("header should contain 'dir:' when workDir is set, got: %s", header)
+	}
+}
+
+func TestRenderHeaderOmitsWorkDirWhenEmpty(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	m.width = 300
+
+	header := m.renderHeader()
+	if strings.Contains(header, "dir:") {
+		t.Errorf("header should not contain 'dir:' when workDir is empty, got: %s", header)
+	}
+}
+
+func TestAbbreviatePath(t *testing.T) {
+	t.Run("empty path returns empty", func(t *testing.T) {
+		if got := abbreviatePath(""); got != "" {
+			t.Errorf("abbreviatePath(\"\") = %q, want \"\"", got)
+		}
+	})
+
+	t.Run("backslashes converted to forward slashes", func(t *testing.T) {
+		got := abbreviatePath(`C:\Projects\foo`)
+		if strings.Contains(got, `\`) {
+			t.Errorf("abbreviatePath should convert backslashes, got: %s", got)
+		}
+		if !strings.Contains(got, "/") {
+			t.Errorf("abbreviatePath should use forward slashes, got: %s", got)
+		}
+	})
+
+	t.Run("path outside home unchanged except separators", func(t *testing.T) {
+		got := abbreviatePath("/tmp/some/path")
+		if got != "/tmp/some/path" {
+			t.Errorf("non-home path should be unchanged, got: %s", got)
+		}
+	})
+
+	t.Run("path inside home replaced with tilde", func(t *testing.T) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			t.Skip("cannot determine home directory")
+		}
+		subdir := filepath.Join(home, "projects", "myapp")
+		got := abbreviatePath(subdir)
+		if !strings.HasPrefix(got, "~") {
+			t.Errorf("abbreviatePath(%q) = %q, want prefix ~", subdir, got)
+		}
+		if strings.Contains(got, home) {
+			t.Errorf("abbreviatePath should replace home dir, got: %s", got)
+		}
+	})
+}
+
+func TestGracefulStopKeyS(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	called := 0
+	m := New(ch, "", "", "", func() { called++ })
+
+	// Press 's' → sets stopRequested and calls requestStop
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	m = updated.(Model)
+
+	if !m.stopRequested {
+		t.Error("expected stopRequested true after 's' key")
+	}
+	if called != 1 {
+		t.Errorf("expected requestStop called once, got %d", called)
+	}
+}
+
+func TestGracefulStopKeySIsIdempotent(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	called := 0
+	m := New(ch, "", "", "", func() { called++ })
+
+	// Press 's' twice → requestStop called only once
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	m = updated.(Model)
+
+	if called != 1 {
+		t.Errorf("expected requestStop called once after two 's' presses, got %d", called)
+	}
+	if !m.stopRequested {
+		t.Error("expected stopRequested true")
+	}
+}
+
+func TestGracefulStopNilRequestStop(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+
+	// Press 's' with nil requestStop → no panic, stopRequested stays false
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	m = updated.(Model)
+
+	// stopRequested stays false since requestStop is nil (no-op guard)
+	if m.stopRequested {
+		t.Error("expected stopRequested false when requestStop is nil")
+	}
+}
+
+func TestGracefulStopFooterIndicator(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+
+	// Default footer contains "s to stop"
+	footer := m.renderFooter()
+	if !strings.Contains(footer, "s to stop") {
+		t.Errorf("default footer should contain 's to stop', got: %s", footer)
+	}
+
+	// After stop requested, footer shows stop indicator
+	m.stopRequested = true
+	footer = m.renderFooter()
+	if !strings.Contains(footer, "⏹ stopping after iteration") {
+		t.Errorf("footer should show stop indicator, got: %s", footer)
+	}
+	if !strings.Contains(footer, "q to force quit") {
+		t.Errorf("footer should show force quit hint, got: %s", footer)
+	}
+	// "s to stop" should not appear once stop is confirmed
+	if strings.Contains(footer, "s to stop") {
+		t.Errorf("footer should not show 's to stop' after stop requested, got: %s", footer)
+	}
+}
+
+func TestRenderLineLogText(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	now := time.Date(2026, 2, 26, 10, 0, 0, 0, time.UTC)
+
+	t.Run("short text shown with thinking icon", func(t *testing.T) {
+		entry := loop.LogEntry{
+			Kind:      loop.LogText,
+			Timestamp: now,
+			Message:   "I'll read the config file first.",
+		}
+		rendered := m.renderLine(logLine{entry: entry})
+		if !strings.Contains(rendered, "💭") {
+			t.Errorf("LogText line should contain 💭 icon, got: %s", rendered)
+		}
+		if !strings.Contains(rendered, "I'll read the config file first.") {
+			t.Errorf("LogText line should contain the message, got: %s", rendered)
+		}
+	})
+
+	t.Run("long text truncated to fit terminal width", func(t *testing.T) {
+		// Default width=80, prefix≈15, padding=2 → maxText=63.
+		longText := strings.Repeat("x", 100)
+		entry := loop.LogEntry{
+			Kind:      loop.LogText,
+			Timestamp: now,
+			Message:   longText,
+		}
+		rendered := m.renderLine(logLine{entry: entry})
+		if !strings.Contains(rendered, "💭") {
+			t.Errorf("LogText line should contain 💭 icon, got: %s", rendered)
+		}
+		// Should be truncated: 62 x's + ellipsis
+		want := strings.Repeat("x", 62) + "…"
+		if !strings.Contains(rendered, want) {
+			t.Errorf("long LogText should be truncated to 62 runes + ellipsis, got: %s", rendered)
+		}
+		// Full 100-char string should not appear
+		if strings.Contains(rendered, longText) {
+			t.Errorf("full 100-char text should not appear untruncated, got: %s", rendered)
+		}
+	})
+
+	t.Run("text within terminal width not truncated", func(t *testing.T) {
+		// Default width=80, maxText=63. Input at exactly 63 chars should not be truncated.
+		exactText := strings.Repeat("y", 63)
+		entry := loop.LogEntry{
+			Kind:      loop.LogText,
+			Timestamp: now,
+			Message:   exactText,
+		}
+		rendered := m.renderLine(logLine{entry: entry})
+		if !strings.Contains(rendered, exactText) {
+			t.Errorf("63-rune text should not be truncated at width 80, got: %s", rendered)
+		}
+	})
+}
+
+func TestSingleLine(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"no newlines", "hello world", "hello world"},
+		{"unix newline", "hello\nworld", "hello world"},
+		{"windows newline", "hello\r\nworld", "hello world"},
+		{"carriage return", "hello\rworld", "hello world"},
+		{"multiple newlines", "a\nb\nc", "a b c"},
+		{"leading newline", "\nhello", " hello"},
+		{"trailing newline", "hello\n", "hello "},
+		{"empty string", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := singleLine(tt.input)
+			if got != tt.want {
+				t.Errorf("singleLine(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRenderLineEmbeddedNewlines verifies that embedded newlines in log entry
+// text are stripped before rendering, so every entry produces exactly one line.
+// This prevents TUI height overflow on terminals like Windows WezTerm.
+func TestRenderLineEmbeddedNewlines(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	now := time.Date(2026, 2, 26, 10, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name  string
+		entry loop.LogEntry
+	}{
+		{
+			"LogText with unix newline",
+			loop.LogEntry{Kind: loop.LogText, Timestamp: now, Message: "first line\nsecond line"},
+		},
+		{
+			"LogText with windows newline",
+			loop.LogEntry{Kind: loop.LogText, Timestamp: now, Message: "first\r\nsecond"},
+		},
+		{
+			"LogError with newline",
+			loop.LogEntry{Kind: loop.LogError, Timestamp: now, Message: "error occurred\ndetails here"},
+		},
+		{
+			"LogGitPull with newline",
+			loop.LogEntry{Kind: loop.LogGitPull, Timestamp: now, Message: "Pulling main\nAlready up to date."},
+		},
+		{
+			"LogGitPush with newline",
+			loop.LogEntry{Kind: loop.LogGitPush, Timestamp: now, Message: "Pushing\nEnumerating objects: 3"},
+		},
+		{
+			"LogDone with newline",
+			loop.LogEntry{Kind: loop.LogDone, Timestamp: now, Message: "Complete\nall done"},
+		},
+		{
+			"LogStopped with newline",
+			loop.LogEntry{Kind: loop.LogStopped, Timestamp: now, Message: "Stopped\ngracefully"},
+		},
+		{
+			"LogRegent with newline",
+			loop.LogEntry{Kind: loop.LogRegent, Timestamp: now, Message: "Restarting\nRalph"},
+		},
+		{
+			"LogInfo with newline",
+			loop.LogEntry{Kind: loop.LogInfo, Timestamp: now, Message: "Starting\nloop"},
+		},
+		{
+			"LogToolUse with newline in input",
+			loop.LogEntry{Kind: loop.LogToolUse, Timestamp: now, ToolName: "Bash", ToolInput: "echo hello\necho world"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rendered := m.renderLine(logLine{entry: tt.entry})
+			// The rendered output must contain no literal newlines — each
+			// entry must occupy exactly one terminal line.
+			if strings.Contains(rendered, "\n") {
+				t.Errorf("renderLine should not produce embedded newlines, got: %q", rendered)
+			}
+		})
+	}
+}
+
+func TestMouseWheelScroll(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	m.height = 5 // log height = 3
+
+	for i := 0; i < 10; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("line %d", i)},
+		})
+	}
+
+	// Initially at bottom
+	if m.scrollOffset != 0 {
+		t.Fatalf("expected scrollOffset 0 initially, got %d", m.scrollOffset)
+	}
+
+	// Wheel up scrolls up
+	updated, cmd := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp})
+	m = updated.(Model)
+	if cmd != nil {
+		t.Error("mouse wheel should not produce a command")
+	}
+	if m.scrollOffset != 1 {
+		t.Errorf("expected scrollOffset 1 after wheel up, got %d", m.scrollOffset)
+	}
+
+	// Wheel down scrolls back down
+	updated, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+	m = updated.(Model)
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset 0 after wheel down, got %d", m.scrollOffset)
+	}
+
+	// Wheel down at bottom does nothing
+	updated, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+	m = updated.(Model)
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset to stay 0, got %d", m.scrollOffset)
+	}
+}
+
+func TestMouseWheelScrollBound(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	m.height = 5 // log height = 3; max offset = 10 - 3 = 7
+
+	for i := 0; i < 10; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("line %d", i)},
+		})
+	}
+
+	// Wheel up beyond max should clamp at max offset
+	for i := 0; i < 20; i++ {
+		updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp})
+		m = updated.(Model)
+	}
+	if m.scrollOffset != 7 {
+		t.Errorf("expected scrollOffset clamped to 7, got %d", m.scrollOffset)
+	}
+}
+
+func TestMouseWheelResetsNewBelow(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	m.height = 5
+
+	for i := 0; i < 10; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("line %d", i)},
+		})
+	}
+
+	// Scroll up and set newBelow
+	m.scrollOffset = 1
+	m.newBelow = 4
+
+	// Wheel down to bottom should reset newBelow
+	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+	m = updated.(Model)
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset 0, got %d", m.scrollOffset)
+	}
+	if m.newBelow != 0 {
+		t.Errorf("expected newBelow 0 after wheel down to bottom, got %d", m.newBelow)
+	}
+}
+
+func TestMouseWheelIgnoresOtherButtons(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	m.height = 5
+
+	for i := 0; i < 10; i++ {
+		m.lines = append(m.lines, logLine{
+			entry: loop.LogEntry{Kind: loop.LogInfo, Timestamp: time.Now(), Message: fmt.Sprintf("line %d", i)},
+		})
+	}
+
+	// Click events should not change scroll offset
+	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = updated.(Model)
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset unchanged after mouse click, got %d", m.scrollOffset)
+	}
+}
+
+// TestRenderLineToolInputNarrowWidthClamp verifies that the LogToolUse case clamps
+// maxInput to 20 when the terminal is narrower than 52 columns (width-32 < 20).
+func TestRenderLineToolInputNarrowWidthClamp(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	m.width = 30 // maxInput = 30-32 = -2 → clamped to 20
+	now := time.Date(2026, 2, 28, 10, 0, 0, 0, time.UTC)
+
+	longInput := strings.Repeat("a", 50)
+	entry := loop.LogEntry{
+		Kind:      loop.LogToolUse,
+		Timestamp: now,
+		ToolName:  "Read",
+		ToolInput: longInput,
+	}
+	rendered := m.renderLine(logLine{entry: entry})
+
+	// At clamp width=20 the input is truncated to 19 chars + ellipsis.
+	want := strings.Repeat("a", 19) + "…"
+	if !strings.Contains(rendered, want) {
+		t.Errorf("narrow-width LogToolUse should truncate input to 19+ellipsis, got: %s", rendered)
+	}
+	if strings.Contains(rendered, longInput) {
+		t.Errorf("full 50-char input should not appear at narrow width, got: %s", rendered)
+	}
+}
+
+// TestRenderLineLogTextNarrowWidthClamp verifies that the LogText case clamps
+// maxText to 20 when the terminal is narrower than 37 columns (width-17 < 20).
+func TestRenderLineLogTextNarrowWidthClamp(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, "", "", "", nil)
+	m.width = 30 // maxText = 30-17 = 13 → clamped to 20
+	now := time.Date(2026, 2, 28, 10, 0, 0, 0, time.UTC)
+
+	longText := strings.Repeat("z", 50)
+	entry := loop.LogEntry{
+		Kind:      loop.LogText,
+		Timestamp: now,
+		Message:   longText,
+	}
+	rendered := m.renderLine(logLine{entry: entry})
+
+	// At clamp width=20 the text is truncated to 19 runes + ellipsis.
+	want := strings.Repeat("z", 19) + "…"
+	if !strings.Contains(rendered, want) {
+		t.Errorf("narrow-width LogText should truncate text to 19+ellipsis, got: %s", rendered)
+	}
+	if strings.Contains(rendered, longText) {
+		t.Errorf("full 50-char text should not appear at narrow width, got: %s", rendered)
+	}
+	if !strings.Contains(rendered, "💭") {
+		t.Errorf("narrow-width LogText should still contain 💭 icon, got: %s", rendered)
 	}
 }

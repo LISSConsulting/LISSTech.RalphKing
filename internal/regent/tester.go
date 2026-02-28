@@ -2,8 +2,10 @@ package regent
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os/exec"
+	"runtime"
 	"strings"
 )
 
@@ -23,12 +25,18 @@ type RunTestResult struct {
 
 // RunTests executes the test command in the given directory and returns the result.
 // Returns an error only if the command could not be started (not if tests fail).
+// On Windows, the command is run via cmd /C; on Unix, via sh -c.
 func RunTests(dir, testCommand string) (RunTestResult, error) {
 	if testCommand == "" {
 		return RunTestResult{Passed: true}, nil
 	}
 
-	cmd := exec.Command("sh", "-c", testCommand)
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd", "/C", testCommand)
+	} else {
+		cmd = exec.Command("sh", "-c", testCommand)
+	}
 	cmd.Dir = dir
 
 	var combined bytes.Buffer
@@ -39,7 +47,13 @@ func RunTests(dir, testCommand string) (RunTestResult, error) {
 	output := strings.TrimSpace(combined.String())
 
 	if err != nil {
-		return RunTestResult{Passed: false, Output: output}, nil
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			// Test command ran but returned non-zero exit code — test failure.
+			return RunTestResult{Passed: false, Output: output}, nil
+		}
+		// Shell binary could not be started (not found in PATH, permission denied, etc.).
+		return RunTestResult{}, fmt.Errorf("regent: run test command: %w", err)
 	}
 	return RunTestResult{Passed: true, Output: output}, nil
 }

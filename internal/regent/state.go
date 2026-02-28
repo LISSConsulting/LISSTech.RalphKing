@@ -52,6 +52,8 @@ func LoadState(dir string) (State, error) {
 
 // SaveState writes the Regent state to .ralph/regent-state.json in dir.
 // Creates the .ralph directory if it does not exist.
+// Uses a write-then-rename pattern so concurrent callers never observe a
+// partially-written file.
 func SaveState(dir string, s State) error {
 	stateDir := filepath.Join(dir, stateDirName)
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
@@ -63,9 +65,23 @@ func SaveState(dir string, s State) error {
 		return fmt.Errorf("regent: marshal state: %w", err)
 	}
 
-	path := filepath.Join(stateDir, stateFileName)
-	if writeErr := os.WriteFile(path, data, 0644); writeErr != nil {
+	tmp, err := os.CreateTemp(stateDir, ".regent-state-*.tmp")
+	if err != nil {
+		return fmt.Errorf("regent: create temp state: %w", err)
+	}
+	if _, writeErr := tmp.Write(data); writeErr != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
 		return fmt.Errorf("regent: write state: %w", writeErr)
+	}
+	if closeErr := tmp.Close(); closeErr != nil {
+		os.Remove(tmp.Name())
+		return fmt.Errorf("regent: close state: %w", closeErr)
+	}
+	path := filepath.Join(stateDir, stateFileName)
+	if renameErr := os.Rename(tmp.Name(), path); renameErr != nil {
+		os.Remove(tmp.Name())
+		return fmt.Errorf("regent: finalize state: %w", renameErr)
 	}
 	return nil
 }

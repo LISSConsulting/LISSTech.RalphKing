@@ -3,6 +3,8 @@ package regent
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -677,5 +679,149 @@ func TestSupervisWithNilEvents(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("Supervise with nil events should succeed, got: %v", err)
+	}
+}
+
+func TestSaveStateEmitsErrorOnFailure(t *testing.T) {
+	// Block the .ralph directory so SaveState fails, then verify saveState emits
+	// a "Failed to save state" event rather than silently swallowing the error.
+	dir := t.TempDir()
+	cfg := defaultTestRegentConfig()
+	events := make(chan loop.LogEntry, 128)
+	rgt := New(cfg, dir, &mockGit{branch: "main"}, events)
+
+	// Place a regular file at .ralph path so MkdirAll fails inside SaveState.
+	if err := os.WriteFile(filepath.Join(dir, stateDirName), []byte("block"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	rgt.saveState()
+
+	close(events)
+	var found bool
+	for e := range events {
+		if e.Kind == loop.LogRegent && strings.Contains(e.Message, "Failed to save state") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected 'Failed to save state' regent event when SaveState fails")
+	}
+}
+
+func TestRunPostIterationTests_RunTestsError(t *testing.T) {
+	// Clearing PATH prevents exec.LookPath from finding the shell binary.
+	// RunPostIterationTests must emit "Failed to start tests" and not trigger revert.
+	t.Setenv("PATH", "")
+
+	dir := t.TempDir()
+	cfg := defaultTestRegentConfig()
+	cfg.RollbackOnTestFailure = true
+	cfg.TestCommand = "some-nonexistent-command"
+	events := make(chan loop.LogEntry, 128)
+	g := &mockGit{branch: "main", lastCommit: "abc123 commit"}
+	rgt := New(cfg, dir, g, events)
+
+	rgt.RunPostIterationTests()
+
+	close(events)
+	var found bool
+	for e := range events {
+		if e.Kind == loop.LogRegent && strings.Contains(e.Message, "Failed to start tests") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected 'Failed to start tests' event when shell is not in PATH")
+	}
+	if len(g.revertCalls) != 0 {
+		t.Error("should not revert when RunTests returns a non-ExitError")
+	}
+}
+
+func TestFlushState(t *testing.T) {
+	dir := t.TempDir()
+	cfg := defaultTestRegentConfig()
+	events := make(chan loop.LogEntry, 128)
+	rgt := New(cfg, dir, &mockGit{}, events)
+
+	rgt.UpdateState(loop.LogEntry{Iteration: 7, TotalCost: 3.14, Branch: "main"})
+	rgt.FlushState()
+
+	state, err := LoadState(dir)
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if state.Iteration != 7 {
+		t.Errorf("Iteration = %d, want 7", state.Iteration)
+	}
+	if state.TotalCostUSD != 3.14 {
+		t.Errorf("TotalCostUSD = %f, want 3.14", state.TotalCostUSD)
+	}
+	if state.Branch != "main" {
+		t.Errorf("Branch = %q, want %q", state.Branch, "main")
+	}
+}
+
+func TestEmitOnClosedChannelDoesNotPanic(t *testing.T) {
+	// Regression: emit must not panic when the events channel has been closed.
+	// This occurs in runWithRegent when the drain goroutine calls UpdateState →
+	// saveState → emit after close(events) has already been called.
+	events := make(chan loop.LogEntry, 1)
+	rgt := New(defaultTestRegentConfig(), t.TempDir(), &mockGit{}, events)
+	close(events)
+	rgt.emit("message after channel close") // must not panic
+}
+
+func TestSaveStateOnClosedChannelDoesNotPanic(t *testing.T) {
+	// Regression: when SaveState fails (blocked .ralph dir) and the events
+	// channel has already been closed, saveState must not panic on the emit call.
+	dir := t.TempDir()
+	events := make(chan loop.LogEntry, 1)
+	rgt := New(defaultTestRegentConfig(), dir, &mockGit{}, events)
+
+	if err := os.WriteFile(filepath.Join(dir, stateDirName), []byte("block"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	close(events)
+	rgt.saveState() // SaveState fails → emit called → must not panic
+}
+
+func TestSupervise_ContextCancelDuringBackoff(t *testing.T) {
+	// Cancel context after "Ralph exited with error" is emitted, which means we
+	// have passed the ctx.Err() check at line 83 and will enter the backoff select.
+	// This covers the case <-ctx.Done() branch inside the backoff wait.
+	dir := t.TempDir()
+	cfg := defaultTestRegentConfig()
+	cfg.MaxRetries = 3
+	cfg.RetryBackoffSeconds = 10 // long backoff ensures ctx.Done fires before time.After
+	events := make(chan loop.LogEntry, 128)
+	rgt := New(cfg, dir, &mockGit{branch: "main"}, events)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Watch events: cancel once "Ralph exited with error" is observed so that the
+	// main goroutine is guaranteed to be at (or heading into) the backoff select.
+	go func() {
+		for e := range events {
+			if e.Kind == loop.LogRegent && strings.Contains(e.Message, "Ralph exited with error") {
+				cancel()
+				return
+			}
+		}
+	}()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- rgt.Supervise(ctx, func(_ context.Context) error {
+			return errors.New("fail")
+		})
+		close(events)
+	}()
+
+	err := <-errCh
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got: %v", err)
 	}
 }

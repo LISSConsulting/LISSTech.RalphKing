@@ -328,8 +328,8 @@ func TestRunWithStateTracking_EventsForwarded(t *testing.T) {
 // hang detection disabled, no retry backoff, fail fast after 0 retries.
 func regentTestConfig(maxRetries int) *config.Config {
 	cfg := config.Defaults()
-	cfg.Regent.HangTimeoutSeconds = 0    // disable hang detection ticker
-	cfg.Regent.RetryBackoffSeconds = 0   // no wait between retries
+	cfg.Regent.HangTimeoutSeconds = 0  // disable hang detection ticker
+	cfg.Regent.RetryBackoffSeconds = 0 // no wait between retries
 	cfg.Regent.MaxRetries = maxRetries
 	cfg.Regent.RollbackOnTestFailure = false // no git ops in tests
 	return &cfg

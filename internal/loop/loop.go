@@ -35,13 +35,15 @@ type GitOps interface {
 
 // Loop orchestrates the prompt -> claude -> parse -> git iteration cycle.
 type Loop struct {
-	Agent         claude.Agent
-	Git           GitOps
-	Config        *config.Config
-	Log           io.Writer       // output destination; defaults to os.Stdout
-	Events        chan<- LogEntry // optional: structured event sink for TUI
-	Dir           string          // working directory for prompt file resolution
-	PostIteration func()          // optional: called after each iteration (e.g., test-gated rollback)
+	Agent            claude.Agent
+	Git              GitOps
+	Config           *config.Config
+	Log              io.Writer       // output destination; defaults to os.Stdout
+	Events           chan<- LogEntry // optional: structured event sink for TUI
+	Dir              string          // working directory for prompt file resolution
+	PostIteration    func()          // optional: called after each iteration (e.g., test-gated rollback)
+	StopAfter        <-chan struct{} // optional: closed to request graceful stop after current iteration
+	NotificationHook func(LogEntry)  // optional: called on every emitted event for external notifications
 }
 
 // Run executes the loop in the given mode. It runs iterations until the
@@ -64,10 +66,15 @@ func (l *Loop) Run(ctx context.Context, mode Mode, maxOverride int) error {
 		return fmt.Errorf("loop: get branch: %w", err)
 	}
 
+	// Include current HEAD commit so TUI footer shows it from the start,
+	// rather than showing "—" until the first push.
+	commit, _ := l.Git.LastCommit()
+
 	l.emit(LogEntry{
 		Kind:    LogInfo,
 		Message: fmt.Sprintf("Starting %s loop on branch %s (max: %s)", mode, branch, iterLabel(maxIter)),
 		Branch:  branch,
+		Commit:  commit,
 		MaxIter: maxIter,
 		Mode:    string(mode),
 	})
@@ -100,6 +107,19 @@ func (l *Loop) Run(ctx context.Context, mode Mode, maxOverride int) error {
 			Message:   fmt.Sprintf("Running total: $%.2f", totalCost),
 			TotalCost: totalCost,
 		})
+
+		// Check for user-requested graceful stop (TUI 's' key).
+		if l.StopAfter != nil {
+			select {
+			case <-l.StopAfter:
+				l.emit(LogEntry{
+					Kind:    LogStopped,
+					Message: "Stop requested — exiting after this iteration",
+				})
+				return nil
+			default:
+			}
+		}
 	}
 
 	l.emit(LogEntry{
@@ -177,7 +197,12 @@ func (l *Loop) iteration(ctx context.Context, n, maxIter int, prompt, branch str
 				ToolInput: summarizeInput(ev.ToolInput),
 			})
 		case claude.EventText:
-			// Skip text events in log output (verbose)
+			if ev.Text != "" {
+				l.emit(LogEntry{
+					Kind:    LogText,
+					Message: ev.Text,
+				})
+			}
 		case claude.EventResult:
 			cost = ev.CostUSD
 			msg := fmt.Sprintf("Iteration %d complete — $%.2f — %.1fs", n, ev.CostUSD, ev.Duration)
@@ -268,10 +293,14 @@ func (l *Loop) pushIfNeeded(branch string) error {
 // emit sends a structured log entry. When Events is set, it sends to the
 // channel for TUI consumption. Otherwise, it writes formatted text to Log.
 // The channel send is non-blocking to prevent deadlock if the TUI exits
-// while the loop is still draining events.
+// while the loop is still draining events. NotificationHook, when set, is
+// always called regardless of the TUI/log path.
 func (l *Loop) emit(entry LogEntry) {
 	if entry.Timestamp.IsZero() {
 		entry.Timestamp = time.Now()
+	}
+	if l.NotificationHook != nil {
+		l.NotificationHook(entry)
 	}
 	if l.Events != nil {
 		select {
@@ -305,7 +334,14 @@ func iterLabel(max int) string {
 }
 
 func summarizeInput(input map[string]any) string {
-	for _, key := range []string{"file_path", "command", "path", "url", "pattern"} {
+	// Check well-known field names in priority order.
+	for _, key := range []string{
+		"file_path", "command", "path", "url", "pattern", // core tools
+		"description", "prompt", // Task / agent tools
+		"query",         // WebSearch
+		"notebook_path", // NotebookEdit
+		"task_id",       // TaskOutput
+	} {
 		if v, ok := input[key]; ok {
 			return fmt.Sprintf("%v", v)
 		}

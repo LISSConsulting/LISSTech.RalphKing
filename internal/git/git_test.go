@@ -137,6 +137,15 @@ func TestStashAndPop(t *testing.T) {
 	}
 }
 
+func TestStashNoChanges(t *testing.T) {
+	dir := initTestRepo(t)
+	r := NewRunner(dir)
+	// Repo is clean — Stash should succeed without error.
+	if err := r.Stash(); err != nil {
+		t.Fatalf("Stash() on clean repo returned unexpected error: %v", err)
+	}
+}
+
 func TestRevert(t *testing.T) {
 	dir := initTestRepo(t)
 	r := NewRunner(dir)

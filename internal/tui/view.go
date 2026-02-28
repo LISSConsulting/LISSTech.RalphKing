@@ -2,7 +2,9 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 )
@@ -39,12 +41,30 @@ func (m Model) renderHeader() string {
 		mode = "—"
 	}
 
-	parts := []string{
-		"👑 RalphKing",
+	name := "RalphKing"
+	if m.projectName != "" {
+		name = m.projectName
+	}
+
+	parts := []string{"👑 " + name}
+	if m.workDir != "" {
+		parts = append(parts, "dir: "+abbreviatePath(m.workDir))
+	}
+	parts = append(parts,
 		fmt.Sprintf("mode: %s", mode),
 		fmt.Sprintf("branch: %s", branch),
 		fmt.Sprintf("iter: %s/%s", iter, maxLabel),
 		fmt.Sprintf("cost: $%.2f", m.totalCost),
+	)
+	if m.lastDuration > 0 {
+		parts = append(parts, fmt.Sprintf("last: %.1fs", m.lastDuration))
+	}
+	if !m.startedAt.IsZero() {
+		elapsed := m.now.Sub(m.startedAt)
+		parts = append(parts, fmt.Sprintf("elapsed: %s", formatElapsed(elapsed)))
+	}
+	if !m.now.IsZero() {
+		parts = append(parts, m.now.Format("15:04"))
 	}
 
 	content := strings.Join(parts, "  │  ")
@@ -58,11 +78,16 @@ func (m Model) renderFooter() string {
 	}
 
 	left := fmt.Sprintf("[⬆ pull] [⬇ push]  last commit: %s", commit)
-	right := "q to quit"
-	if m.scrollOffset > 0 && m.newBelow > 0 {
-		right = fmt.Sprintf("↓%d new  ↑%d  j/k scroll  q to quit", m.newBelow, m.scrollOffset)
-	} else if m.scrollOffset > 0 {
-		right = fmt.Sprintf("↑%d  j/k scroll  q to quit", m.scrollOffset)
+	var right string
+	switch {
+	case m.stopRequested:
+		right = "⏹ stopping after iteration…  q to force quit"
+	case m.scrollOffset > 0 && m.newBelow > 0:
+		right = fmt.Sprintf("↓%d new  ↑%d  j/k scroll  s to stop  q to quit", m.newBelow, m.scrollOffset)
+	case m.scrollOffset > 0:
+		right = fmt.Sprintf("↑%d  j/k scroll  s to stop  q to quit", m.scrollOffset)
+	default:
+		right = "s to stop  q to quit"
 	}
 
 	gap := m.width - len(left) - len(right)
@@ -109,6 +134,46 @@ func (m Model) renderLog(height int) string {
 	return b.String()
 }
 
+// formatElapsed renders a duration as a compact human-readable string.
+// Examples: "5s", "2m30s", "1h15m"
+func formatElapsed(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	if h > 0 {
+		return fmt.Sprintf("%dh%dm", h, m)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm%ds", m, s)
+	}
+	return fmt.Sprintf("%ds", s)
+}
+
+// singleLine replaces newline sequences with a space so every log entry
+// renders as exactly one terminal line. This prevents embedded newlines in
+// agent reasoning text or error messages from breaking the TUI height
+// calculation, which assumes a strict 1-entry-per-line mapping.
+func singleLine(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	return s
+}
+
+// abbreviatePath returns a display-friendly version of path.
+// If the path begins with the user's home directory, that prefix is replaced
+// with "~". Backslashes are converted to forward slashes for consistent display.
+func abbreviatePath(path string) string {
+	if path == "" {
+		return ""
+	}
+	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(path, home) {
+		path = "~" + path[len(home):]
+	}
+	return strings.ReplaceAll(path, "\\", "/")
+}
+
 func (m Model) renderLine(line logLine) string {
 	e := line.entry
 	ts := timestampStyle.Render(fmt.Sprintf("[%s]", e.Timestamp.Format("15:04:05")))
@@ -122,7 +187,29 @@ func (m Model) renderLine(line logLine) string {
 			displayName = displayName[:13] + "…"
 		}
 		name := style.Render(fmt.Sprintf("%-14s", displayName))
-		return fmt.Sprintf("%s  %s %s %s", ts, icon, name, e.ToolInput)
+		input := singleLine(e.ToolInput)
+		// Truncate to fit terminal width. Prefix is ~30 visible columns.
+		maxInput := m.width - 32
+		if maxInput < 20 {
+			maxInput = 20
+		}
+		if len(input) > maxInput {
+			input = input[:maxInput-1] + "…"
+		}
+		return fmt.Sprintf("%s  %s %s %s", ts, icon, name, input)
+
+	case loop.LogText:
+		text := singleLine(e.Message)
+		// Truncate to fit terminal width. Prefix is ~15 visible columns.
+		maxText := m.width - 17
+		if maxText < 20 {
+			maxText = 20
+		}
+		if len([]rune(text)) > maxText {
+			runes := []rune(text)
+			text = string(runes[:maxText-1]) + "…"
+		}
+		return fmt.Sprintf("%s  %s", ts, reasoningStyle.Render("💭 "+text))
 
 	case loop.LogIterStart:
 		return fmt.Sprintf("%s  ── iteration %d ──", ts, e.Iteration)
@@ -130,29 +217,29 @@ func (m Model) renderLine(line logLine) string {
 	case loop.LogIterComplete:
 		iterMsg := fmt.Sprintf("✅ iteration %d complete  —  $%.2f  —  %.1fs", e.Iteration, e.CostUSD, e.Duration)
 		if e.Subtype != "" {
-			iterMsg += fmt.Sprintf("  —  %s", e.Subtype)
+			iterMsg += fmt.Sprintf("  —  %s", singleLine(e.Subtype))
 		}
 		return fmt.Sprintf("%s  %s", ts, resultStyle.Render(iterMsg))
 
 	case loop.LogError:
-		return fmt.Sprintf("%s  %s", ts, errorStyle.Render("❌ "+e.Message))
+		return fmt.Sprintf("%s  %s", ts, errorStyle.Render("❌ "+singleLine(e.Message)))
 
 	case loop.LogGitPull:
-		return fmt.Sprintf("%s  %s", ts, m.accentGitStyle.Render("⬆ "+e.Message))
+		return fmt.Sprintf("%s  %s", ts, m.accentGitStyle.Render("⬆ "+singleLine(e.Message)))
 
 	case loop.LogGitPush:
-		return fmt.Sprintf("%s  %s", ts, m.accentGitStyle.Render("⬇ "+e.Message))
+		return fmt.Sprintf("%s  %s", ts, m.accentGitStyle.Render("⬇ "+singleLine(e.Message)))
 
 	case loop.LogDone:
-		return fmt.Sprintf("%s  %s", ts, resultStyle.Render("✅ "+e.Message))
+		return fmt.Sprintf("%s  %s", ts, resultStyle.Render("✅ "+singleLine(e.Message)))
 
 	case loop.LogStopped:
-		return fmt.Sprintf("%s  %s", ts, errorStyle.Render("⏹ "+e.Message))
+		return fmt.Sprintf("%s  %s", ts, errorStyle.Render("⏹ "+singleLine(e.Message)))
 
 	case loop.LogRegent:
-		return fmt.Sprintf("%s  %s", ts, regentStyle.Render("🛡️  Regent: "+e.Message))
+		return fmt.Sprintf("%s  %s", ts, regentStyle.Render("🛡️  Regent: "+singleLine(e.Message)))
 
 	default:
-		return fmt.Sprintf("%s  %s", ts, infoStyle.Render(e.Message))
+		return fmt.Sprintf("%s  %s", ts, infoStyle.Render(singleLine(e.Message)))
 	}
 }
