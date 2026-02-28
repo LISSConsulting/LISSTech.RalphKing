@@ -1,17 +1,42 @@
 package loop
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/claude"
 )
+
+// init runs as a fake Claude subprocess when _FAKE_CLAUDE=1 is set.
+// Placing the fake-mode guard in init() (before flag.Parse in TestMain/m.Run)
+// avoids flag-parse failures caused by Claude CLI arguments such as
+// --output-format that are unrecognised by the Go test runner.
+func init() {
+	if os.Getenv("_FAKE_CLAUDE") != "1" {
+		return
+	}
+	if f := os.Getenv("_FAKE_CLAUDE_STDOUT_FILE"); f != "" {
+		if data, err := os.ReadFile(f); err == nil {
+			_, _ = os.Stdout.Write(data)
+		}
+	}
+	if s := os.Getenv("_FAKE_CLAUDE_STDERR"); s != "" {
+		_, _ = fmt.Fprint(os.Stderr, s)
+	}
+	if os.Getenv("_FAKE_CLAUDE_SLEEP") == "1" {
+		time.Sleep(time.Minute)
+	}
+	code := 0
+	if s := os.Getenv("_FAKE_CLAUDE_EXIT"); s != "" {
+		_, _ = fmt.Sscan(s, &code)
+	}
+	os.Exit(code)
+}
 
 func TestNewClaudeAgent(t *testing.T) {
 	agent := NewClaudeAgent()
@@ -104,18 +129,19 @@ func TestBuildArgs(t *testing.T) {
 	}
 }
 
-// TestClaudeAgentRun tests the full subprocess lifecycle using a fake script.
+// TestClaudeAgentRun tests the full subprocess lifecycle using the test binary
+// as a cross-platform fake Claude CLI (via the init() fake-mode guard above).
+// No shell scripts are required, so these tests run on all platforms.
 func TestClaudeAgentRun(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("shell script tests not supported on Windows")
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
 	}
 
 	t.Run("streams events from subprocess", func(t *testing.T) {
 		output := `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"read_file","input":{"file_path":"main.go"}}]}}
 {"type":"result","cost_usd":0.10,"duration_ms":2500}`
-
-		script := fakeClaudeScript(t, 0, output)
-		agent := &ClaudeAgent{Executable: script}
+		agent := setUpFakeClaude(t, exe, 0, output, "")
 
 		ch, err := agent.Run(context.Background(), "test prompt", claude.RunOptions{})
 		if err != nil {
@@ -146,8 +172,7 @@ func TestClaudeAgentRun(t *testing.T) {
 
 	t.Run("non-zero exit sends error event", func(t *testing.T) {
 		output := `{"type":"result","cost_usd":0.05,"duration_ms":1000}`
-		script := fakeClaudeScript(t, 1, output)
-		agent := &ClaudeAgent{Executable: script}
+		agent := setUpFakeClaude(t, exe, 1, output, "")
 
 		ch, err := agent.Run(context.Background(), "test", claude.RunOptions{})
 		if err != nil {
@@ -170,8 +195,7 @@ func TestClaudeAgentRun(t *testing.T) {
 	})
 
 	t.Run("non-zero exit includes stderr in error", func(t *testing.T) {
-		script := fakeClaudeScriptWithStderr(t, 1, "", "API rate limit exceeded")
-		agent := &ClaudeAgent{Executable: script}
+		agent := setUpFakeClaude(t, exe, 1, "", "API rate limit exceeded")
 
 		ch, err := agent.Run(context.Background(), "test", claude.RunOptions{})
 		if err != nil {
@@ -196,8 +220,7 @@ func TestClaudeAgentRun(t *testing.T) {
 	})
 
 	t.Run("non-zero exit without stderr omits detail", func(t *testing.T) {
-		script := fakeClaudeScriptWithStderr(t, 1, "", "")
-		agent := &ClaudeAgent{Executable: script}
+		agent := setUpFakeClaude(t, exe, 1, "", "")
 
 		ch, err := agent.Run(context.Background(), "test", claude.RunOptions{})
 		if err != nil {
@@ -223,15 +246,10 @@ func TestClaudeAgentRun(t *testing.T) {
 	})
 
 	t.Run("context cancellation stops process", func(t *testing.T) {
-		// Script that sleeps forever
-		script := fakeClaudeScript(t, 0, "")
-		// Rewrite script to sleep
-		sleepScript := "#!/bin/sh\nsleep 60\n"
-		if err := os.WriteFile(script, []byte(sleepScript), 0755); err != nil {
-			t.Fatal(err)
-		}
+		t.Setenv("_FAKE_CLAUDE", "1")
+		t.Setenv("_FAKE_CLAUDE_SLEEP", "1")
+		agent := &ClaudeAgent{Executable: exe}
 
-		agent := &ClaudeAgent{Executable: script}
 		ctx, cancel := context.WithCancel(context.Background())
 
 		ch, err := agent.Run(ctx, "test", claude.RunOptions{})
@@ -258,54 +276,25 @@ func TestClaudeAgentRun(t *testing.T) {
 // Verify ClaudeAgent satisfies claude.Agent at compile time.
 var _ claude.Agent = (*ClaudeAgent)(nil)
 
-// fakeClaudeScript creates a shell script that outputs the given content and
-// exits with the given code. Returns the path to the script.
-func fakeClaudeScript(t *testing.T, exitCode int, output string) string {
+// setUpFakeClaude configures the test binary (exe) as a fake Claude subprocess
+// via env vars. Returns a ClaudeAgent pointing at that binary.
+// Env vars are restored automatically by t.Setenv cleanup.
+func setUpFakeClaude(t *testing.T, exe string, exitCode int, stdout, stderr string) *ClaudeAgent {
 	t.Helper()
 	dir := t.TempDir()
-
-	// Write output to a data file so we don't have to escape JSON in shell
-	dataPath := filepath.Join(dir, "output.txt")
-	if err := os.WriteFile(dataPath, []byte(output), 0644); err != nil {
-		t.Fatal(err)
+	stdoutFile := filepath.Join(dir, "stdout.txt")
+	if err := os.WriteFile(stdoutFile, []byte(stdout), 0644); err != nil {
+		t.Fatalf("write stdout file: %v", err)
 	}
-
-	script := filepath.Join(dir, "claude")
-	var buf bytes.Buffer
-	buf.WriteString("#!/bin/sh\n")
-	buf.WriteString(fmt.Sprintf("cat %s\n", dataPath))
-	buf.WriteString(fmt.Sprintf("exit %d\n", exitCode))
-	if err := os.WriteFile(script, buf.Bytes(), 0755); err != nil {
-		t.Fatal(err)
+	t.Setenv("_FAKE_CLAUDE", "1")
+	t.Setenv("_FAKE_CLAUDE_STDOUT_FILE", stdoutFile)
+	if exitCode != 0 {
+		t.Setenv("_FAKE_CLAUDE_EXIT", fmt.Sprintf("%d", exitCode))
 	}
-	return script
-}
-
-// fakeClaudeScriptWithStderr creates a shell script that outputs to stdout and stderr,
-// then exits with the given code. Returns the path to the script.
-func fakeClaudeScriptWithStderr(t *testing.T, exitCode int, stdout, stderr string) string {
-	t.Helper()
-	dir := t.TempDir()
-
-	dataPath := filepath.Join(dir, "stdout.txt")
-	if err := os.WriteFile(dataPath, []byte(stdout), 0644); err != nil {
-		t.Fatal(err)
+	if stderr != "" {
+		t.Setenv("_FAKE_CLAUDE_STDERR", stderr)
 	}
-	stderrPath := filepath.Join(dir, "stderr.txt")
-	if err := os.WriteFile(stderrPath, []byte(stderr), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	script := filepath.Join(dir, "claude")
-	var buf bytes.Buffer
-	buf.WriteString("#!/bin/sh\n")
-	buf.WriteString(fmt.Sprintf("cat %s\n", dataPath))
-	buf.WriteString(fmt.Sprintf("cat %s >&2\n", stderrPath))
-	buf.WriteString(fmt.Sprintf("exit %d\n", exitCode))
-	if err := os.WriteFile(script, buf.Bytes(), 0755); err != nil {
-		t.Fatal(err)
-	}
-	return script
+	return &ClaudeAgent{Executable: exe}
 }
 
 func containsArg(args []string, target string) bool {
