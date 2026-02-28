@@ -1,6 +1,8 @@
 package panels
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -106,6 +108,30 @@ func TestRenderHeader_Elapsed(t *testing.T) {
 	rendered := RenderHeader(props, 200, accent)
 	if !strings.Contains(rendered, "elapsed:") {
 		t.Errorf("RenderHeader() should show elapsed time; got %q", rendered)
+	}
+}
+
+func TestAbbreviatePath(t *testing.T) {
+	// Empty string returns empty.
+	if got := AbbreviatePath(""); got != "" {
+		t.Errorf("AbbreviatePath(\"\") = %q, want %q", got, "")
+	}
+
+	// Backslashes are converted to forward slashes.
+	got := AbbreviatePath("C:\\Users\\test\\file")
+	if strings.Contains(got, "\\") {
+		t.Errorf("AbbreviatePath should convert backslashes; got %q", got)
+	}
+
+	// Home directory prefix is replaced with "~".
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("cannot determine home dir")
+	}
+	path := filepath.Join(home, "projects", "myapp")
+	got = AbbreviatePath(path)
+	if !strings.HasPrefix(got, "~") {
+		t.Errorf("AbbreviatePath(%q) = %q, want ~-prefixed path", path, got)
 	}
 }
 

@@ -199,6 +199,33 @@ func TestSecondaryPanel_Update_NonKeyMsg(t *testing.T) {
 	_, _ = p.Update(wm)
 }
 
+func TestNewSecondaryPanel_ZeroHeight(t *testing.T) {
+	// contentH < 1 clamp branch: should not panic.
+	p := NewSecondaryPanel(80, 0)
+	_ = p.View()
+}
+
+func TestSecondaryPanel_SetSize_ZeroHeight(t *testing.T) {
+	// contentH < 1 clamp branch in SetSize.
+	p := NewSecondaryPanel(80, 20)
+	p = p.SetSize(100, 0)
+	_ = p.View()
+}
+
+func TestSecondaryPanel_RenderCostTable_ZeroHeight(t *testing.T) {
+	// contentH < 1 clamp branch inside renderCostTable (with data).
+	p := NewSecondaryPanel(80, 0)
+	p = p.AddIteration(store.IterationSummary{Number: 1, Mode: "build", CostUSD: 0.01, Duration: 1.0})
+	// Navigate to Cost tab (index 3: Regent→Git→Tests→Cost).
+	p, _ = p.Update(keyMsg("]"))
+	p, _ = p.Update(keyMsg("]"))
+	p, _ = p.Update(keyMsg("]"))
+	view := p.View()
+	if view == "" {
+		t.Error("Cost tab with zero height should still render non-empty output")
+	}
+}
+
 // TestSecondaryPanel_AllTabsRenderable verifies all four tabs produce non-empty
 // output after content has been routed (T037).
 func TestSecondaryPanel_AllTabsRenderable(t *testing.T) {

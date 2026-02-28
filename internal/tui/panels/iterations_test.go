@@ -126,6 +126,23 @@ func TestIterDelegate_Render(t *testing.T) {
 	}
 }
 
+func TestIterDelegate_Render_Selected(t *testing.T) {
+	// Render at index 0 = selected (m.Index() == 0 for a new list) — exercises
+	// the bold/highlighted branch in iterDelegate.Render.
+	d := iterDelegate{}
+	l := list.New(nil, d, 80, 20)
+	item := iterItem{summary: makeSummary(1, "build", "success", 0.01, 1.5)}
+
+	var buf bytes.Buffer
+	d.Render(&buf, l, 0, item)
+	if buf.Len() == 0 {
+		t.Error("Render() for selected item should write output")
+	}
+	if !strings.Contains(buf.String(), ">") {
+		t.Errorf("Render() for selected item should contain '>' prefix; got %q", buf.String())
+	}
+}
+
 func TestIterationsPanel_Update_Keys(t *testing.T) {
 	p := NewIterationsPanel(80, 20)
 	p = p.AddIteration(makeSummary(1, "build", "success", 0.01, 1.5))

@@ -213,6 +213,31 @@ func TestSpecsPanel_Update_JK_Enter(t *testing.T) {
 	_, _ = p.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
 }
 
+func TestSpecsPanel_JK_EmitsSpecSelectedMsg(t *testing.T) {
+	// The j and k cmds must be invoked to cover the closure body.
+	specs := []spec.SpecFile{
+		makeSpec("spec-a", "specs/spec-a.md", spec.StatusNotStarted),
+		makeSpec("spec-b", "specs/spec-b.md", spec.StatusNotStarted),
+	}
+	p := NewSpecsPanel(specs, 80, 20)
+
+	_, cmd := p.Update(keyMsg("j"))
+	if cmd == nil {
+		t.Fatal("'j' on non-empty panel should return a cmd")
+	}
+	if _, ok := cmd().(SpecSelectedMsg); !ok {
+		t.Errorf("j cmd should emit SpecSelectedMsg, got %T", cmd())
+	}
+
+	_, cmd = p.Update(keyMsg("k"))
+	if cmd == nil {
+		t.Fatal("'k' on non-empty panel should return a cmd")
+	}
+	if _, ok := cmd().(SpecSelectedMsg); !ok {
+		t.Errorf("k cmd should emit SpecSelectedMsg, got %T", cmd())
+	}
+}
+
 func TestSpecItem_Title_ContainsStatusSymbol(t *testing.T) {
 	tests := []struct {
 		status spec.Status

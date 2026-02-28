@@ -3,6 +3,8 @@ package panels
 import (
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestNewMainView(t *testing.T) {
@@ -115,6 +117,88 @@ func TestMainView_SummaryTab(t *testing.T) {
 			t.Errorf("View() missing %q; got:\n%s", want, view)
 		}
 	}
+}
+
+func TestNewMainView_ZeroHeight(t *testing.T) {
+	// contentH < 1 clamp branch: should not panic.
+	mv := NewMainView(80, 0)
+	_ = mv.View()
+}
+
+func TestMainView_SetSize_ZeroHeight(t *testing.T) {
+	// contentH < 1 clamp branch in SetSize.
+	mv := NewMainView(80, 20)
+	mv = mv.SetSize(100, 0)
+	_ = mv.View()
+}
+
+func TestMainView_Update_PrevTab(t *testing.T) {
+	mv := NewMainView(80, 20)
+	mv, _ = mv.Update(keyMsg("]")) // advance to Spec tab
+	prev, _ := mv.Update(keyMsg("["))
+	if prev.activeTab == mv.activeTab {
+		t.Error("'[' key should navigate to the previous tab")
+	}
+}
+
+func TestMainView_Update_FKey(t *testing.T) {
+	// 'f' on output tab toggles follow (non-summary tab branch).
+	mv := NewMainView(80, 20)
+	mv2, _ := mv.Update(keyMsg("f"))
+	_ = mv2.View()
+
+	// 'f' on summary tab is a no-op for follow (summary tab branch).
+	mv = NewMainView(80, 20)
+	mv, _ = mv.Update(keyMsg("]"))
+	mv, _ = mv.Update(keyMsg("]"))
+	mv, _ = mv.Update(keyMsg("]")) // TabIterationSummary
+	if mv.activeTab != TabIterationSummary {
+		t.Fatalf("setup: expected TabIterationSummary, got %v", mv.activeTab)
+	}
+	mv2, _ = mv.Update(keyMsg("f"))
+	_ = mv2.View()
+}
+
+func TestMainView_Update_NonKeyMsg(t *testing.T) {
+	wm := tea.WindowSizeMsg{Width: 100, Height: 30}
+
+	// Non-key message on output tab (default outer switch — else branch).
+	mv := NewMainView(80, 20)
+	mv2, _ := mv.Update(wm)
+	_ = mv2.View()
+
+	// Non-key message on summary tab (default outer switch — if branch).
+	mv = NewMainView(80, 20)
+	mv, _ = mv.Update(keyMsg("]"))
+	mv, _ = mv.Update(keyMsg("]"))
+	mv, _ = mv.Update(keyMsg("]")) // TabIterationSummary
+	mv2, _ = mv.Update(wm)
+	_ = mv2.View()
+}
+
+func TestSplitLines_TrailingNewline(t *testing.T) {
+	// A string ending with '\n' should not produce a spurious empty last element.
+	got := splitLines("line1\nline2\n")
+	if len(got) != 2 {
+		t.Errorf("splitLines with trailing newline: expected 2 lines, got %d: %v", len(got), got)
+	}
+	if got[0] != "line1" || got[1] != "line2" {
+		t.Errorf("splitLines: unexpected content: %v", got)
+	}
+}
+
+func TestSplitLines_Empty(t *testing.T) {
+	if got := splitLines(""); got != nil {
+		t.Errorf("splitLines(\"\") = %v, want nil", got)
+	}
+}
+
+func TestMainView_Update_DefaultKey_NonSummaryTab(t *testing.T) {
+	// A key not matching ], [, or f on a non-summary tab is forwarded to the
+	// logview (the else branch of the default key handler).
+	mv := NewMainView(80, 20) // starts on TabOutput (non-summary)
+	mv2, _ := mv.Update(keyMsg("g"))
+	_ = mv2.View()
 }
 
 func TestMainView_SummaryTab_ContainsLabel(t *testing.T) {
