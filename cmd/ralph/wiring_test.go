@@ -456,6 +456,52 @@ func TestLoopController_StartLoop_NoopWhenRunning(t *testing.T) {
 	}
 }
 
+func TestLoopController_StopLoop_CancelsWhenRunning(t *testing.T) {
+	cancelCalled := false
+	ctrl := &loopController{
+		outerCtx: context.Background(),
+		cancel:   func() { cancelCalled = true },
+	}
+	ctrl.StopLoop()
+	if !cancelCalled {
+		t.Error("StopLoop should call cancel when a loop is running")
+	}
+}
+
+func TestLoopController_StartLoop_WhenIdle(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// Config is valid but BUILD.md is absent — runLoop fails fast on os.ReadFile.
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+
+	ctrl := &loopController{
+		cfg:       cfg,
+		dir:       dir,
+		gitRunner: git.NewRunner(dir),
+		outerCtx:  context.Background(),
+	}
+
+	if ctrl.IsRunning() {
+		t.Fatal("should not be running initially")
+	}
+
+	ctrl.StartLoop("build")
+
+	// runLoop fails fast (BUILD.md missing) — wait for the goroutine to clean up.
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) && ctrl.IsRunning() {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if ctrl.IsRunning() {
+		t.Error("runLoop goroutine should finish quickly when prompt file is missing")
+	}
+}
+
 // initGitRepo creates a minimal git repo in dir for tests that need git operations.
 func initGitRepo(t *testing.T, dir string) {
 	t.Helper()
