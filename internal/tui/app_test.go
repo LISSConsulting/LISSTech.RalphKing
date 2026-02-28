@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -579,5 +580,63 @@ func TestUpdate_Key_Build_NoopWhenRunning(t *testing.T) {
 
 	if ctrl.startCalled != "" {
 		t.Errorf("b key should not start loop when already running, startCalled=%q", ctrl.startCalled)
+	}
+}
+
+func TestReadSpecContent_Success(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "specs"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	want := "# Alpha Spec\n\nHello world."
+	if err := os.WriteFile(filepath.Join(dir, "specs", "alpha.md"), []byte(want), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "TestProject", dir, nil, nil, nil)
+
+	got := m.readSpecContent(spec.SpecFile{Name: "alpha", Path: "specs/alpha.md"})
+	if got != want {
+		t.Errorf("readSpecContent = %q, want %q", got, want)
+	}
+}
+
+func TestReadSpecContent_NotFound(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "TestProject", "", nil, nil, nil)
+
+	got := m.readSpecContent(spec.SpecFile{Name: "missing", Path: "/nonexistent/path/missing.md"})
+	if !strings.Contains(got, "cannot read") {
+		t.Errorf("readSpecContent for missing file should contain 'cannot read'; got %q", got)
+	}
+}
+
+func TestUpdate_SpecSelected_ShowsContent(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "specs"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	specContent := "# My Feature\n\nThis is the spec content."
+	if err := os.WriteFile(filepath.Join(dir, "specs", "feature.md"), []byte(specContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "TestProject", dir, nil, nil, nil)
+
+	// Set a large window so content is renderable.
+	updated0, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated0.(Model)
+
+	sf := spec.SpecFile{Name: "feature", Path: "specs/feature.md"}
+	updated, cmd := m.Update(panels.SpecSelectedMsg{Spec: sf})
+	m2 := updated.(Model)
+
+	if cmd != nil {
+		t.Error("SpecSelectedMsg should return nil cmd")
+	}
+	// The main view should be on the spec tab and show the file content.
+	view := m2.View()
+	if !strings.Contains(view, "My Feature") {
+		t.Errorf("View() after SpecSelectedMsg should contain spec content; got:\n%s", view)
 	}
 }
