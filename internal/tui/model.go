@@ -34,8 +34,8 @@ type Model struct {
 	workDir     string // working directory; shown in header when non-empty
 
 	// Graceful stop support
-	requestStop  func() // called once when user presses 's'; provided by wiring
-	stopRequested bool  // true after first 's' press
+	requestStop   func() // called once when user presses 's'; provided by wiring
+	stopRequested bool   // true after first 's' press
 
 	// Loop state
 	mode         string

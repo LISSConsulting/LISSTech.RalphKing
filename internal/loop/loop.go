@@ -42,7 +42,7 @@ type Loop struct {
 	Events           chan<- LogEntry // optional: structured event sink for TUI
 	Dir              string          // working directory for prompt file resolution
 	PostIteration    func()          // optional: called after each iteration (e.g., test-gated rollback)
-	StopAfter        <-chan struct{}  // optional: closed to request graceful stop after current iteration
+	StopAfter        <-chan struct{} // optional: closed to request graceful stop after current iteration
 	NotificationHook func(LogEntry)  // optional: called on every emitted event for external notifications
 }
 
@@ -337,10 +337,10 @@ func summarizeInput(input map[string]any) string {
 	// Check well-known field names in priority order.
 	for _, key := range []string{
 		"file_path", "command", "path", "url", "pattern", // core tools
-		"description", "prompt",                           // Task / agent tools
-		"query",                                           // WebSearch
-		"notebook_path",                                   // NotebookEdit
-		"task_id",                                         // TaskOutput
+		"description", "prompt", // Task / agent tools
+		"query",         // WebSearch
+		"notebook_path", // NotebookEdit
+		"task_id",       // TaskOutput
 	} {
 		if v, ok := input[key]; ok {
 			return fmt.Sprintf("%v", v)
