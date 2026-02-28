@@ -11,8 +11,27 @@ import (
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui/panels"
 )
+
+// mockStoreReader is a minimal store.Reader for unit tests.
+type mockStoreReader struct {
+	iterations []store.IterationSummary
+	entries    []loop.LogEntry
+}
+
+func (r *mockStoreReader) Iterations() ([]store.IterationSummary, error) {
+	return r.iterations, nil
+}
+
+func (r *mockStoreReader) IterationLog(_ int) ([]loop.LogEntry, error) {
+	return r.entries, nil
+}
+
+func (r *mockStoreReader) SessionSummary() (store.SessionSummary, error) {
+	return store.SessionSummary{}, nil
+}
 
 func newTestModel() Model {
 	ch := make(chan loop.LogEntry, 1)
@@ -312,5 +331,80 @@ func TestUpdate_StopRequested(t *testing.T) {
 	m2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
 	if stopped {
 		t.Error("second 's' key should not call requestStop again")
+	}
+}
+
+func TestUpdate_IterationLogLoaded_SetsIterationAndSummary(t *testing.T) {
+	m := newTestModel()
+
+	// Resize to a standard size so layout is not TooSmall.
+	updated0, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated0.(Model)
+
+	summary := store.IterationSummary{
+		Number:   2,
+		Mode:     "build",
+		CostUSD:  0.0234,
+		Duration: 45.2,
+		Subtype:  "success",
+		Commit:   "abc1234",
+	}
+	msg := iterationLogLoadedMsg{
+		Number:  2,
+		Entries: []loop.LogEntry{{Kind: loop.LogInfo, Message: "agent output"}},
+		Summary: summary,
+		Err:     nil,
+	}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	// After iterationLogLoadedMsg the main view is on TabIterationDetail (2).
+	// One ] advances to TabIterationSummary (3).
+	updated1, _ := m2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("]")})
+	m3 := updated1.(Model)
+
+	view := m3.View()
+	// The Summary tab should show iteration number, cost, and commit.
+	for _, want := range []string{"2", "build", "0.0234", "success", "abc1234"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("Summary tab view missing %q; got:\n%s", want, view)
+		}
+	}
+}
+
+func TestHandleIterationSelected_NilReader(t *testing.T) {
+	m := newTestModel() // storeReader is nil
+	_, cmd := m.Update(panels.IterationSelectedMsg{Number: 1})
+	if cmd != nil {
+		t.Error("nil storeReader should return nil cmd")
+	}
+}
+
+func TestHandleIterationSelected_WithReader(t *testing.T) {
+	reader := &mockStoreReader{
+		iterations: []store.IterationSummary{
+			{Number: 1, Mode: "build", CostUSD: 0.01, Duration: 10, Subtype: "success", Commit: "deadbeef"},
+		},
+		entries: []loop.LogEntry{
+			{Kind: loop.LogInfo, Message: "hello"},
+		},
+	}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, reader, "", "Proj", "/tmp", nil, nil)
+
+	_, cmd := m.Update(panels.IterationSelectedMsg{Number: 1})
+	if cmd == nil {
+		t.Fatal("with storeReader set, should return a non-nil cmd")
+	}
+	resultMsg := cmd()
+	loaded, ok := resultMsg.(iterationLogLoadedMsg)
+	if !ok {
+		t.Fatalf("expected iterationLogLoadedMsg, got %T", resultMsg)
+	}
+	if loaded.Err != nil {
+		t.Errorf("expected no error, got %v", loaded.Err)
+	}
+	if loaded.Summary.Commit != "deadbeef" {
+		t.Errorf("expected commit deadbeef, got %q", loaded.Summary.Commit)
 	}
 }

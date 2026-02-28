@@ -359,7 +359,16 @@ func (m Model) handleIterationSelected(msg panels.IterationSelectedMsg) (tea.Mod
 	n := msg.Number
 	return m, func() tea.Msg {
 		entries, err := m.storeReader.IterationLog(n)
-		return iterationLogLoadedMsg{Number: n, Entries: entries, Err: err}
+		var summary store.IterationSummary
+		if summaries, sErr := m.storeReader.Iterations(); sErr == nil {
+			for _, s := range summaries {
+				if s.Number == n {
+					summary = s
+					break
+				}
+			}
+		}
+		return iterationLogLoadedMsg{Number: n, Entries: entries, Summary: summary, Err: err}
 	}
 }
 
@@ -372,7 +381,25 @@ func (m Model) handleIterationLogLoaded(msg iterationLogLoadedMsg) (tea.Model, t
 		rendered[i] = m.theme.RenderLogLine(e, m.layout.Main.Width)
 	}
 	m.mainView = m.mainView.ShowIterationLog(rendered)
+	m.mainView = m.mainView.SetIterationSummary(renderIterationSummary(msg.Summary))
 	return m, nil
+}
+
+// renderIterationSummary formats an IterationSummary as key-value lines for the Summary tab.
+func renderIterationSummary(s store.IterationSummary) []string {
+	lines := []string{
+		fmt.Sprintf("%-12s %d", "Iteration:", s.Number),
+		fmt.Sprintf("%-12s %s", "Mode:", s.Mode),
+		fmt.Sprintf("%-12s $%.4f", "Cost:", s.CostUSD),
+		fmt.Sprintf("%-12s %.1fs", "Duration:", s.Duration),
+	}
+	if s.Subtype != "" {
+		lines = append(lines, fmt.Sprintf("%-12s %s", "Exit:", s.Subtype))
+	}
+	if s.Commit != "" {
+		lines = append(lines, fmt.Sprintf("%-12s %s", "Commit:", s.Commit))
+	}
+	return lines
 }
 
 // View renders the full multi-panel TUI.

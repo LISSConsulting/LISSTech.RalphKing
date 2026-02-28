@@ -5,6 +5,7 @@ import (
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
 )
 
 // logEntryMsg wraps a LogEntry for broadcasting to all panels.
@@ -23,6 +24,7 @@ type tickMsg time.Time
 type iterationLogLoadedMsg struct {
 	Number  int
 	Entries []loop.LogEntry
+	Summary store.IterationSummary
 	Err     error
 }
 

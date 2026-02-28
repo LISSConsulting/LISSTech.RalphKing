@@ -11,21 +11,23 @@ import (
 type MainTab int
 
 const (
-	TabOutput        MainTab = iota // Live loop output log
-	TabSpecContent                  // Spec file content viewer (US2)
-	TabIterationDetail              // Past iteration drill-down (US3)
+	TabOutput           MainTab = iota // Live loop output log
+	TabSpecContent                     // Spec file content viewer (US2)
+	TabIterationDetail                 // Past iteration log drill-down (US3)
+	TabIterationSummary                // Iteration metadata summary (US3)
 )
 
 // MainView is the main (right-top) panel showing loop output and spec/iteration content.
 type MainView struct {
-	tabbar    components.TabBar
-	logview   components.LogView
-	width     int
-	height    int
-	activeTab MainTab
+	tabbar         components.TabBar
+	logview        components.LogView
+	summaryLogview components.LogView
+	width          int
+	height         int
+	activeTab      MainTab
 }
 
-var mainTabLabels = []string{"Output", "Spec", "Iteration"}
+var mainTabLabels = []string{"Output", "Spec", "Iteration", "Summary"}
 
 // NewMainView creates a MainView with the output tab active.
 func NewMainView(w, h int) MainView {
@@ -34,10 +36,11 @@ func NewMainView(w, h int) MainView {
 		contentH = 1
 	}
 	return MainView{
-		tabbar:  components.NewTabBar(mainTabLabels).SetWidth(w),
-		logview: components.NewLogView(w, contentH),
-		width:   w,
-		height:  h,
+		tabbar:         components.NewTabBar(mainTabLabels).SetWidth(w),
+		logview:        components.NewLogView(w, contentH),
+		summaryLogview: components.NewLogView(w, contentH),
+		width:          w,
+		height:         h,
 	}
 }
 
@@ -48,9 +51,7 @@ func (v MainView) AppendLine(rendered string) MainView {
 }
 
 // ShowSpec loads spec content into the spec viewer and switches to TabSpecContent.
-// For the MVP this simply shows the content in the logview (placeholder).
 func (v MainView) ShowSpec(content string) MainView {
-	// MVP placeholder: show spec content as plain text in the logview
 	v.logview = v.logview.SetContent(splitLines(content))
 	v.activeTab = TabSpecContent
 	v.tabbar = components.NewTabBar(mainTabLabels).SetWidth(v.width)
@@ -72,6 +73,13 @@ func (v MainView) ShowIterationLog(rendered []string) MainView {
 	return v
 }
 
+// SetIterationSummary loads summary key-value lines into the summary viewport.
+// The tab is not switched; the user navigates to Summary with ].
+func (v MainView) SetIterationSummary(lines []string) MainView {
+	v.summaryLogview = v.summaryLogview.SetContent(lines)
+	return v
+}
+
 // SwitchToOutput returns to the live output tab.
 func (v MainView) SwitchToOutput() MainView {
 	v.activeTab = TabOutput
@@ -89,6 +97,7 @@ func (v MainView) SetSize(w, h int) MainView {
 	}
 	v.tabbar = v.tabbar.SetWidth(w)
 	v.logview = v.logview.SetSize(w, contentH)
+	v.summaryLogview = v.summaryLogview.SetSize(w, contentH)
 	return v
 }
 
@@ -105,12 +114,22 @@ func (v MainView) Update(msg tea.Msg) (MainView, tea.Cmd) {
 			v.tabbar = v.tabbar.Prev()
 			v.activeTab = MainTab(v.tabbar.Active())
 		case "f":
-			v.logview = v.logview.ToggleFollow()
+			if v.activeTab != TabIterationSummary {
+				v.logview = v.logview.ToggleFollow()
+			}
 		default:
-			v.logview, cmd = v.logview.Update(msg)
+			if v.activeTab == TabIterationSummary {
+				v.summaryLogview, cmd = v.summaryLogview.Update(msg)
+			} else {
+				v.logview, cmd = v.logview.Update(msg)
+			}
 		}
 	default:
-		v.logview, cmd = v.logview.Update(msg)
+		if v.activeTab == TabIterationSummary {
+			v.summaryLogview, cmd = v.summaryLogview.Update(msg)
+		} else {
+			v.logview, cmd = v.logview.Update(msg)
+		}
 	}
 	return v, cmd
 }
@@ -118,7 +137,12 @@ func (v MainView) Update(msg tea.Msg) (MainView, tea.Cmd) {
 // View renders the main panel: tab bar + content area.
 func (v MainView) View() string {
 	tabRow := v.tabbar.View()
-	content := v.logview.View()
+	var content string
+	if v.activeTab == TabIterationSummary {
+		content = v.summaryLogview.View()
+	} else {
+		content = v.logview.View()
+	}
 	return lipgloss.JoinVertical(lipgloss.Left, tabRow, content)
 }
 

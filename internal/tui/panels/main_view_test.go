@@ -82,3 +82,58 @@ func TestMainView_View_ContainsTabBar(t *testing.T) {
 		t.Errorf("View() should contain tab label 'Output'; got %q", view)
 	}
 }
+
+func TestMainView_SummaryTab(t *testing.T) {
+	summaryLines := []string{
+		"Iteration:   3",
+		"Mode:        build",
+		"Cost:        $0.0234",
+		"Duration:    45.2s",
+		"Exit:        success",
+		"Commit:      abc1234",
+	}
+
+	mv := NewMainView(80, 20)
+	mv = mv.SetIterationSummary(summaryLines)
+
+	// Tab is still on Output after SetIterationSummary (no auto-switch).
+	if mv.activeTab != TabOutput {
+		t.Errorf("SetIterationSummary should not change activeTab, got %v", mv.activeTab)
+	}
+
+	// Cycle ] three times: Output → Spec → Iteration → Summary.
+	mv, _ = mv.Update(keyMsg("]"))
+	mv, _ = mv.Update(keyMsg("]"))
+	mv, _ = mv.Update(keyMsg("]"))
+	if mv.activeTab != TabIterationSummary {
+		t.Errorf("after 3x ], expected TabIterationSummary, got %v", mv.activeTab)
+	}
+
+	view := mv.View()
+	for _, want := range summaryLines {
+		if !strings.Contains(view, want) {
+			t.Errorf("View() missing %q; got:\n%s", want, view)
+		}
+	}
+}
+
+func TestMainView_SummaryTab_ContainsLabel(t *testing.T) {
+	mv := NewMainView(80, 20)
+	view := mv.View()
+	if !strings.Contains(view, "Summary") {
+		t.Errorf("View() should contain tab label 'Summary'; got %q", view)
+	}
+}
+
+func TestMainView_SummaryTab_ScrollDelegation(t *testing.T) {
+	// Verify scroll keys are delegated to summaryLogview when on summary tab.
+	mv := NewMainView(80, 20)
+	mv = mv.SetIterationSummary([]string{"line1", "line2"})
+	// Advance to TabIterationSummary.
+	mv, _ = mv.Update(keyMsg("]"))
+	mv, _ = mv.Update(keyMsg("]"))
+	mv, _ = mv.Update(keyMsg("]"))
+	// Sending a scroll key should not panic.
+	mv, _ = mv.Update(keyMsg("j"))
+	_ = mv.View()
+}
