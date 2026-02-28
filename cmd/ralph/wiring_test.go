@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
 )
 
 func TestNewStateTracker(t *testing.T) {
@@ -319,6 +321,53 @@ func TestRunWithStateTracking_EventsForwarded(t *testing.T) {
 	}
 	if state.Mode != "build" {
 		t.Errorf("Mode = %q, want %q", state.Mode, "build")
+	}
+}
+
+func TestRunWithStateTracking_WithStore(t *testing.T) {
+	// Passes a non-nil store.Writer to cover the sw.Append branch inside the
+	// drain goroutine (the sw != nil branch was previously always exercised
+	// with nil, leaving _ = sw.Append(entry) uncovered).
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+	runner := git.NewRunner(dir)
+	lp := &loop.Loop{}
+
+	s, err := store.NewJSONL(filepath.Join(dir, ".ralph", "logs"))
+	if err != nil {
+		t.Fatalf("NewJSONL: %v", err)
+	}
+	defer func() { _ = s.Close() }()
+
+	gotErr := runWithStateTracking(context.Background(), lp, dir, runner, "build", s, func(_ context.Context) error {
+		lp.Events <- loop.LogEntry{Iteration: 1, TotalCost: 0.10}
+		return nil
+	})
+	if gotErr != nil {
+		t.Fatalf("unexpected error: %v", gotErr)
+	}
+}
+
+func TestRunWithRegent_WithStore(t *testing.T) {
+	// Passes a non-nil store.Writer to cover the sw.Append branch inside the
+	// drain goroutine in runWithRegent.
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+	runner := git.NewRunner(dir)
+	lp := &loop.Loop{}
+
+	s, err := store.NewJSONL(filepath.Join(dir, ".ralph", "logs"))
+	if err != nil {
+		t.Fatalf("NewJSONL: %v", err)
+	}
+	defer func() { _ = s.Close() }()
+
+	err = runWithRegent(context.Background(), lp, regentTestConfig(1), runner, dir, s, func(_ context.Context) error {
+		lp.Events <- loop.LogEntry{Iteration: 1, TotalCost: 0.10}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

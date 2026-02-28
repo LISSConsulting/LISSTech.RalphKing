@@ -654,6 +654,43 @@ func TestExecuteSmartRun_RegentEnabled_PromptMissing(t *testing.T) {
 	}
 }
 
+func TestExecuteLoop_StoreUnavailable(t *testing.T) {
+	// Create .ralph as a regular file so store.NewJSONL cannot create the logs
+	// subdirectory (MkdirAll fails). The store failure is non-fatal — the loop
+	// continues with sw=nil but fails at git CurrentBranch (no git repo).
+	// This covers the fmt.Fprintf(stderr, "session log unavailable") branch.
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
+	if err := os.WriteFile(filepath.Join(dir, ".ralph"), []byte("x"), 0644); err != nil {
+		t.Fatalf("WriteFile .ralph: %v", err)
+	}
+
+	err := executeLoop(loop.ModePlan, 1, true)
+	if err == nil {
+		t.Fatal("expected error from git operations")
+	}
+}
+
+func TestExecuteSmartRun_StoreUnavailable(t *testing.T) {
+	// Create .ralph as a regular file so store.NewJSONL cannot create the logs
+	// subdirectory. Covers the same fmt.Fprintf stderr branch in executeSmartRun.
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+	writeExecTestFile(t, dir, "CHRONICLE.md", "# Done\n\nContent.\n")
+	writeExecTestFile(t, dir, "BUILD.md", "# Build\n")
+	if err := os.WriteFile(filepath.Join(dir, ".ralph"), []byte("x"), 0644); err != nil {
+		t.Fatalf("WriteFile .ralph: %v", err)
+	}
+
+	err := executeSmartRun(1, true)
+	if err == nil {
+		t.Fatal("expected error from git operations")
+	}
+}
+
 func TestExecuteLoop_NotificationsURLSet(t *testing.T) {
 	// With notifications.url set the notify wiring runs; loop still fails at
 	// git CurrentBranch() because there is no git repo in the temp dir.
