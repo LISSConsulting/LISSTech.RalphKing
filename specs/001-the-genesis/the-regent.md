@@ -1,95 +1,142 @@
-# Spec: The Regent — Ralph's Supervisor
+# Feature Specification: The Regent — Ralph's Supervisor
 
-## Topic of Concern
-The Regent is a supervisor process that watches Ralph, detects failures, rolls back bad commits, and resurrects Ralph if he crashes, hangs, or produces regressions.
+**Feature Branch**: `001-the-genesis`
+**Created**: 2026-02-23
+**Status**: Implemented
 
-## Why
-Ralph runs autonomously and makes commits. Without a supervisor, a crash loses the iteration, a bad commit stays in history, and a hang blocks forever. The Regent is the safety layer that keeps Ralph honest and the codebase healthy.
+## User Scenarios & Testing *(mandatory)*
 
-## Responsibilities
+### User Story 1 - Crash Detection and Recovery (Priority: P1)
 
-### 1. Crash detection & resurrection
-- Ralph is run as a child process by the Regent (or the Regent monitors Ralph's PID)
-- If Ralph exits non-zero: log the failure, wait `retry_backoff_seconds`, restart Ralph
-- After `max_retries` consecutive failures: escalate (print to terminal, optionally send webhook notification) and stop
+Ralph crashes mid-iteration (exits non-zero). The Regent detects the crash, logs
+the failure, waits a configurable backoff period, and restarts Ralph automatically.
+After `max_retries` consecutive failures, the Regent escalates and stops.
 
-### 2. Hang detection
-- Track last output timestamp from Ralph's stdout/stderr
-- If no output for `hang_timeout_seconds`: kill Ralph, log timeout, restart
-- Reset hang timer on each new line of output
+**Why this priority**: Autonomous coding loops must survive transient failures;
+without crash recovery Ralph is no better than a bash script.
 
-### 3. Test regression detection (optional, config-gated)
-- After each successful iteration (Ralph completes + pushes), if `test_command` is set:
-  - Run `test_command` in the repo directory
-  - If it fails: run `git revert HEAD --no-edit` and `git push` to undo the bad commit
-  - Log the revert with reason
-  - Resume Ralph on next iteration
-- If `rollback_on_test_failure = false`: skip test run entirely
+**Independent Test**: Mock Ralph to exit non-zero; verify Regent restarts it after
+backoff and stops after max retries.
 
-### 4. State tracking
-- Write Regent state to `.ralph/regent-state.json`:
-  ```json
-  {
-    "ralph_pid": 12345,
-    "iteration": 7,
-    "consecutive_errors": 0,
-    "last_output_at": "2026-02-23T20:00:00Z",
-    "last_commit": "abc1234",
-    "total_cost_usd": 1.42
-  }
-  ```
-- `ralph status` reads this file
+**Acceptance Scenarios**:
 
-### 5. Graceful shutdown
-- On SIGINT/SIGTERM: finish current iteration if in progress, then stop
-- On SIGQUIT: stop immediately, kill Ralph child process
+1. **Given** Ralph exits with a non-zero code, **When** the Regent detects the crash, **Then** it logs the failure, waits `retry_backoff_seconds`, and restarts Ralph.
+2. **Given** Ralph has crashed `max_retries` consecutive times, **When** the next crash occurs, **Then** the Regent escalates (prints to terminal) and stops supervision.
+3. **Given** Ralph completes an iteration successfully after a crash, **When** the success is detected, **Then** the consecutive error counter resets to zero.
 
-## Modes
+---
 
-### Embedded (default)
-The Regent runs inside the same `ralph` binary. `ralph build` → spawns the loop as a goroutine, Regent runs in a separate goroutine monitoring it.
+### User Story 2 - Hang Detection (Priority: P2)
 
-### Daemon (future)
-`ralph regent start` — runs as a background daemon, `ralph regent stop`, `ralph regent logs`.
+Ralph stops producing output but has not exited (hung process). The Regent detects
+the silence, kills Ralph, and restarts it.
 
-## Configuration (from `ralph.toml`)
-```toml
-[regent]
-enabled = true                    # false = Ralph runs unsupervised (loop.sh behaviour)
-rollback_on_test_failure = false  # true = run tests after each commit
-test_command = "go test ./..."    # command to run for regression check
-max_retries = 3                   # consecutive failures before giving up
-retry_backoff_seconds = 30        # wait between retries
-hang_timeout_seconds = 300        # kill Ralph if silent for this long
-```
+**Why this priority**: A hung process blocks the loop indefinitely with no visible
+feedback; automatic detection prevents wasted time and compute.
 
-## TUI Integration
-The Regent surfaces its activity in the Ralph TUI:
+**Independent Test**: Mock Ralph to stop producing output; verify Regent kills it
+after `hang_timeout_seconds` and restarts.
 
-```
-[14:25:01]  🛡️  Regent: Ralph exited (exit 1) — retrying in 30s (attempt 2/3)
-[14:25:31]  🛡️  Regent: Restarting Ralph...
-[14:26:44]  🛡️  Regent: Tests passed ✅ — commit abc1234 kept
-[14:27:01]  🛡️  Regent: Tests failed ❌ — reverting commit abc1234
-```
+**Acceptance Scenarios**:
 
-Regent messages appear inline in the log with a 🛡️ prefix and orange color.
+1. **Given** Ralph has produced no output for `hang_timeout_seconds`, **When** the timeout fires, **Then** the Regent kills the process, logs the timeout, and restarts Ralph.
+2. **Given** Ralph is producing output, **When** each new output line arrives, **Then** the hang timer resets.
 
-## Package Structure
+---
 
-```
-internal/regent/
-  regent.go      — Regent struct, Start(), Stop(), supervision loop
-  state.go       — state file read/write (.ralph/regent-state.json)
-  tester.go      — test runner, revert logic
-```
+### User Story 3 - Test Regression Detection (Priority: P3)
 
-## Acceptance Criteria
-- Ralph crash → Regent restarts after backoff
-- Ralph hang → Regent kills and restarts after timeout
-- Test failure (when enabled) → Regent reverts commit and continues
-- After `max_retries` failures → Regent stops and reports
-- `ralph status` shows Regent state
-- SIGINT stops gracefully after current iteration
-- `.ralph/regent-state.json` written and readable
-- Regent messages visible in TUI log
+After a successful iteration and git push, the Regent runs the configured test
+command. If tests fail, the Regent reverts the commit and pushes the revert,
+keeping the codebase healthy.
+
+**Why this priority**: Autonomous commits can introduce regressions; test gating
+is the safety net that keeps the codebase deployable.
+
+**Independent Test**: Configure `test_command` and `rollback_on_test_failure = true`;
+mock a failing test after commit; verify Regent reverts HEAD and pushes.
+
+**Acceptance Scenarios**:
+
+1. **Given** `rollback_on_test_failure = true` and `test_command` is set, **When** tests pass after an iteration, **Then** the commit is kept and the Regent logs success.
+2. **Given** `rollback_on_test_failure = true` and `test_command` is set, **When** tests fail after an iteration, **Then** the Regent runs `git revert HEAD --no-edit`, pushes the revert, and logs the reason.
+3. **Given** `rollback_on_test_failure = false`, **When** an iteration completes, **Then** no test run is performed.
+
+---
+
+### User Story 4 - State Tracking and Status (Priority: P4)
+
+The Regent writes its state to `.ralph/regent-state.json` after each significant
+event. `ralph status` reads this file to display the last run summary.
+
+**Why this priority**: Observable state enables debugging, monitoring, and the
+`ralph status` command.
+
+**Independent Test**: Run Ralph with Regent; verify `.ralph/regent-state.json`
+contains expected fields; run `ralph status` and verify output.
+
+**Acceptance Scenarios**:
+
+1. **Given** the Regent is running, **When** an iteration completes, **Then** `.ralph/regent-state.json` is updated with ralph_pid, iteration count, consecutive_errors, last_output_at, last_commit, and total_cost_usd.
+2. **Given** a valid state file exists, **When** `ralph status` is run, **Then** it displays the state summary.
+
+---
+
+### User Story 5 - Graceful Shutdown (Priority: P5)
+
+The user sends a signal to stop the Regent. SIGINT/SIGTERM finishes the current
+iteration before stopping; SIGQUIT stops immediately and kills Ralph.
+
+**Why this priority**: Users need predictable shutdown behavior to avoid dirty
+git state or lost work.
+
+**Independent Test**: Send SIGINT during an iteration; verify it completes before
+exiting. Send SIGQUIT; verify immediate termination.
+
+**Acceptance Scenarios**:
+
+1. **Given** Ralph is mid-iteration, **When** SIGINT is received, **Then** the current iteration completes (including git push), then the Regent stops.
+2. **Given** Ralph is mid-iteration, **When** SIGQUIT is received, **Then** the Regent kills Ralph immediately and exits.
+
+---
+
+### Edge Cases
+
+- What happens when `.ralph/` directory does not exist (first run)?
+- What happens when the test command itself hangs?
+- What happens when `git revert` fails (e.g., merge commit)?
+- What happens when the state file is corrupted or has an incompatible schema?
+
+## Requirements *(mandatory)*
+
+### Functional Requirements
+
+- **FR-001**: System MUST monitor Ralph as a child process and detect non-zero exits.
+- **FR-002**: System MUST restart Ralph after `retry_backoff_seconds` on crash, up to `max_retries` consecutive failures.
+- **FR-003**: System MUST track last output timestamp and kill Ralph if no output for `hang_timeout_seconds`.
+- **FR-004**: System MUST run `test_command` after each successful iteration when `rollback_on_test_failure = true`.
+- **FR-005**: System MUST revert HEAD and push when test command fails.
+- **FR-006**: System MUST write state to `.ralph/regent-state.json` with fields: ralph_pid, iteration, consecutive_errors, last_output_at, last_commit, total_cost_usd.
+- **FR-007**: System MUST handle SIGINT/SIGTERM by finishing the current iteration then stopping.
+- **FR-008**: System MUST handle SIGQUIT by killing Ralph immediately and exiting.
+- **FR-009**: System MUST run in embedded mode (same binary as Ralph, separate goroutine) by default.
+- **FR-010**: System MUST surface Regent activity in the Ralph TUI with a shield icon prefix and orange color.
+
+### Key Entities
+
+- **Regent**: Supervisor struct; owns Start(), Stop(), and the supervision loop.
+- **State**: Serializable struct persisted to `.ralph/regent-state.json`.
+- **Tester**: Runs the configured test command and handles revert logic.
+
+## Success Criteria *(mandatory)*
+
+### Measurable Outcomes
+
+- **SC-001**: Ralph crash triggers Regent restart within `retry_backoff_seconds`.
+- **SC-002**: Ralph hang triggers Regent kill-and-restart after `hang_timeout_seconds` of silence.
+- **SC-003**: Test failure with `rollback_on_test_failure = true` results in automatic `git revert HEAD` and push.
+- **SC-004**: After `max_retries` consecutive failures, Regent stops and reports.
+- **SC-005**: `ralph status` displays current Regent state from the state file.
+- **SC-006**: SIGINT results in graceful shutdown after current iteration.
+- **SC-007**: `.ralph/regent-state.json` is written and readable after every state change.
+- **SC-008**: Regent messages are visible in the TUI log with shield prefix.
