@@ -420,6 +420,42 @@ func TestRunWithRegent_LoopEventsUpdateState(t *testing.T) {
 	}
 }
 
+// --- Tests for loopController ---
+
+func TestLoopController_IsRunning_InitiallyFalse(t *testing.T) {
+	ctrl := &loopController{
+		outerCtx: context.Background(),
+	}
+	if ctrl.IsRunning() {
+		t.Error("new loopController should not be running")
+	}
+}
+
+func TestLoopController_StopLoop_NoopWhenIdle(t *testing.T) {
+	ctrl := &loopController{
+		outerCtx: context.Background(),
+	}
+	// Should not panic
+	ctrl.StopLoop()
+	if ctrl.IsRunning() {
+		t.Error("StopLoop on idle controller should not set running=true")
+	}
+}
+
+func TestLoopController_StartLoop_NoopWhenRunning(t *testing.T) {
+	// Set cancel directly to simulate a running loop.
+	cancelCalled := false
+	ctrl := &loopController{
+		outerCtx: context.Background(),
+		cancel:   func() { cancelCalled = true },
+	}
+	ctrl.StartLoop("build") // should be a no-op since cancel != nil
+	// cancelCalled should still be false — we didn't call cancel, just skipped StartLoop
+	if cancelCalled {
+		t.Error("StartLoop should not call cancel when already running")
+	}
+}
+
 // initGitRepo creates a minimal git repo in dir for tests that need git operations.
 func initGitRepo(t *testing.T, dir string) {
 	t.Helper()

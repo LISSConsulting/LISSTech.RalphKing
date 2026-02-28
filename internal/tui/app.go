@@ -57,6 +57,9 @@ type Model struct {
 	requestStop   func()
 	stopRequested bool
 
+	// Loop control (nil when launched from ralph build/plan/run)
+	controller LoopController
+
 	// Error/done
 	err  error
 	done bool
@@ -66,7 +69,7 @@ type Model struct {
 // storeReader may be nil if no session log is available.
 // specFiles is the initial list of specs for the sidebar; nil is allowed.
 // requestStop, if non-nil, is called once when the user presses 's'.
-func New(events <-chan loop.LogEntry, storeReader store.Reader, accentColor, projectName, workDir string, specFiles []spec.SpecFile, requestStop func()) Model {
+func New(events <-chan loop.LogEntry, storeReader store.Reader, accentColor, projectName, workDir string, specFiles []spec.SpecFile, requestStop func(), controller LoopController) Model {
 	now := time.Now()
 	th := NewTheme(accentColor)
 	layout := Calculate(80, 24)
@@ -94,6 +97,7 @@ func New(events <-chan loop.LogEntry, storeReader store.Reader, accentColor, pro
 		projectName:     projectName,
 		workDir:         workDir,
 		requestStop:     requestStop,
+		controller:      controller,
 	}
 }
 
@@ -136,8 +140,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.now = time.Time(msg)
 		return m, tickCmd()
 	case loopDoneMsg:
-		m.done = true
-		return m, tea.Quit
+		// Channel closed — loop finished. Transition to idle but keep TUI open.
+		// In dashboard mode the channel is never closed; for ralph build/plan/run
+		// this fires once when the single loop finishes. User presses q to exit.
+		if m.loopState.CanTransitionTo(StateIdle) {
+			m.loopState = StateIdle
+		}
+		return m, nil
 	case loopErrMsg:
 		m.err = msg.err
 		m.done = true
@@ -183,6 +192,35 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.requestStop != nil && !m.stopRequested {
 			m.stopRequested = true
 			m.requestStop()
+		}
+		return m, nil
+	case "b":
+		if m.controller != nil && !m.controller.IsRunning() {
+			if m.loopState.CanTransitionTo(StateBuilding) {
+				m.loopState = StateBuilding
+			}
+			m.controller.StartLoop("build")
+		}
+		return m, nil
+	case "p":
+		if m.controller != nil && !m.controller.IsRunning() {
+			if m.loopState.CanTransitionTo(StatePlanning) {
+				m.loopState = StatePlanning
+			}
+			m.controller.StartLoop("plan")
+		}
+		return m, nil
+	case "R":
+		if m.controller != nil && !m.controller.IsRunning() {
+			if m.loopState.CanTransitionTo(StateBuilding) {
+				m.loopState = StateBuilding
+			}
+			m.controller.StartLoop("smart")
+		}
+		return m, nil
+	case "x":
+		if m.controller != nil {
+			m.controller.StopLoop()
 		}
 		return m, nil
 	case "tab":

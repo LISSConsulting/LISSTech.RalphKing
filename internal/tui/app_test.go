@@ -33,9 +33,28 @@ func (r *mockStoreReader) SessionSummary() (store.SessionSummary, error) {
 	return store.SessionSummary{}, nil
 }
 
+// mockLoopController is a test double for LoopController.
+type mockLoopController struct {
+	startCalled string
+	stopCalled  bool
+	running     bool
+}
+
+func (c *mockLoopController) StartLoop(mode string) {
+	c.startCalled = mode
+	c.running = true
+}
+
+func (c *mockLoopController) StopLoop() {
+	c.stopCalled = true
+	c.running = false
+}
+
+func (c *mockLoopController) IsRunning() bool { return c.running }
+
 func newTestModel() Model {
 	ch := make(chan loop.LogEntry, 1)
-	return New(ch, nil, "", "TestProject", "/tmp/proj", nil, nil)
+	return New(ch, nil, "", "TestProject", "/tmp/proj", nil, nil, nil)
 }
 
 func TestNew_Defaults(t *testing.T) {
@@ -196,15 +215,20 @@ func TestUpdate_LogEntry_MetadataExtracted(t *testing.T) {
 	}
 }
 
-func TestUpdate_LoopDone_QuitCmd(t *testing.T) {
+func TestUpdate_LoopDone_TransitionsToIdle(t *testing.T) {
 	m := newTestModel()
+	// Put model in building state to verify transition.
+	m.loopState = StateBuilding
 	updated, cmd := m.Update(loopDoneMsg{})
 	m2 := updated.(Model)
-	if !m2.done {
-		t.Error("loopDoneMsg should set done=true")
+	if m2.done {
+		t.Error("loopDoneMsg should NOT set done=true; TUI stays open after loop finishes")
 	}
-	if cmd == nil {
-		t.Fatal("loopDoneMsg should return a quit cmd")
+	if cmd != nil {
+		t.Error("loopDoneMsg should not return a quit cmd; user presses q to exit")
+	}
+	if m2.loopState != StateIdle {
+		t.Errorf("loopDoneMsg should transition to StateIdle, got %v", m2.loopState)
 	}
 }
 
@@ -265,7 +289,7 @@ func TestUpdate_EditSpecRequest_WithEditor(t *testing.T) {
 func TestUpdate_CreateSpecRequest_ReturnsRefresh(t *testing.T) {
 	dir := t.TempDir()
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, nil, "", "TestProject", dir, nil, nil)
+	m := New(ch, nil, "", "TestProject", dir, nil, nil, nil)
 
 	_, cmd := m.Update(panels.CreateSpecRequestMsg{Name: "my-spec"})
 	if cmd == nil {
@@ -315,7 +339,7 @@ func TestUpdate_SpecsRefreshed_UpdatesPanel(t *testing.T) {
 func TestUpdate_StopRequested(t *testing.T) {
 	stopped := false
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, nil, "", "", "", nil, func() { stopped = true })
+	m := New(ch, nil, "", "", "", nil, func() { stopped = true }, nil)
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
 	m2 := updated.(Model)
@@ -390,7 +414,7 @@ func TestHandleIterationSelected_WithReader(t *testing.T) {
 		},
 	}
 	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, reader, "", "Proj", "/tmp", nil, nil)
+	m := New(ch, reader, "", "Proj", "/tmp", nil, nil, nil)
 
 	_, cmd := m.Update(panels.IterationSelectedMsg{Number: 1})
 	if cmd == nil {
@@ -406,5 +430,96 @@ func TestHandleIterationSelected_WithReader(t *testing.T) {
 	}
 	if loaded.Summary.Commit != "deadbeef" {
 		t.Errorf("expected commit deadbeef, got %q", loaded.Summary.Commit)
+	}
+}
+
+func TestUpdate_Key_LoopControl_NoController(t *testing.T) {
+	// Without a controller, b/p/R/x should be no-ops.
+	keys := []string{"b", "p", "R", "x"}
+	for _, key := range keys {
+		t.Run(key, func(t *testing.T) {
+			m := newTestModel()
+			updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+			m2 := updated.(Model)
+			if m2.loopState != StateIdle {
+				t.Errorf("key %q without controller should not change state, got %v", key, m2.loopState)
+			}
+			if cmd != nil {
+				t.Errorf("key %q without controller should return nil cmd", key)
+			}
+		})
+	}
+}
+
+func TestUpdate_Key_Build_StartsLoop(t *testing.T) {
+	ctrl := &mockLoopController{}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, ctrl)
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("b")})
+	m2 := updated.(Model)
+
+	if ctrl.startCalled != "build" {
+		t.Errorf("expected StartLoop(\"build\"), got %q", ctrl.startCalled)
+	}
+	if m2.loopState != StateBuilding {
+		t.Errorf("expected StateBuilding, got %v", m2.loopState)
+	}
+}
+
+func TestUpdate_Key_Plan_StartsLoop(t *testing.T) {
+	ctrl := &mockLoopController{}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, ctrl)
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
+	m2 := updated.(Model)
+
+	if ctrl.startCalled != "plan" {
+		t.Errorf("expected StartLoop(\"plan\"), got %q", ctrl.startCalled)
+	}
+	if m2.loopState != StatePlanning {
+		t.Errorf("expected StatePlanning, got %v", m2.loopState)
+	}
+}
+
+func TestUpdate_Key_SmartRun_StartsLoop(t *testing.T) {
+	ctrl := &mockLoopController{}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, ctrl)
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
+	m2 := updated.(Model)
+
+	if ctrl.startCalled != "smart" {
+		t.Errorf("expected StartLoop(\"smart\"), got %q", ctrl.startCalled)
+	}
+	if m2.loopState != StateBuilding {
+		t.Errorf("expected StateBuilding, got %v", m2.loopState)
+	}
+}
+
+func TestUpdate_Key_Stop_StopsLoop(t *testing.T) {
+	ctrl := &mockLoopController{running: true}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, ctrl)
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if !ctrl.stopCalled {
+		t.Error("x key should call StopLoop()")
+	}
+}
+
+func TestUpdate_Key_Build_NoopWhenRunning(t *testing.T) {
+	ctrl := &mockLoopController{running: true}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, ctrl)
+	m.loopState = StateBuilding
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("b")})
+
+	if ctrl.startCalled != "" {
+		t.Errorf("b key should not start loop when already running, startCalled=%q", ctrl.startCalled)
 	}
 }

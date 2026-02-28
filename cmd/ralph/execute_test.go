@@ -688,6 +688,34 @@ func TestExecuteSmartRun_NotificationsURLSet(t *testing.T) {
 	}
 }
 
+func TestExecuteDashboard_ConfigNotFound(t *testing.T) {
+	// Isolated temp dir with no ralph.toml anywhere in its ancestor tree.
+	t.Chdir(t.TempDir())
+
+	err := executeDashboard()
+	if err == nil {
+		t.Fatal("expected error when ralph.toml not found")
+	}
+	if !strings.Contains(err.Error(), "ralph.toml") {
+		t.Errorf("error should mention ralph.toml, got: %v", err)
+	}
+}
+
+func TestExecuteDashboard_ConfigInvalid(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// Empty plan.prompt_file triggers Validate() error.
+	writeExecTestFile(t, dir, "ralph.toml", "[plan]\nprompt_file = \"\"\n[build]\nprompt_file = \"b.md\"\n")
+
+	err := executeDashboard()
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "config validation") {
+		t.Errorf("error should mention config validation, got: %v", err)
+	}
+}
+
 func TestShowStatus_CorruptedStateFile(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)

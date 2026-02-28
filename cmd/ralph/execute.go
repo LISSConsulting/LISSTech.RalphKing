@@ -282,6 +282,42 @@ func formatLogLine(entry loop.LogEntry) string {
 	return fmt.Sprintf("[%s]  %s", ts, entry.Message)
 }
 
+// executeDashboard launches the TUI in idle/dashboard state.
+// The user can press b/p/R to start a loop and x to stop it from within the TUI.
+func executeDashboard() error {
+	cfg, err := config.Load("")
+	if err != nil {
+		return err
+	}
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("config validation: %w", err)
+	}
+
+	dir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working directory: %w", err)
+	}
+
+	ctx, cancel := signalContext()
+	defer cancel()
+
+	logsDir := filepath.Join(dir, ".ralph", "logs")
+	var sw store.Writer
+	var sr store.Reader
+	if s, err := store.NewJSONL(logsDir); err != nil {
+		fmt.Fprintf(os.Stderr, "ralph: session log unavailable: %v\n", err)
+	} else {
+		if retErr := store.EnforceRetention(logsDir, cfg.TUI.LogRetention); retErr != nil {
+			fmt.Fprintf(os.Stderr, "ralph: log retention: %v\n", retErr)
+		}
+		sw = s
+		sr = s
+		defer s.Close()
+	}
+
+	return runDashboard(ctx, cfg, dir, sw, sr)
+}
+
 // openEditor launches the given editor with the file path, connecting stdio.
 func openEditor(editor, path string) error {
 	cmd := exec.Command(editor, path)

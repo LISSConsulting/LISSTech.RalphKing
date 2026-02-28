@@ -2,7 +2,7 @@ package tui
 
 // GlobalKeyBindings lists the keys that are always handled by the root model
 // before dispatching to focused panels.
-var GlobalKeyBindings = []string{"tab", "shift+tab", "1", "2", "3", "4", "q", "ctrl+c", "s", "?"}
+var GlobalKeyBindings = []string{"tab", "shift+tab", "1", "2", "3", "4", "q", "ctrl+c", "s", "?", "b", "p", "R", "x"}
 
 // panelKeys maps each FocusTarget to the keys that panel handles internally.
 var panelKeys = map[FocusTarget][]string{

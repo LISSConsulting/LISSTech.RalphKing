@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -72,7 +73,7 @@ func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gi
 	lp.PostIteration = rgt.RunPostIterationTests
 
 	specFiles, _ := spec.List(dir)
-	model := tui.New(tuiEvents, sr, cfg.TUI.AccentColor, cfg.Project.Name, dir, specFiles, requestStop)
+	model := tui.New(tuiEvents, sr, cfg.TUI.AccentColor, cfg.Project.Name, dir, specFiles, requestStop, nil)
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	// Forward loop events → regent state update → TUI
@@ -184,7 +185,7 @@ func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunne
 	st.save()
 
 	specFiles, _ := spec.List(dir)
-	model := tui.New(tuiEvents, sr, accentColor, projectName, dir, specFiles, requestStop)
+	model := tui.New(tuiEvents, sr, accentColor, projectName, dir, specFiles, requestStop, nil)
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	// Forward loop events → state tracking → TUI
@@ -287,4 +288,122 @@ func (s *stateTracker) finish(err error) {
 	s.state.FinishedAt = time.Now()
 	s.state.Passed = err == nil || errors.Is(err, context.Canceled)
 	s.save()
+}
+
+// loopController implements tui.LoopController for dashboard mode.
+// It starts and stops loop runs in response to TUI key presses (b/p/R/x).
+type loopController struct {
+	cfg       *config.Config
+	dir       string
+	gitRunner *git.Runner
+	sw        store.Writer
+	tuiSend   chan<- loop.LogEntry
+	outerCtx  context.Context
+	mu        sync.Mutex
+	cancel    context.CancelFunc
+}
+
+// IsRunning reports whether a loop goroutine is currently active.
+func (lc *loopController) IsRunning() bool {
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
+	return lc.cancel != nil
+}
+
+// StartLoop starts a loop in the given mode ("build", "plan", or "smart").
+// A no-op if a loop is already running.
+func (lc *loopController) StartLoop(mode string) {
+	lc.mu.Lock()
+	if lc.cancel != nil {
+		lc.mu.Unlock()
+		return
+	}
+	ctx, cancel := context.WithCancel(lc.outerCtx)
+	lc.cancel = cancel
+	lc.mu.Unlock()
+
+	go lc.runLoop(ctx, mode)
+}
+
+// StopLoop immediately cancels the running loop. No-op if idle.
+func (lc *loopController) StopLoop() {
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
+	if lc.cancel != nil {
+		lc.cancel()
+	}
+}
+
+// runLoop executes the loop and forwards events to the TUI channel.
+func (lc *loopController) runLoop(ctx context.Context, mode string) {
+	lp := &loop.Loop{
+		Agent:  loop.NewClaudeAgent(),
+		Git:    lc.gitRunner,
+		Config: lc.cfg,
+		Dir:    lc.dir,
+	}
+	loopEvents := make(chan loop.LogEntry, 128)
+	lp.Events = loopEvents
+
+	forwardDone := make(chan struct{})
+	go func() {
+		defer close(forwardDone)
+		for entry := range loopEvents {
+			if lc.sw != nil {
+				_ = lc.sw.Append(entry)
+			}
+			select {
+			case lc.tuiSend <- entry:
+			default:
+			}
+		}
+	}()
+
+	var runErr error
+	switch mode {
+	case "plan":
+		runErr = lp.Run(ctx, loop.ModePlan, 0)
+	case "smart":
+		planPath := filepath.Join(lc.dir, "CHRONICLE.md")
+		info, statErr := os.Stat(planPath)
+		if needsPlanPhase(info, statErr) {
+			runErr = lp.Run(ctx, loop.ModePlan, 0)
+		}
+		if runErr == nil {
+			runErr = lp.Run(ctx, loop.ModeBuild, 0)
+		}
+	default: // "build"
+		runErr = lp.Run(ctx, loop.ModeBuild, 0)
+	}
+
+	close(loopEvents)
+	<-forwardDone
+
+	lc.mu.Lock()
+	lc.cancel = nil
+	lc.mu.Unlock()
+
+	_ = runErr
+}
+
+// runDashboard launches the TUI in idle (dashboard) state with no loop running.
+// The user can press b/p/R to start a loop and x to stop it.
+func runDashboard(ctx context.Context, cfg *config.Config, dir string, sw store.Writer, sr store.Reader) error {
+	tuiEvents := make(chan loop.LogEntry, 128)
+	// Note: tuiEvents is intentionally never closed; the TUI exits when user presses q.
+
+	gitRunner := git.NewRunner(dir)
+	ctrl := &loopController{
+		cfg:       cfg,
+		dir:       dir,
+		gitRunner: gitRunner,
+		sw:        sw,
+		tuiSend:   tuiEvents,
+		outerCtx:  ctx,
+	}
+
+	specFiles, _ := spec.List(dir)
+	model := tui.New(tuiEvents, sr, cfg.TUI.AccentColor, cfg.Project.Name, dir, specFiles, nil, ctrl)
+	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	return finishTUI(program)
 }
