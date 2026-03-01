@@ -28,6 +28,16 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 No actionable items remain. All specs (001–004) are fully implemented, tests pass, lint is clean.
 
+### Improvement Sweep (v0.0.96, 2026-03-01)
+
+Full sweep completed — actionable findings resolved:
+- **Test coverage**: Added `TestRenderLogLine_NarrowWidth_ToolUse` and `TestRenderLogLine_NarrowWidth_LogText` covering the `maxInput < 20` (width=30 gives -2 → clamped to 20) and `maxText < 20` (width=30 gives 13 → clamped to 20) branches in `RenderLogLine`. `internal/tui/theme.go:RenderLogLine`: 88.6%→100%; `internal/tui` package: 97.0%→98.2%. Remaining gaps are confirmed residuals: `tickCmd()` (tea.Tick callback unreachable in tests), `os.Getwd()` errors throughout cmd/ralph (OS-level impossibility), `runWithRegentTUI`/`runWithTUIAndState`/`runDashboard` (0%, TTY required), git Pull/Push/Stash edge cases (old-git or impossible two-step failures), ScaffoldProject write errors (chmod Unix-only/unreliable), SaveState CreateTemp/Write/Close errors (OS permission manipulation), store.NewJSONL OpenFile/Seek errors (OS manipulation), EnforceRetention ReadDir non-IsNotExist error (behaves like IsNotExist on Windows, per TestSpecListCmd_SpecsNotDir skip pattern).
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere.
+- **Stale references**: No drift found.
+- **Spec consistency**: Full compliance check against spec 004 acceptance criteria — zero drift found.
+- **CI health**: Both `ci.yml` and `release.yml` are clean — `golangci-lint-action@v7` with `v2.1.6` pinned, all other actions at v4/v5.
+- **Dead code**: No orphaned functions or unused constants found.
+
 ### Improvement Sweep (v0.0.95, 2026-03-01)
 
 Full sweep completed — actionable findings resolved:

@@ -191,3 +191,34 @@ func TestRenderLogLinePkgFunc(t *testing.T) {
 		t.Errorf("method and function differ:\nmethod: %q\nfn:     %q", method, fn)
 	}
 }
+
+// TestRenderLogLine_NarrowWidth_ToolUse covers the maxInput < 20 clamp in the
+// LogToolUse case. width=30 gives maxInput = 30-32 = -2, which is clamped to 20.
+func TestRenderLogLine_NarrowWidth_ToolUse(t *testing.T) {
+	th := NewTheme("")
+	now := time.Now()
+	rendered := th.RenderLogLine(loop.LogEntry{
+		Kind:      loop.LogToolUse,
+		Timestamp: now,
+		ToolName:  "Bash",
+		ToolInput: strings.Repeat("x", 200),
+	}, 30)
+	if !strings.Contains(rendered, "…") {
+		t.Error("expected tool input to be truncated even with narrow width clamp")
+	}
+}
+
+// TestRenderLogLine_NarrowWidth_LogText covers the maxText < 20 clamp in the
+// LogText case. width=30 gives maxText = 30-17 = 13, which is clamped to 20.
+func TestRenderLogLine_NarrowWidth_LogText(t *testing.T) {
+	th := NewTheme("")
+	now := time.Now()
+	rendered := th.RenderLogLine(loop.LogEntry{
+		Kind:      loop.LogText,
+		Timestamp: now,
+		Message:   strings.Repeat("x", 200),
+	}, 30)
+	if !strings.Contains(rendered, "…") {
+		t.Error("expected text to be truncated even with narrow width clamp")
+	}
+}
