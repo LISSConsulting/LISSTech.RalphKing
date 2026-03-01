@@ -28,6 +28,16 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 None. All code, tests, CI, and documentation are clean.
 
+### Improvement Sweep (v0.1.02, 2026-03-01)
+
+Full sweep completed — one actionable finding resolved:
+- **Test coverage**: Added `TestClaudeAgentRun/empty_executable_defaults_to_claude_binary_name` covering the `if exe == "" { exe = "claude" }` default branch in `ClaudeAgent.Run` (`internal/loop/runner.go:32`). Approach: clear PATH via `t.Setenv("PATH", "")` then create `&ClaudeAgent{}` with empty Executable — `cmd.Start()` fails with "claude agent: start: not found". `internal/loop` package: 98.6%→99.3%; `ClaudeAgent.Run` function: 92.0%→96.0%. Remaining 4% (1 stmt) is `StdoutPipe()` failure — OS-level impossibility, confirmed ceiling.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found.
+- **Stale references**: None found. README.md, CLAUDE.md, all CI workflows current.
+- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned.
+- **Dead code**: None found.
+- **Spec compliance**: Full compliance check against spec 003 (T001–T045) and spec 004 (T001–T034) — zero implementation drift found.
+
 ### Improvement Sweep (v0.1.00, 2026-03-01)
 
 Full sweep completed — one documentation-only carry-forward finding, no functional changes:

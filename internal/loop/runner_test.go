@@ -271,6 +271,20 @@ func TestClaudeAgentRun(t *testing.T) {
 			t.Fatal("expected error for invalid executable")
 		}
 	})
+
+	t.Run("empty executable defaults to claude binary name", func(t *testing.T) {
+		// Clear PATH so "claude" cannot be found — Start() fails with a
+		// start error, confirming the exe = "claude" default was reached.
+		t.Setenv("PATH", "")
+		agent := &ClaudeAgent{} // Executable is ""
+		_, err := agent.Run(context.Background(), "test", claude.RunOptions{})
+		if err == nil {
+			t.Fatal("expected error when Executable is empty and claude not in PATH")
+		}
+		if !strings.Contains(err.Error(), "claude agent: start:") {
+			t.Errorf("error should mention claude agent start, got: %v", err)
+		}
+	})
 }
 
 // Verify ClaudeAgent satisfies claude.Agent at compile time.
