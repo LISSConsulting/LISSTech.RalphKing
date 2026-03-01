@@ -31,9 +31,9 @@ func TestFormatSpecList(t *testing.T) {
 		{
 			name: "single done spec (flat file)",
 			specs: []spec.SpecFile{
-				{Name: "ralph-core", Path: "specs/ralph-core.md", Status: spec.StatusDone},
+				{Name: "test-spec", Path: "specs/test-spec.md", Status: spec.StatusDone},
 			},
-			contains: []string{"Specs", "─────", "✅", "specs/ralph-core.md", "done"},
+			contains: []string{"Specs", "─────", "✅", "specs/test-spec.md", "done"},
 		},
 		{
 			name: "directory-based spec uses Dir path",
@@ -46,14 +46,14 @@ func TestFormatSpecList(t *testing.T) {
 		{
 			name: "multiple specs with mixed statuses",
 			specs: []spec.SpecFile{
-				{Name: "ralph-core", Path: "specs/ralph-core.md", Status: spec.StatusDone},
-				{Name: "the-regent", Path: "specs/the-regent.md", Status: spec.StatusInProgress},
+				{Name: "spec-one", Path: "specs/spec-one.md", Status: spec.StatusDone},
+				{Name: "spec-two", Path: "specs/spec-two.md", Status: spec.StatusInProgress},
 				{Name: "new-feature", Path: "specs/new-feature.md", Status: spec.StatusNotStarted},
 			},
 			contains: []string{
 				"Specs", "─────",
-				"✅", "specs/ralph-core.md", "done",
-				"🔄", "specs/the-regent.md", "in progress",
+				"✅", "specs/spec-one.md", "done",
+				"🔄", "specs/spec-two.md", "in progress",
 				"⬜", "specs/new-feature.md", "not started",
 			},
 		},

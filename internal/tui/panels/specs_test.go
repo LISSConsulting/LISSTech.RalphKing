@@ -25,12 +25,12 @@ func TestNewSpecsPanel_Empty(t *testing.T) {
 
 func TestNewSpecsPanel_WithSpecs(t *testing.T) {
 	specs := []spec.SpecFile{
-		makeSpec("ralph-core", "specs/ralph-core.md", spec.StatusDone),
-		makeSpec("the-regent", "specs/the-regent.md", spec.StatusInProgress),
+		makeSpec("spec-one", "specs/spec-one.md", spec.StatusDone),
+		makeSpec("spec-two", "specs/spec-two.md", spec.StatusInProgress),
 	}
 	p := NewSpecsPanel(specs, 80, 20)
 	view := p.View()
-	for _, want := range []string{"ralph-core", "the-regent"} {
+	for _, want := range []string{"spec-one", "spec-two"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("View() missing spec %q; got %q", want, view)
 		}
