@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **Specs 001+002 fully implemented; spec 003 fully complete (T001–T045, all phases). CI lint fixed (golangci-lint pinned to v2.1.6). PR #5 open for review.** All 12 packages pass; go vet clean; golangci-lint 0 issues; tests green. `internal/tui/components` 100%, `internal/tui/panels` 100% (was 94.7%). cmd/ralph 72.5% (was 71.6% — `finishTUI` 0%→50% via `tea.WithoutRenderer()` test).
+> Current state: **All specs (001–003) fully implemented. No remaining work items. PR #5 open for review.** All 12 packages pass; go vet clean; golangci-lint 0 issues; tests green. `internal/tui/components` 100%, `internal/tui/panels` 100%. cmd/ralph 72.5% — confirmed ceiling: `runWithRegentTUI`/`runWithTUIAndState`/`runDashboard` (0%) require real TTY; `os.Getwd()` error paths untriggerable in tests; `TestSpecListCmd_SpecsNotDir` skipped on Windows (ReadDir on regular file returns IsNotExist on Windows, not an error).
 
 ## Completed Work
 
@@ -22,9 +22,7 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 ## Remaining Work
 
-| Priority | Item | Location | Notes |
-|----------|------|----------|-------|
-| Info | cmd/ralph coverage ceiling at 72.5% | `cmd/ralph/wiring.go` — `runWithRegentTUI`, `runWithTUIAndState`, `runDashboard` (0%); `finishTUI` 50%; `cmd/ralph/main.go` — `main`; `cmd/ralph/quit_unix.go`/`quit_windows.go` — `registerQuitHandler` | `finishTUI` improved 0%→50% via `TestFinishTUI_Success` (`tea.WithoutRenderer()` + test I/O); error paths require `program.Run()` failure which is not triggerable. Remaining 0% functions require real TUI program loop. `signalContext` signal-cancel path covered on Linux CI (skipped on Windows). Windows-only gap: `TestSpecListCmd_SpecsNotDir` skipped on Windows (`spec.List` error path via ReadDir on regular file only fails on Unix). |
+No actionable items remain. All specs (001–003) are fully implemented, tests pass, lint is clean.
 
 ## Future Backlog (from GitHub Issues #1 and #2)
 
@@ -133,6 +131,7 @@ All items from Issues #1 (TUI) and #2 (RK) are resolved. Two items remain pendin
 - `LogView.Update` test pattern: to trigger the `follow=false` branch, populate a small-height viewport (e.g. `height=2`) with ≥20 lines so content exceeds the view, then set `lv.vp.YOffset = 0` (direct field access from within `package components`) to force off-bottom state. Then send `tea.KeyMsg` or `tea.MouseMsg{Button: tea.MouseButtonWheelUp}`. The `switch msg.(type) { case tea.KeyMsg, tea.MouseMsg: }` in `Update` then sets `follow=false`. `store.onAppend` commit-from-complete branch: pass `Commit: "hash"` on the `LogIterComplete` entry — the index copies it to the summary's `Commit` field; covered by `TestIterationSummary_CommitFromComplete`.
 - `panels` coverage patterns: (a) `contentH < 1` clamp in `NewMainView`/`NewSecondaryPanel`/`SetSize` triggered by passing `h=0`; (b) `renderCostTable` clamp covered by `NewSecondaryPanel(80, 0)` + navigate to Cost tab; (c) `iterDelegate.Render` selected branch covered by `d.Render(&buf, l, 0, item)` where `0 == l.Index()`; (d) `MainView.Update` `else` branch in default-key handler on non-summary tab covered by sending arbitrary key (`"g"`) to output tab; (e) `SpecsPanel` j/k closure bodies covered by calling `cmd()` after the update returns; (f) `AbbreviatePath` home-dir substitution covered by constructing a path under `os.UserHomeDir()` and calling `AbbreviatePath` on it (skip if UserHomeDir errors).
 - `finishTUI` happy-path test: bubbletea v1.3.10 supports `tea.WithoutRenderer()` (sets `nilRenderer` — all methods no-op) which allows `program.Run()` to execute without a real TTY. Combined with `tea.WithInput(strings.NewReader("q"))` (non-TTY reader uses `cancelreader.NewReader` fallback on both Unix and Windows) and `tea.WithOutput(io.Discard)`, the test starts the TUI, receives `loopDoneMsg` (from pre-closed events channel), receives `q` key → `tea.Quit`, and exits cleanly. This covers the happy path of `finishTUI` (50% coverage). The error paths (`program.Run()` returning error, `m.Err()` non-nil) are not triggerable without real terminal failures or editor subprocess failures.
+- cmd/ralph coverage ceiling analysis (confirmed 2026-03-01): `runWithRegentTUI`/`runWithTUIAndState`/`runDashboard` are 0% because they create `tea.NewProgram` internally with `tea.WithAltScreen()` + `tea.WithMouseCellMotion()` — test options cannot be injected without refactoring. `os.Getwd()` error branches throughout cmd/ralph are impossible to trigger in tests. `TestSpecListCmd_SpecsNotDir` is skipped on Windows because `os.ReadDir` on a regular file returns `IsNotExist` on Windows (path `specs\*` doesn't exist), not a non-IsNotExist error; verified empirically: `err` message is "The system cannot find the path specified", `os.IsNotExist(err)` is `true`. The 72.5% ceiling is definitive without introducing TTY infrastructure or `programFactory` injection patterns.
 
 ## Out of Scope (for now)
 
