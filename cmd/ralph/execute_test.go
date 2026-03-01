@@ -654,6 +654,43 @@ func TestExecuteSmartRun_RegentEnabled_PromptMissing(t *testing.T) {
 	}
 }
 
+func TestExecuteLoop_StoreUnavailable(t *testing.T) {
+	// Create .ralph as a regular file so store.NewJSONL cannot create the logs
+	// subdirectory (MkdirAll fails). The store failure is non-fatal — the loop
+	// continues with sw=nil but fails at git CurrentBranch (no git repo).
+	// This covers the fmt.Fprintf(stderr, "session log unavailable") branch.
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
+	if err := os.WriteFile(filepath.Join(dir, ".ralph"), []byte("x"), 0644); err != nil {
+		t.Fatalf("WriteFile .ralph: %v", err)
+	}
+
+	err := executeLoop(loop.ModePlan, 1, true)
+	if err == nil {
+		t.Fatal("expected error from git operations")
+	}
+}
+
+func TestExecuteSmartRun_StoreUnavailable(t *testing.T) {
+	// Create .ralph as a regular file so store.NewJSONL cannot create the logs
+	// subdirectory. Covers the same fmt.Fprintf stderr branch in executeSmartRun.
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+	writeExecTestFile(t, dir, "CHRONICLE.md", "# Done\n\nContent.\n")
+	writeExecTestFile(t, dir, "BUILD.md", "# Build\n")
+	if err := os.WriteFile(filepath.Join(dir, ".ralph"), []byte("x"), 0644); err != nil {
+		t.Fatalf("WriteFile .ralph: %v", err)
+	}
+
+	err := executeSmartRun(1, true)
+	if err == nil {
+		t.Fatal("expected error from git operations")
+	}
+}
+
 func TestExecuteLoop_NotificationsURLSet(t *testing.T) {
 	// With notifications.url set the notify wiring runs; loop still fails at
 	// git CurrentBranch() because there is no git repo in the temp dir.
@@ -685,6 +722,34 @@ func TestExecuteSmartRun_NotificationsURLSet(t *testing.T) {
 	err := executeSmartRun(1, true)
 	if err == nil {
 		t.Fatal("expected error from git operations")
+	}
+}
+
+func TestExecuteDashboard_ConfigNotFound(t *testing.T) {
+	// Isolated temp dir with no ralph.toml anywhere in its ancestor tree.
+	t.Chdir(t.TempDir())
+
+	err := executeDashboard()
+	if err == nil {
+		t.Fatal("expected error when ralph.toml not found")
+	}
+	if !strings.Contains(err.Error(), "ralph.toml") {
+		t.Errorf("error should mention ralph.toml, got: %v", err)
+	}
+}
+
+func TestExecuteDashboard_ConfigInvalid(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// Empty plan.prompt_file triggers Validate() error.
+	writeExecTestFile(t, dir, "ralph.toml", "[plan]\nprompt_file = \"\"\n[build]\nprompt_file = \"b.md\"\n")
+
+	err := executeDashboard()
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "config validation") {
+		t.Errorf("error should mention config validation, got: %v", err)
 	}
 }
 

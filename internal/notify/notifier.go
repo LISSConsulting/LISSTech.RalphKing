@@ -69,5 +69,5 @@ func (n *Notifier) post(message string) {
 	if err != nil {
 		return
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }

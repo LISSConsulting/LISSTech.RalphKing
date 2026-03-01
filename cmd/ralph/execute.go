@@ -15,6 +15,7 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/notify"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
 )
 
 // executeLoop loads config, builds the loop, and runs it in the given mode.
@@ -62,21 +63,35 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 		lp.NotificationHook = n.Hook
 	}
 
+	logsDir := filepath.Join(dir, ".ralph", "logs")
+	var sw store.Writer
+	var sr store.Reader
+	if s, err := store.NewJSONL(logsDir); err != nil {
+		fmt.Fprintf(os.Stderr, "ralph: session log unavailable: %v\n", err)
+	} else {
+		if retErr := store.EnforceRetention(logsDir, cfg.TUI.LogRetention); retErr != nil {
+			fmt.Fprintf(os.Stderr, "ralph: log retention: %v\n", retErr)
+		}
+		sw = s
+		sr = s
+		defer func() { _ = s.Close() }()
+	}
+
 	runFn := func(ctx context.Context) error {
 		return lp.Run(ctx, mode, maxOverride)
 	}
 
 	if !cfg.Regent.Enabled {
 		if noTUI {
-			return runWithStateTracking(ctx, lp, dir, gitRunner, string(mode), runFn)
+			return runWithStateTracking(ctx, lp, dir, gitRunner, string(mode), sw, runFn)
 		}
-		return runWithTUIAndState(ctx, lp, dir, gitRunner, string(mode), cfg.TUI.AccentColor, cfg.Project.Name, runFn)
+		return runWithTUIAndState(ctx, lp, dir, gitRunner, string(mode), cfg.TUI.AccentColor, cfg.Project.Name, sw, sr, runFn)
 	}
 
 	if noTUI {
-		return runWithRegent(ctx, lp, cfg, gitRunner, dir, runFn)
+		return runWithRegent(ctx, lp, cfg, gitRunner, dir, sw, runFn)
 	}
-	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, runFn)
+	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, sw, sr, runFn)
 }
 
 // executeSmartRun runs plan if CHRONICLE.md doesn't exist, then build.
@@ -110,6 +125,20 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 		lp.NotificationHook = n.Hook
 	}
 
+	logsDir := filepath.Join(dir, ".ralph", "logs")
+	var sw store.Writer
+	var sr store.Reader
+	if s, err := store.NewJSONL(logsDir); err != nil {
+		fmt.Fprintf(os.Stderr, "ralph: session log unavailable: %v\n", err)
+	} else {
+		if retErr := store.EnforceRetention(logsDir, cfg.TUI.LogRetention); retErr != nil {
+			fmt.Fprintf(os.Stderr, "ralph: log retention: %v\n", retErr)
+		}
+		sw = s
+		sr = s
+		defer func() { _ = s.Close() }()
+	}
+
 	smartRunFn := func(ctx context.Context) error {
 		// Check inside the closure so Regent retries re-evaluate whether
 		// the plan file exists (it may have been created by a prior attempt).
@@ -125,15 +154,15 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 
 	if !cfg.Regent.Enabled {
 		if noTUI {
-			return runWithStateTracking(ctx, lp, dir, gitRunner, "run", smartRunFn)
+			return runWithStateTracking(ctx, lp, dir, gitRunner, "run", sw, smartRunFn)
 		}
-		return runWithTUIAndState(ctx, lp, dir, gitRunner, "run", cfg.TUI.AccentColor, cfg.Project.Name, smartRunFn)
+		return runWithTUIAndState(ctx, lp, dir, gitRunner, "run", cfg.TUI.AccentColor, cfg.Project.Name, sw, sr, smartRunFn)
 	}
 
 	if noTUI {
-		return runWithRegent(ctx, lp, cfg, gitRunner, dir, smartRunFn)
+		return runWithRegent(ctx, lp, cfg, gitRunner, dir, sw, smartRunFn)
 	}
-	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, smartRunFn)
+	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, sw, sr, smartRunFn)
 }
 
 // showStatus reads .ralph/regent-state.json and prints a formatted summary.
@@ -251,6 +280,42 @@ func formatLogLine(entry loop.LogEntry) string {
 		return fmt.Sprintf("[%s]  🛡️  Regent: %s", ts, entry.Message)
 	}
 	return fmt.Sprintf("[%s]  %s", ts, entry.Message)
+}
+
+// executeDashboard launches the TUI in idle/dashboard state.
+// The user can press b/p/R to start a loop and x to stop it from within the TUI.
+func executeDashboard() error {
+	cfg, err := config.Load("")
+	if err != nil {
+		return err
+	}
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("config validation: %w", err)
+	}
+
+	dir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working directory: %w", err)
+	}
+
+	ctx, cancel := signalContext()
+	defer cancel()
+
+	logsDir := filepath.Join(dir, ".ralph", "logs")
+	var sw store.Writer
+	var sr store.Reader
+	if s, err := store.NewJSONL(logsDir); err != nil {
+		fmt.Fprintf(os.Stderr, "ralph: session log unavailable: %v\n", err)
+	} else {
+		if retErr := store.EnforceRetention(logsDir, cfg.TUI.LogRetention); retErr != nil {
+			fmt.Fprintf(os.Stderr, "ralph: log retention: %v\n", retErr)
+		}
+		sw = s
+		sr = s
+		defer func() { _ = s.Close() }()
+	}
+
+	return runDashboard(ctx, cfg, dir, sw, sr)
 }
 
 // openEditor launches the given editor with the file path, connecting stdio.

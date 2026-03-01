@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -14,12 +15,14 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui"
 )
 
 // runWithRegent runs the loop under Regent supervision without TUI.
 // Events are drained to stdout.
-func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRunner *git.Runner, dir string, run regent.RunFunc) error {
+func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRunner *git.Runner, dir string, sw store.Writer, run regent.RunFunc) error {
 	events := make(chan loop.LogEntry, 128)
 	lp.Events = events
 
@@ -31,10 +34,13 @@ func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRu
 	go func() {
 		defer close(drainDone)
 		for entry := range events {
+			if sw != nil {
+				_ = sw.Append(entry)
+			}
 			if entry.Kind != loop.LogRegent {
 				rgt.UpdateState(entry)
 			}
-			fmt.Fprintln(os.Stdout, formatLogLine(entry))
+			_, _ = fmt.Fprintln(os.Stdout, formatLogLine(entry))
 		}
 	}()
 
@@ -52,7 +58,7 @@ func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRu
 // runWithRegentTUI runs the loop under Regent supervision with TUI display.
 // Loop events are forwarded through the Regent for state/hang tracking, then
 // sent to the TUI. Regent messages are sent directly to the TUI channel.
-func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRunner *git.Runner, dir string, run regent.RunFunc) error {
+func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRunner *git.Runner, dir string, sw store.Writer, sr store.Reader, run regent.RunFunc) error {
 	loopEvents := make(chan loop.LogEntry, 128)
 	tuiEvents := make(chan loop.LogEntry, 128)
 
@@ -66,7 +72,8 @@ func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gi
 	rgt := regent.New(cfg.Regent, dir, gitRunner, tuiEvents)
 	lp.PostIteration = rgt.RunPostIterationTests
 
-	model := tui.New(tuiEvents, cfg.TUI.AccentColor, cfg.Project.Name, dir, requestStop)
+	specFiles, _ := spec.List(dir)
+	model := tui.New(tuiEvents, sr, cfg.TUI.AccentColor, cfg.Project.Name, dir, specFiles, requestStop, nil)
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	// Forward loop events → regent state update → TUI
@@ -74,6 +81,9 @@ func runWithRegentTUI(ctx context.Context, lp *loop.Loop, cfg *config.Config, gi
 	go func() {
 		defer close(forwardDone)
 		for entry := range loopEvents {
+			if sw != nil {
+				_ = sw.Append(entry)
+			}
 			rgt.UpdateState(entry)
 			select {
 			case tuiEvents <- entry:
@@ -130,7 +140,7 @@ func finishTUI(program *tea.Program) error {
 // runWithStateTracking runs the loop without Regent supervision in no-TUI mode,
 // draining events to stdout and persisting state to .ralph/regent-state.json
 // so that `ralph status` works even when the Regent is disabled.
-func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, run regent.RunFunc) error {
+func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, sw store.Writer, run regent.RunFunc) error {
 	events := make(chan loop.LogEntry, 128)
 	lp.Events = events
 
@@ -141,7 +151,10 @@ func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRun
 	go func() {
 		defer close(drainDone)
 		for entry := range events {
-			fmt.Fprintln(os.Stdout, formatLogLine(entry))
+			if sw != nil {
+				_ = sw.Append(entry)
+			}
+			_, _ = fmt.Fprintln(os.Stdout, formatLogLine(entry))
 			st.trackEntry(entry)
 		}
 	}()
@@ -156,7 +169,7 @@ func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRun
 
 // runWithTUIAndState runs the loop without Regent supervision with TUI display,
 // forwarding events through a state tracker so `ralph status` works.
-func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, accentColor string, projectName string, run regent.RunFunc) error {
+func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, accentColor string, projectName string, sw store.Writer, sr store.Reader, run regent.RunFunc) error {
 	loopEvents := make(chan loop.LogEntry, 128)
 	tuiEvents := make(chan loop.LogEntry, 128)
 
@@ -171,7 +184,8 @@ func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunne
 	st := newStateTracker(dir, mode, gitRunner)
 	st.save()
 
-	model := tui.New(tuiEvents, accentColor, projectName, dir, requestStop)
+	specFiles, _ := spec.List(dir)
+	model := tui.New(tuiEvents, sr, accentColor, projectName, dir, specFiles, requestStop, nil)
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	// Forward loop events → state tracking → TUI
@@ -179,6 +193,9 @@ func runWithTUIAndState(ctx context.Context, lp *loop.Loop, dir string, gitRunne
 	go func() {
 		defer close(forwardDone)
 		for entry := range loopEvents {
+			if sw != nil {
+				_ = sw.Append(entry)
+			}
 			st.trackEntry(entry)
 			select {
 			case tuiEvents <- entry:
@@ -271,4 +288,122 @@ func (s *stateTracker) finish(err error) {
 	s.state.FinishedAt = time.Now()
 	s.state.Passed = err == nil || errors.Is(err, context.Canceled)
 	s.save()
+}
+
+// loopController implements tui.LoopController for dashboard mode.
+// It starts and stops loop runs in response to TUI key presses (b/p/R/x).
+type loopController struct {
+	cfg       *config.Config
+	dir       string
+	gitRunner *git.Runner
+	sw        store.Writer
+	tuiSend   chan<- loop.LogEntry
+	outerCtx  context.Context
+	mu        sync.Mutex
+	cancel    context.CancelFunc
+}
+
+// IsRunning reports whether a loop goroutine is currently active.
+func (lc *loopController) IsRunning() bool {
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
+	return lc.cancel != nil
+}
+
+// StartLoop starts a loop in the given mode ("build", "plan", or "smart").
+// A no-op if a loop is already running.
+func (lc *loopController) StartLoop(mode string) {
+	lc.mu.Lock()
+	if lc.cancel != nil {
+		lc.mu.Unlock()
+		return
+	}
+	ctx, cancel := context.WithCancel(lc.outerCtx)
+	lc.cancel = cancel
+	lc.mu.Unlock()
+
+	go lc.runLoop(ctx, mode)
+}
+
+// StopLoop immediately cancels the running loop. No-op if idle.
+func (lc *loopController) StopLoop() {
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
+	if lc.cancel != nil {
+		lc.cancel()
+	}
+}
+
+// runLoop executes the loop and forwards events to the TUI channel.
+func (lc *loopController) runLoop(ctx context.Context, mode string) {
+	lp := &loop.Loop{
+		Agent:  loop.NewClaudeAgent(),
+		Git:    lc.gitRunner,
+		Config: lc.cfg,
+		Dir:    lc.dir,
+	}
+	loopEvents := make(chan loop.LogEntry, 128)
+	lp.Events = loopEvents
+
+	forwardDone := make(chan struct{})
+	go func() {
+		defer close(forwardDone)
+		for entry := range loopEvents {
+			if lc.sw != nil {
+				_ = lc.sw.Append(entry)
+			}
+			select {
+			case lc.tuiSend <- entry:
+			default:
+			}
+		}
+	}()
+
+	var runErr error
+	switch mode {
+	case "plan":
+		runErr = lp.Run(ctx, loop.ModePlan, 0)
+	case "smart":
+		planPath := filepath.Join(lc.dir, "CHRONICLE.md")
+		info, statErr := os.Stat(planPath)
+		if needsPlanPhase(info, statErr) {
+			runErr = lp.Run(ctx, loop.ModePlan, 0)
+		}
+		if runErr == nil {
+			runErr = lp.Run(ctx, loop.ModeBuild, 0)
+		}
+	default: // "build"
+		runErr = lp.Run(ctx, loop.ModeBuild, 0)
+	}
+
+	close(loopEvents)
+	<-forwardDone
+
+	lc.mu.Lock()
+	lc.cancel = nil
+	lc.mu.Unlock()
+
+	_ = runErr
+}
+
+// runDashboard launches the TUI in idle (dashboard) state with no loop running.
+// The user can press b/p/R to start a loop and x to stop it.
+func runDashboard(ctx context.Context, cfg *config.Config, dir string, sw store.Writer, sr store.Reader) error {
+	tuiEvents := make(chan loop.LogEntry, 128)
+	// Note: tuiEvents is intentionally never closed; the TUI exits when user presses q.
+
+	gitRunner := git.NewRunner(dir)
+	ctrl := &loopController{
+		cfg:       cfg,
+		dir:       dir,
+		gitRunner: gitRunner,
+		sw:        sw,
+		tuiSend:   tuiEvents,
+		outerCtx:  ctx,
+	}
+
+	specFiles, _ := spec.List(dir)
+	model := tui.New(tuiEvents, sr, cfg.TUI.AccentColor, cfg.Project.Name, dir, specFiles, nil, ctrl)
+	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	return finishTUI(program)
 }

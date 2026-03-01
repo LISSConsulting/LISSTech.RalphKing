@@ -1,17 +1,20 @@
 # golangci-lint configuration — RalphKing
 # Constitution requires: go vet, go fmt, go-critic all pass with zero warnings.
+version: "2"
 
 linters:
   enable:
     - gocritic
-    - gofmt
-    - gosimple
+    - staticcheck
     - govet
     - ineffassign
     - unused
     - errcheck
+  settings:
+    errcheck:
+      check-blank: false
+      check-type-assertions: false
 
-linters-settings:
-  errcheck:
-    check-blank: false
-    check-type-assertions: false
+formatters:
+  enable:
+    - gofmt

@@ -22,9 +22,15 @@ func main() {
 
 func rootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:     "ralph",
-		Short:   "RalphKing — spec-driven AI coding loop",
+		Use:   "ralph",
+		Short: "RalphKing — spec-driven AI coding loop",
+		Long: "RalphKing — spec-driven AI coding loop\n\n" +
+			"Run without a subcommand to enter dashboard mode (TUI idle state).\n" +
+			"Press b to start build, p to plan, R for smart-run, x to stop.",
 		Version: version,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return executeDashboard()
+		},
 	}
 
 	root.PersistentFlags().Bool("no-tui", false, "disable TUI, use plain text output")

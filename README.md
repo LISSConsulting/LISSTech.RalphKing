@@ -5,9 +5,10 @@
 Ralph runs Claude Code against your specs in a continuous loop: plan → build → commit → push → repeat. The Regent watches Ralph, detects failures, rolls back bad commits, and resurrects him if he crashes.
 
 ```
+ralph               # Dashboard mode — interactive TUI with loop control
 ralph plan          # Run Claude in plan mode against specs/
 ralph build         # Run Claude in build mode
-ralph run           # Auto: plan if no IMPLEMENTATION_PLAN, then build
+ralph run           # Auto: plan if no CHRONICLE.md, then build
 ralph status        # Show last run, cost, iteration, branch
 ralph init          # Scaffold ralph.toml in current project
 ralph spec new      # Create a new spec
@@ -63,6 +64,32 @@ rollback_on_test_failure = true
 max_retries = 3
 retry_backoff_seconds = 30
 ```
+
+## TUI Keyboard Reference
+
+The four-panel TUI is available for all loop commands and via `ralph` (dashboard mode).
+
+| Key | Action |
+|-----|--------|
+| `tab` / `shift+tab` | Cycle panel focus |
+| `1` `2` `3` `4` | Jump to Specs / Iterations / Main / Secondary panel |
+| `b` | Start build loop |
+| `p` | Start plan loop |
+| `R` | Smart run (plan if needed, then build) |
+| `x` | Stop loop after current iteration |
+| `s` | Graceful stop after current iteration |
+| `?` | Toggle help overlay |
+| `q` / `ctrl+c` | Quit |
+
+**Specs panel (`1`):** `j`/`k` navigate · `enter` view · `e` open in `$EDITOR` · `n` create new
+
+**Iterations panel (`2`):** `j`/`k` navigate · `enter` view log · `]` view summary
+
+**Main panel (`3`):** `[`/`]` switch tabs · `f` toggle follow · `j`/`k` scroll · `ctrl+u`/`ctrl+d` page
+
+**Secondary panel (`4`):** `[`/`]` switch tabs (Regent / Git / Tests / Cost) · `j`/`k` scroll
+
+Minimum terminal size: 80×24. Set accent color via `[tui] accent_color = "#7D56F4"` in `ralph.toml`.
 
 ## Spec Kit Integration
 

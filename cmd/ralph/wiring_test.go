@@ -3,15 +3,21 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui"
 )
 
 func TestNewStateTracker(t *testing.T) {
@@ -224,7 +230,7 @@ func TestRunWithStateTracking_Success(t *testing.T) {
 	runner := git.NewRunner(dir)
 	lp := &loop.Loop{}
 
-	err := runWithStateTracking(context.Background(), lp, dir, runner, "build", func(_ context.Context) error {
+	err := runWithStateTracking(context.Background(), lp, dir, runner, "build", nil, func(_ context.Context) error {
 		return nil
 	})
 	if err != nil {
@@ -250,7 +256,7 @@ func TestRunWithStateTracking_Error(t *testing.T) {
 	lp := &loop.Loop{}
 
 	want := errors.New("build failed")
-	got := runWithStateTracking(context.Background(), lp, dir, runner, "build", func(_ context.Context) error {
+	got := runWithStateTracking(context.Background(), lp, dir, runner, "build", nil, func(_ context.Context) error {
 		return want
 	})
 	if !errors.Is(got, want) {
@@ -272,7 +278,7 @@ func TestRunWithStateTracking_ContextCanceled(t *testing.T) {
 	runner := git.NewRunner(dir)
 	lp := &loop.Loop{}
 
-	err := runWithStateTracking(context.Background(), lp, dir, runner, "build", func(_ context.Context) error {
+	err := runWithStateTracking(context.Background(), lp, dir, runner, "build", nil, func(_ context.Context) error {
 		return context.Canceled
 	})
 	if !errors.Is(err, context.Canceled) {
@@ -296,7 +302,7 @@ func TestRunWithStateTracking_EventsForwarded(t *testing.T) {
 
 	// The run func sends events through lp.Events, which is set by runWithStateTracking
 	// before calling run. The drain goroutine processes all events before returning.
-	err := runWithStateTracking(context.Background(), lp, dir, runner, "plan", func(_ context.Context) error {
+	err := runWithStateTracking(context.Background(), lp, dir, runner, "plan", nil, func(_ context.Context) error {
 		lp.Events <- loop.LogEntry{Iteration: 3, TotalCost: 1.50, Branch: "feat/test", Mode: "build"}
 		return nil
 	})
@@ -322,6 +328,53 @@ func TestRunWithStateTracking_EventsForwarded(t *testing.T) {
 	}
 }
 
+func TestRunWithStateTracking_WithStore(t *testing.T) {
+	// Passes a non-nil store.Writer to cover the sw.Append branch inside the
+	// drain goroutine (the sw != nil branch was previously always exercised
+	// with nil, leaving _ = sw.Append(entry) uncovered).
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+	runner := git.NewRunner(dir)
+	lp := &loop.Loop{}
+
+	s, err := store.NewJSONL(filepath.Join(dir, ".ralph", "logs"))
+	if err != nil {
+		t.Fatalf("NewJSONL: %v", err)
+	}
+	defer func() { _ = s.Close() }()
+
+	gotErr := runWithStateTracking(context.Background(), lp, dir, runner, "build", s, func(_ context.Context) error {
+		lp.Events <- loop.LogEntry{Iteration: 1, TotalCost: 0.10}
+		return nil
+	})
+	if gotErr != nil {
+		t.Fatalf("unexpected error: %v", gotErr)
+	}
+}
+
+func TestRunWithRegent_WithStore(t *testing.T) {
+	// Passes a non-nil store.Writer to cover the sw.Append branch inside the
+	// drain goroutine in runWithRegent.
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+	runner := git.NewRunner(dir)
+	lp := &loop.Loop{}
+
+	s, err := store.NewJSONL(filepath.Join(dir, ".ralph", "logs"))
+	if err != nil {
+		t.Fatalf("NewJSONL: %v", err)
+	}
+	defer func() { _ = s.Close() }()
+
+	err = runWithRegent(context.Background(), lp, regentTestConfig(1), runner, dir, s, func(_ context.Context) error {
+		lp.Events <- loop.LogEntry{Iteration: 1, TotalCost: 0.10}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 // --- Tests for runWithRegent ---
 
 // regentTestConfig returns a Config with Regent settings tuned for fast tests:
@@ -341,7 +394,7 @@ func TestRunWithRegent_Success(t *testing.T) {
 	runner := git.NewRunner(dir)
 	lp := &loop.Loop{}
 
-	err := runWithRegent(context.Background(), lp, regentTestConfig(1), runner, dir, func(_ context.Context) error {
+	err := runWithRegent(context.Background(), lp, regentTestConfig(1), runner, dir, nil, func(_ context.Context) error {
 		return nil
 	})
 	if err != nil {
@@ -364,7 +417,7 @@ func TestRunWithRegent_MaxRetriesExceeded(t *testing.T) {
 	lp := &loop.Loop{}
 
 	runErr := errors.New("loop crashed")
-	err := runWithRegent(context.Background(), lp, regentTestConfig(0), runner, dir, func(_ context.Context) error {
+	err := runWithRegent(context.Background(), lp, regentTestConfig(0), runner, dir, nil, func(_ context.Context) error {
 		return runErr
 	})
 	if err == nil {
@@ -384,7 +437,7 @@ func TestRunWithRegent_ContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately so Regent exits on first check
 
-	err := runWithRegent(ctx, lp, regentTestConfig(1), runner, dir, func(_ context.Context) error {
+	err := runWithRegent(ctx, lp, regentTestConfig(1), runner, dir, nil, func(_ context.Context) error {
 		return nil
 	})
 	if !errors.Is(err, context.Canceled) {
@@ -400,7 +453,7 @@ func TestRunWithRegent_LoopEventsUpdateState(t *testing.T) {
 
 	// Non-Regent events emitted by the run func flow through the drain goroutine's
 	// rgt.UpdateState path. Verify they are captured in the persisted state.
-	err := runWithRegent(context.Background(), lp, regentTestConfig(1), runner, dir, func(_ context.Context) error {
+	err := runWithRegent(context.Background(), lp, regentTestConfig(1), runner, dir, nil, func(_ context.Context) error {
 		lp.Events <- loop.LogEntry{Iteration: 5, TotalCost: 2.50, Branch: "main"}
 		return nil
 	})
@@ -417,6 +470,230 @@ func TestRunWithRegent_LoopEventsUpdateState(t *testing.T) {
 	}
 	if state.TotalCostUSD != 2.50 {
 		t.Errorf("TotalCostUSD = %f, want 2.50", state.TotalCostUSD)
+	}
+}
+
+// --- Tests for loopController ---
+
+func TestLoopController_IsRunning_InitiallyFalse(t *testing.T) {
+	ctrl := &loopController{
+		outerCtx: context.Background(),
+	}
+	if ctrl.IsRunning() {
+		t.Error("new loopController should not be running")
+	}
+}
+
+func TestLoopController_StopLoop_NoopWhenIdle(t *testing.T) {
+	ctrl := &loopController{
+		outerCtx: context.Background(),
+	}
+	// Should not panic
+	ctrl.StopLoop()
+	if ctrl.IsRunning() {
+		t.Error("StopLoop on idle controller should not set running=true")
+	}
+}
+
+func TestLoopController_StartLoop_NoopWhenRunning(t *testing.T) {
+	// Set cancel directly to simulate a running loop.
+	cancelCalled := false
+	ctrl := &loopController{
+		outerCtx: context.Background(),
+		cancel:   func() { cancelCalled = true },
+	}
+	ctrl.StartLoop("build") // should be a no-op since cancel != nil
+	// cancelCalled should still be false — we didn't call cancel, just skipped StartLoop
+	if cancelCalled {
+		t.Error("StartLoop should not call cancel when already running")
+	}
+}
+
+func TestLoopController_StopLoop_CancelsWhenRunning(t *testing.T) {
+	cancelCalled := false
+	ctrl := &loopController{
+		outerCtx: context.Background(),
+		cancel:   func() { cancelCalled = true },
+	}
+	ctrl.StopLoop()
+	if !cancelCalled {
+		t.Error("StopLoop should call cancel when a loop is running")
+	}
+}
+
+func TestLoopController_StartLoop_WhenIdle(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// Config is valid but BUILD.md is absent — runLoop fails fast on os.ReadFile.
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+
+	ctrl := &loopController{
+		cfg:       cfg,
+		dir:       dir,
+		gitRunner: git.NewRunner(dir),
+		outerCtx:  context.Background(),
+	}
+
+	if ctrl.IsRunning() {
+		t.Fatal("should not be running initially")
+	}
+
+	ctrl.StartLoop("build")
+
+	// runLoop fails fast (BUILD.md missing) — wait for the goroutine to clean up.
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) && ctrl.IsRunning() {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if ctrl.IsRunning() {
+		t.Error("runLoop goroutine should finish quickly when prompt file is missing")
+	}
+}
+
+// waitForIdle polls until ctrl.IsRunning() returns false or the deadline passes.
+func waitForIdle(t *testing.T, ctrl *loopController) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) && ctrl.IsRunning() {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if ctrl.IsRunning() {
+		t.Error("runLoop goroutine should finish quickly when loop fails fast")
+	}
+}
+
+func TestLoopController_StartLoop_PlanMode(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// PLAN.md absent — runLoop falls into case "plan" then fails fast.
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+
+	ctrl := &loopController{
+		cfg:       cfg,
+		dir:       dir,
+		gitRunner: git.NewRunner(dir),
+		outerCtx:  context.Background(),
+	}
+
+	ctrl.StartLoop("plan")
+	waitForIdle(t, ctrl)
+}
+
+func TestLoopController_StartLoop_SmartMode_NoPlan(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// No CHRONICLE.md — needsPlanPhase returns true, plan path is taken.
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+
+	ctrl := &loopController{
+		cfg:       cfg,
+		dir:       dir,
+		gitRunner: git.NewRunner(dir),
+		outerCtx:  context.Background(),
+	}
+
+	ctrl.StartLoop("smart")
+	waitForIdle(t, ctrl)
+}
+
+func TestLoopController_StartLoop_SmartMode_WithChronicle(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// CHRONICLE.md exists and is non-empty — needsPlanPhase returns false,
+	// plan is skipped and build path is taken directly.
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+	writeExecTestFile(t, dir, "CHRONICLE.md", "# Chronicle\n## Completed Work\n")
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+
+	ctrl := &loopController{
+		cfg:       cfg,
+		dir:       dir,
+		gitRunner: git.NewRunner(dir),
+		outerCtx:  context.Background(),
+	}
+
+	ctrl.StartLoop("smart")
+	waitForIdle(t, ctrl)
+}
+
+func TestLoopController_StartLoop_ForwardGoroutine(t *testing.T) {
+	// This test exercises the event-forwarding goroutine inside runLoop:
+	// sw.Append and tuiSend channel paths run when the loop emits at least one
+	// event. That requires a git repo (CurrentBranch succeeds) and a prompt
+	// file (ReadFile succeeds) so loop.Run reaches the emit(LogInfo) call
+	// before failing to exec the Claude binary.
+	dir := t.TempDir()
+	t.Chdir(dir)
+	initGitRepo(t, dir)
+	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
+	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+
+	logsDir := filepath.Join(dir, ".ralph", "logs")
+	sw, err := store.NewJSONL(logsDir)
+	if err != nil {
+		t.Fatalf("store.NewJSONL: %v", err)
+	}
+	defer func() { _ = sw.Close() }()
+
+	tuiSend := make(chan loop.LogEntry, 128)
+
+	ctrl := &loopController{
+		cfg:       cfg,
+		dir:       dir,
+		gitRunner: git.NewRunner(dir),
+		sw:        sw,
+		tuiSend:   tuiSend,
+		outerCtx:  context.Background(),
+	}
+
+	ctrl.StartLoop("plan")
+	waitForIdle(t, ctrl)
+}
+
+// --- Tests for finishTUI ---
+
+// TestFinishTUI_Success verifies that finishTUI returns nil when the TUI exits
+// cleanly. Using tea.WithoutRenderer() + a pre-closed events channel + "q"
+// input lets the program start, transition to idle (loopDoneMsg from closed
+// channel), receive the quit key, and exit — all without a real TTY.
+func TestFinishTUI_Success(t *testing.T) {
+	dir := t.TempDir()
+	events := make(chan loop.LogEntry)
+	close(events) // simulate: loop finished before TUI starts
+
+	model := tui.New(events, nil, "", "", dir, nil, nil, nil)
+	program := tea.NewProgram(model,
+		tea.WithInput(strings.NewReader("q")),
+		tea.WithOutput(io.Discard),
+		tea.WithoutRenderer(),
+	)
+
+	if err := finishTUI(program); err != nil {
+		t.Fatalf("finishTUI: unexpected error: %v", err)
 	}
 }
 

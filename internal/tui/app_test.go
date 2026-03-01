@@ -1,0 +1,921 @@
+package tui
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui/panels"
+)
+
+// mockStoreReader is a minimal store.Reader for unit tests.
+type mockStoreReader struct {
+	iterations []store.IterationSummary
+	entries    []loop.LogEntry
+}
+
+func (r *mockStoreReader) Iterations() ([]store.IterationSummary, error) {
+	return r.iterations, nil
+}
+
+func (r *mockStoreReader) IterationLog(_ int) ([]loop.LogEntry, error) {
+	return r.entries, nil
+}
+
+func (r *mockStoreReader) SessionSummary() (store.SessionSummary, error) {
+	return store.SessionSummary{}, nil
+}
+
+// mockLoopController is a test double for LoopController.
+type mockLoopController struct {
+	startCalled string
+	stopCalled  bool
+	running     bool
+}
+
+func (c *mockLoopController) StartLoop(mode string) {
+	c.startCalled = mode
+	c.running = true
+}
+
+func (c *mockLoopController) StopLoop() {
+	c.stopCalled = true
+	c.running = false
+}
+
+func (c *mockLoopController) IsRunning() bool { return c.running }
+
+func newTestModel() Model {
+	ch := make(chan loop.LogEntry, 1)
+	return New(ch, nil, "", "TestProject", "/tmp/proj", nil, nil, nil)
+}
+
+func TestNew_Defaults(t *testing.T) {
+	m := newTestModel()
+	if m.width != 80 {
+		t.Errorf("expected default width 80, got %d", m.width)
+	}
+	if m.height != 24 {
+		t.Errorf("expected default height 24, got %d", m.height)
+	}
+	if m.focus != FocusMain {
+		t.Errorf("expected default focus FocusMain, got %v", m.focus)
+	}
+	if m.loopState != StateIdle {
+		t.Errorf("expected initial loopState StateIdle, got %v", m.loopState)
+	}
+	if m.done {
+		t.Error("expected done=false at init")
+	}
+}
+
+func TestInit_ReturnsCmd(t *testing.T) {
+	m := newTestModel()
+	cmd := m.Init()
+	if cmd == nil {
+		t.Error("Init() should return a non-nil command")
+	}
+}
+
+func TestErr_NoError(t *testing.T) {
+	m := newTestModel()
+	if m.Err() != nil {
+		t.Errorf("Err() should be nil at init, got %v", m.Err())
+	}
+}
+
+func TestUpdate_WindowSize(t *testing.T) {
+	m := newTestModel()
+	updated, cmd := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	if cmd != nil {
+		t.Error("WindowSizeMsg should return nil cmd")
+	}
+	m2 := updated.(Model)
+	if m2.width != 120 || m2.height != 40 {
+		t.Errorf("got dimensions %dx%d, want 120x40", m2.width, m2.height)
+	}
+	if m2.layout.TooSmall {
+		t.Error("120x40 should not be TooSmall")
+	}
+}
+
+func TestUpdate_WindowSize_TooSmall(t *testing.T) {
+	m := newTestModel()
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	m2 := updated.(Model)
+	if !m2.layout.TooSmall {
+		t.Error("60x20 should be TooSmall")
+	}
+}
+
+func TestUpdate_Key_Quit(t *testing.T) {
+	m := newTestModel()
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	if cmd == nil {
+		t.Fatal("q key should return a quit cmd")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Errorf("q key cmd should produce tea.QuitMsg, got %T", msg)
+	}
+}
+
+func TestUpdate_Key_Tab_CyclesFocus(t *testing.T) {
+	m := newTestModel()
+	// Start at FocusMain (index 2), tab should go to FocusSecondary (3)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m2 := updated.(Model)
+	if m2.focus != FocusMain.Next() {
+		t.Errorf("tab should advance focus from %v to %v, got %v",
+			FocusMain, FocusMain.Next(), m2.focus)
+	}
+}
+
+func TestUpdate_Key_DirectFocus(t *testing.T) {
+	tests := []struct {
+		key  string
+		want FocusTarget
+	}{
+		{"1", FocusSpecs},
+		{"2", FocusIterations},
+		{"3", FocusMain},
+		{"4", FocusSecondary},
+	}
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			m := newTestModel()
+			updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)})
+			m2 := updated.(Model)
+			if m2.focus != tt.want {
+				t.Errorf("key %q: focus = %v, want %v", tt.key, m2.focus, tt.want)
+			}
+		})
+	}
+}
+
+func TestUpdate_LogEntry_StateTransition(t *testing.T) {
+	tests := []struct {
+		name      string
+		entry     loop.LogEntry
+		wantState LoopState
+	}{
+		{
+			name:      "LogIterStart build → StateBuilding",
+			entry:     loop.LogEntry{Kind: loop.LogIterStart, Mode: "build", Iteration: 1},
+			wantState: StateBuilding,
+		},
+		{
+			name:      "LogIterStart plan → StatePlanning",
+			entry:     loop.LogEntry{Kind: loop.LogIterStart, Mode: "plan", Iteration: 1},
+			wantState: StatePlanning,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestModel()
+			msg := logEntryMsg(tt.entry)
+			updated, _ := m.Update(msg)
+			m2 := updated.(Model)
+			if m2.loopState != tt.wantState {
+				t.Errorf("loopState = %v, want %v", m2.loopState, tt.wantState)
+			}
+		})
+	}
+}
+
+func TestUpdate_LogEntry_MetadataExtracted(t *testing.T) {
+	m := newTestModel()
+	entry := loop.LogEntry{
+		Kind:      loop.LogIterStart,
+		Timestamp: time.Now(),
+		Iteration: 3,
+		MaxIter:   10,
+		Branch:    "feat/test",
+		Mode:      "build",
+		TotalCost: 0.05,
+	}
+	updated, _ := m.Update(logEntryMsg(entry))
+	m2 := updated.(Model)
+
+	if m2.iteration != 3 {
+		t.Errorf("iteration = %d, want 3", m2.iteration)
+	}
+	if m2.branch != "feat/test" {
+		t.Errorf("branch = %q, want \"feat/test\"", m2.branch)
+	}
+	if m2.mode != "build" {
+		t.Errorf("mode = %q, want \"build\"", m2.mode)
+	}
+}
+
+func TestUpdate_LoopDone_TransitionsToIdle(t *testing.T) {
+	m := newTestModel()
+	// Put model in building state to verify transition.
+	m.loopState = StateBuilding
+	updated, cmd := m.Update(loopDoneMsg{})
+	m2 := updated.(Model)
+	if m2.done {
+		t.Error("loopDoneMsg should NOT set done=true; TUI stays open after loop finishes")
+	}
+	if cmd != nil {
+		t.Error("loopDoneMsg should not return a quit cmd; user presses q to exit")
+	}
+	if m2.loopState != StateIdle {
+		t.Errorf("loopDoneMsg should transition to StateIdle, got %v", m2.loopState)
+	}
+}
+
+func TestUpdate_LoopErr_SetsErr(t *testing.T) {
+	m := newTestModel()
+	testErr := fmt.Errorf("loop failure")
+	updated, _ := m.Update(loopErrMsg{err: testErr})
+	m2 := updated.(Model)
+	if m2.Err() != testErr {
+		t.Errorf("Err() = %v, want %v", m2.Err(), testErr)
+	}
+	if !m2.done {
+		t.Error("loopErrMsg should set done=true")
+	}
+}
+
+func TestView_TooSmall(t *testing.T) {
+	m := newTestModel()
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
+	m2 := updated.(Model)
+	view := m2.View()
+	lower := strings.ToLower(view)
+	if !strings.Contains(lower, "too small") {
+		t.Errorf("View() for small terminal should contain 'too small', got: %q", view)
+	}
+}
+
+func TestView_Normal_DoesNotPanic(t *testing.T) {
+	m := newTestModel()
+	// Resize to large terminal so all panels have space
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m2 := updated.(Model)
+	// Should not panic
+	view := m2.View()
+	if view == "" {
+		t.Error("View() should not return empty string")
+	}
+}
+
+func TestUpdate_EditSpecRequest_NoEditor(t *testing.T) {
+	t.Setenv("EDITOR", "")
+	m := newTestModel()
+	_, cmd := m.Update(panels.EditSpecRequestMsg{Path: "specs/foo.md"})
+	if cmd != nil {
+		t.Error("EditSpecRequestMsg with no EDITOR should return nil cmd")
+	}
+}
+
+func TestUpdate_EditSpecRequest_WithEditor(t *testing.T) {
+	t.Setenv("EDITOR", "true")
+	m := newTestModel()
+	_, cmd := m.Update(panels.EditSpecRequestMsg{Path: "specs/foo.md"})
+	if cmd == nil {
+		t.Error("EditSpecRequestMsg with EDITOR set should return a non-nil cmd")
+	}
+}
+
+func TestUpdate_CreateSpecRequest_ReturnsRefresh(t *testing.T) {
+	dir := t.TempDir()
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "TestProject", dir, nil, nil, nil)
+
+	_, cmd := m.Update(panels.CreateSpecRequestMsg{Name: "my-spec"})
+	if cmd == nil {
+		t.Fatal("CreateSpecRequestMsg should return a cmd")
+	}
+	msg := cmd()
+	refreshed, ok := msg.(specsRefreshedMsg)
+	if !ok {
+		t.Fatalf("expected specsRefreshedMsg, got %T", msg)
+	}
+	// The spec file should have been created.
+	found := false
+	for _, s := range refreshed.Specs {
+		if s.Name == "my-spec" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("refreshed spec list should contain 'my-spec'; got %v", refreshed.Specs)
+	}
+	// File should exist on disk.
+	if _, err := filepath.Glob(filepath.Join(dir, "specs", "my-spec.md")); err != nil {
+		t.Errorf("spec file not created: %v", err)
+	}
+}
+
+func TestUpdate_SpecsRefreshed_UpdatesPanel(t *testing.T) {
+	m := newTestModel()
+	// Panel starts with no specs.
+	if m.specsPanel.SelectedSpec() != nil {
+		t.Fatal("setup: expected empty specs panel")
+	}
+	newSpecs := []spec.SpecFile{
+		{Name: "alpha", Path: "specs/alpha.md"},
+	}
+	updated, _ := m.Update(specsRefreshedMsg{Specs: newSpecs})
+	m2 := updated.(Model)
+	sel := m2.specsPanel.SelectedSpec()
+	if sel == nil {
+		t.Fatal("after specsRefreshedMsg, panel should have a selected spec")
+	}
+	if sel.Name != "alpha" {
+		t.Errorf("selected spec name = %q, want %q", sel.Name, "alpha")
+	}
+}
+
+func TestUpdate_StopRequested(t *testing.T) {
+	stopped := false
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "", "", nil, func() { stopped = true }, nil)
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	m2 := updated.(Model)
+	if !stopped {
+		t.Error("'s' key should have called requestStop")
+	}
+	if !m2.stopRequested {
+		t.Error("stopRequested should be true after 's'")
+	}
+
+	// Second 's' press should not call requestStop again
+	stopped = false
+	m2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	if stopped {
+		t.Error("second 's' key should not call requestStop again")
+	}
+}
+
+func TestUpdate_IterationLogLoaded_SetsIterationAndSummary(t *testing.T) {
+	m := newTestModel()
+
+	// Resize to a standard size so layout is not TooSmall.
+	updated0, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated0.(Model)
+
+	summary := store.IterationSummary{
+		Number:   2,
+		Mode:     "build",
+		CostUSD:  0.0234,
+		Duration: 45.2,
+		Subtype:  "success",
+		Commit:   "abc1234",
+	}
+	msg := iterationLogLoadedMsg{
+		Number:  2,
+		Entries: []loop.LogEntry{{Kind: loop.LogInfo, Message: "agent output"}},
+		Summary: summary,
+		Err:     nil,
+	}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	// After iterationLogLoadedMsg the main view is on TabIterationDetail (2).
+	// One ] advances to TabIterationSummary (3).
+	updated1, _ := m2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("]")})
+	m3 := updated1.(Model)
+
+	view := m3.View()
+	// The Summary tab should show iteration number, cost, and commit.
+	for _, want := range []string{"2", "build", "0.0234", "success", "abc1234"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("Summary tab view missing %q; got:\n%s", want, view)
+		}
+	}
+}
+
+func TestHandleIterationSelected_NilReader(t *testing.T) {
+	m := newTestModel() // storeReader is nil
+	_, cmd := m.Update(panels.IterationSelectedMsg{Number: 1})
+	if cmd != nil {
+		t.Error("nil storeReader should return nil cmd")
+	}
+}
+
+func TestHandleIterationSelected_WithReader(t *testing.T) {
+	reader := &mockStoreReader{
+		iterations: []store.IterationSummary{
+			{Number: 1, Mode: "build", CostUSD: 0.01, Duration: 10, Subtype: "success", Commit: "deadbeef"},
+		},
+		entries: []loop.LogEntry{
+			{Kind: loop.LogInfo, Message: "hello"},
+		},
+	}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, reader, "", "Proj", "/tmp", nil, nil, nil)
+
+	_, cmd := m.Update(panels.IterationSelectedMsg{Number: 1})
+	if cmd == nil {
+		t.Fatal("with storeReader set, should return a non-nil cmd")
+	}
+	resultMsg := cmd()
+	loaded, ok := resultMsg.(iterationLogLoadedMsg)
+	if !ok {
+		t.Fatalf("expected iterationLogLoadedMsg, got %T", resultMsg)
+	}
+	if loaded.Err != nil {
+		t.Errorf("expected no error, got %v", loaded.Err)
+	}
+	if loaded.Summary.Commit != "deadbeef" {
+		t.Errorf("expected commit deadbeef, got %q", loaded.Summary.Commit)
+	}
+}
+
+func TestUpdate_Key_LoopControl_NoController(t *testing.T) {
+	// Without a controller, b/p/R/x should be no-ops.
+	keys := []string{"b", "p", "R", "x"}
+	for _, key := range keys {
+		t.Run(key, func(t *testing.T) {
+			m := newTestModel()
+			updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+			m2 := updated.(Model)
+			if m2.loopState != StateIdle {
+				t.Errorf("key %q without controller should not change state, got %v", key, m2.loopState)
+			}
+			if cmd != nil {
+				t.Errorf("key %q without controller should return nil cmd", key)
+			}
+		})
+	}
+}
+
+func TestUpdate_Key_Build_StartsLoop(t *testing.T) {
+	ctrl := &mockLoopController{}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, ctrl)
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("b")})
+	m2 := updated.(Model)
+
+	if ctrl.startCalled != "build" {
+		t.Errorf("expected StartLoop(\"build\"), got %q", ctrl.startCalled)
+	}
+	if m2.loopState != StateBuilding {
+		t.Errorf("expected StateBuilding, got %v", m2.loopState)
+	}
+}
+
+func TestUpdate_Key_Plan_StartsLoop(t *testing.T) {
+	ctrl := &mockLoopController{}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, ctrl)
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
+	m2 := updated.(Model)
+
+	if ctrl.startCalled != "plan" {
+		t.Errorf("expected StartLoop(\"plan\"), got %q", ctrl.startCalled)
+	}
+	if m2.loopState != StatePlanning {
+		t.Errorf("expected StatePlanning, got %v", m2.loopState)
+	}
+}
+
+func TestUpdate_Key_SmartRun_StartsLoop(t *testing.T) {
+	ctrl := &mockLoopController{}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, ctrl)
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
+	m2 := updated.(Model)
+
+	if ctrl.startCalled != "smart" {
+		t.Errorf("expected StartLoop(\"smart\"), got %q", ctrl.startCalled)
+	}
+	if m2.loopState != StateBuilding {
+		t.Errorf("expected StateBuilding, got %v", m2.loopState)
+	}
+}
+
+func TestUpdate_Key_Stop_StopsLoop(t *testing.T) {
+	ctrl := &mockLoopController{running: true}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, ctrl)
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if !ctrl.stopCalled {
+		t.Error("x key should call StopLoop()")
+	}
+}
+
+func TestUpdate_Key_Help_Shows(t *testing.T) {
+	m := newTestModel()
+	if m.helpVisible {
+		t.Fatal("setup: helpVisible should be false initially")
+	}
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	m2 := updated.(Model)
+	if !m2.helpVisible {
+		t.Error("? key should set helpVisible=true")
+	}
+	if cmd != nil {
+		t.Error("? key should return nil cmd")
+	}
+}
+
+func TestUpdate_Key_Help_AnyKeyDismisses(t *testing.T) {
+	m := newTestModel()
+	m.helpVisible = true
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m2 := updated.(Model)
+	if m2.helpVisible {
+		t.Error("any key press when help visible should set helpVisible=false")
+	}
+}
+
+func TestUpdate_Key_Help_Toggle(t *testing.T) {
+	m := newTestModel()
+
+	// First ? shows help.
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	m2 := updated.(Model)
+	if !m2.helpVisible {
+		t.Error("first ? should show help")
+	}
+
+	// Second ? (treated as "any key") dismisses it.
+	updated2, _ := m2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	m3 := updated2.(Model)
+	if m3.helpVisible {
+		t.Error("second ? should dismiss help overlay")
+	}
+}
+
+func TestView_Help_ContainsKeyBindings(t *testing.T) {
+	m := newTestModel()
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m2 := updated.(Model)
+	m2.helpVisible = true
+
+	view := m2.View()
+	for _, want := range []string{"Keyboard Shortcuts", "GLOBAL", "LOOP CONTROL", "SPECS PANEL", "MAIN PANEL"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("help view should contain %q", want)
+		}
+	}
+}
+
+func TestUpdate_Key_Build_NoopWhenRunning(t *testing.T) {
+	ctrl := &mockLoopController{running: true}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, ctrl)
+	m.loopState = StateBuilding
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("b")})
+
+	if ctrl.startCalled != "" {
+		t.Errorf("b key should not start loop when already running, startCalled=%q", ctrl.startCalled)
+	}
+}
+
+func TestReadSpecContent_Success(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "specs"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	want := "# Alpha Spec\n\nHello world."
+	if err := os.WriteFile(filepath.Join(dir, "specs", "alpha.md"), []byte(want), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "TestProject", dir, nil, nil, nil)
+
+	got := m.readSpecContent(spec.SpecFile{Name: "alpha", Path: "specs/alpha.md"})
+	if got != want {
+		t.Errorf("readSpecContent = %q, want %q", got, want)
+	}
+}
+
+func TestReadSpecContent_NotFound(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "TestProject", "", nil, nil, nil)
+
+	got := m.readSpecContent(spec.SpecFile{Name: "missing", Path: "/nonexistent/path/missing.md"})
+	if !strings.Contains(got, "cannot read") {
+		t.Errorf("readSpecContent for missing file should contain 'cannot read'; got %q", got)
+	}
+}
+
+func TestUpdate_SpecSelected_ShowsContent(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "specs"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	specContent := "# My Feature\n\nThis is the spec content."
+	if err := os.WriteFile(filepath.Join(dir, "specs", "feature.md"), []byte(specContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "TestProject", dir, nil, nil, nil)
+
+	// Set a large window so content is renderable.
+	updated0, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated0.(Model)
+
+	sf := spec.SpecFile{Name: "feature", Path: "specs/feature.md"}
+	updated, cmd := m.Update(panels.SpecSelectedMsg{Spec: sf})
+	m2 := updated.(Model)
+
+	if cmd != nil {
+		t.Error("SpecSelectedMsg should return nil cmd")
+	}
+	// The main view should be on the spec tab and show the file content.
+	view := m2.View()
+	if !strings.Contains(view, "My Feature") {
+		t.Errorf("View() after SpecSelectedMsg should contain spec content; got:\n%s", view)
+	}
+}
+
+// TestUpdate_LogEntry_LogDoneStoppedErrorRegent covers state transitions for
+// LogDone, LogStopped, LogError, and LogRegent kinds — the branches in
+// handleLogEntry that were previously uncovered.
+func TestUpdate_LogEntry_LogDoneStoppedErrorRegent(t *testing.T) {
+	tests := []struct {
+		name      string
+		entry     loop.LogEntry
+		wantState LoopState
+	}{
+		{
+			name:      "LogDone → StateIdle",
+			entry:     loop.LogEntry{Kind: loop.LogDone, Message: "finished"},
+			wantState: StateIdle,
+		},
+		{
+			name:      "LogStopped → StateIdle",
+			entry:     loop.LogEntry{Kind: loop.LogStopped, Message: "stopped"},
+			wantState: StateIdle,
+		},
+		{
+			name:      "LogError → StateFailed",
+			entry:     loop.LogEntry{Kind: loop.LogError, Message: "error occurred"},
+			wantState: StateFailed,
+		},
+		{
+			name:      "LogRegent → StateRegentRestart",
+			entry:     loop.LogEntry{Kind: loop.LogRegent, Message: "restarting"},
+			wantState: StateRegentRestart,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestModel()
+			// Start in StateBuilding so all transitions are valid.
+			m.loopState = StateBuilding
+			updated, _ := m.Update(logEntryMsg(tt.entry))
+			m2 := updated.(Model)
+			if m2.loopState != tt.wantState {
+				t.Errorf("loopState = %v, want %v", m2.loopState, tt.wantState)
+			}
+		})
+	}
+}
+
+// TestUpdate_LogEntry_GitPullPushRouting verifies that LogGitPull and
+// LogGitPush entries are routed to both the secondary panel (Git tab)
+// and the main view — covering the LogGitPull/LogGitPush branch in
+// handleLogEntry.
+func TestUpdate_LogEntry_GitPullPushRouting(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		kind loop.LogKind
+	}{
+		{"LogGitPull", loop.LogGitPull},
+		{"LogGitPush", loop.LogGitPush},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestModel()
+			updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+			m = updated.(Model)
+			entry := loop.LogEntry{Kind: tc.kind, Message: "git op"}
+			updated2, _ := m.Update(logEntryMsg(entry))
+			_ = updated2.(Model) // must not panic
+		})
+	}
+}
+
+// TestUpdate_LogEntry_LogRegentTestsRouting verifies that LogRegent entries
+// containing "Tests" or "Reverted" are also routed to the Tests tab.
+func TestUpdate_LogEntry_LogRegentTestsRouting(t *testing.T) {
+	m := newTestModel()
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(Model)
+	entry := loop.LogEntry{Kind: loop.LogRegent, Message: "Tests passed"}
+	updated2, _ := m.Update(logEntryMsg(entry))
+	_ = updated2.(Model) // must not panic; Tests branch covered
+}
+
+// TestDelegateToFocused covers delegating keyboard events when focus is on
+// each non-Specs panel (Iterations, Main, Secondary).
+func TestDelegateToFocused(t *testing.T) {
+	focusCases := []struct {
+		name  string
+		focus FocusTarget
+	}{
+		{"Iterations", FocusIterations},
+		{"Main", FocusMain},
+		{"Secondary", FocusSecondary},
+	}
+	for _, fc := range focusCases {
+		t.Run(fc.name, func(t *testing.T) {
+			m := newTestModel()
+			updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+			m = updated.(Model)
+			m.focus = fc.focus
+			// Send a scrolling key that is not handled by handleKey directly.
+			updated2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+			_ = updated2.(Model) // must not panic
+		})
+	}
+}
+
+// TestInnerDims_SmallRect verifies that innerDims clamps w and h to at
+// least 1 when the rectangle is too small to contain a 1-char border.
+func TestInnerDims_SmallRect(t *testing.T) {
+	tests := []struct {
+		name  string
+		r     Rect
+		wantW int
+		wantH int
+	}{
+		{"zero", Rect{Width: 0, Height: 0}, 1, 1},
+		{"tiny", Rect{Width: 1, Height: 1}, 1, 1},
+		{"normal", Rect{Width: 80, Height: 24}, 78, 22},
+		{"small width", Rect{Width: 1, Height: 24}, 1, 22},
+		{"small height", Rect{Width: 80, Height: 1}, 78, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w, h := innerDims(tt.r)
+			if w != tt.wantW || h != tt.wantH {
+				t.Errorf("innerDims(%v) = (%d, %d), want (%d, %d)", tt.r, w, h, tt.wantW, tt.wantH)
+			}
+		})
+	}
+}
+
+// TestUpdate_EditSpecRequest_AbsolutePath verifies that an absolute spec path
+// is used as-is (not joined with workDir) in handleEditSpecRequest.
+func TestUpdate_EditSpecRequest_AbsolutePath(t *testing.T) {
+	t.Setenv("EDITOR", "true")
+	dir := t.TempDir()
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", dir, nil, nil, nil)
+	// Use an absolute path — it must not be re-joined with workDir.
+	absPath := dir + "/specs/absolute.md"
+	_, cmd := m.Update(panels.EditSpecRequestMsg{Path: absPath})
+	if cmd == nil {
+		t.Error("EditSpecRequestMsg with EDITOR set and absolute path should return a non-nil cmd")
+	}
+}
+
+// TestUpdate_IterationLogLoaded_WithError verifies that handleIterationLogLoaded
+// returns early (nil cmd) when msg.Err is non-nil.
+func TestUpdate_IterationLogLoaded_WithError(t *testing.T) {
+	m := newTestModel()
+	msg := iterationLogLoadedMsg{
+		Number:  1,
+		Entries: nil,
+		Err:     fmt.Errorf("load failed"),
+	}
+	updated, cmd := m.Update(msg)
+	_ = updated.(Model)
+	if cmd != nil {
+		t.Error("iterationLogLoadedMsg with Err set should return nil cmd")
+	}
+}
+
+// TestUpdate_Key_ShiftTab covers the shift+tab branch in handleKey.
+func TestUpdate_Key_ShiftTab_CyclesFocusBack(t *testing.T) {
+	m := newTestModel()
+	// Default focus is FocusMain (index 2); shift+tab should go to FocusIterations (1).
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	m2 := updated.(Model)
+	if m2.focus != FocusMain.Prev() {
+		t.Errorf("shift+tab should move focus from %v to %v, got %v",
+			FocusMain, FocusMain.Prev(), m2.focus)
+	}
+}
+
+// TestDelegateToFocused_Specs covers the FocusSpecs branch in delegateToFocused.
+func TestDelegateToFocused_Specs(t *testing.T) {
+	m := newTestModel()
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(Model)
+	m.focus = FocusSpecs
+	// Send a key that is not a global binding so it is delegated to specsPanel.
+	updated2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	_ = updated2.(Model) // must not panic
+}
+
+// TestHandleLogEntry_CommitSet covers the `entry.Commit != ""` metadata branch.
+func TestHandleLogEntry_CommitSet(t *testing.T) {
+	m := newTestModel()
+	entry := loop.LogEntry{Kind: loop.LogInfo, Commit: "abcdef0", Message: "info"}
+	updated, _ := m.Update(logEntryMsg(entry))
+	m2 := updated.(Model)
+	if m2.lastCommit != "abcdef0" {
+		t.Errorf("lastCommit = %q, want %q", m2.lastCommit, "abcdef0")
+	}
+}
+
+// TestWaitForEvent_EntryReceived covers the logEntryMsg return path.
+func TestWaitForEvent_EntryReceived(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	ch <- loop.LogEntry{Kind: loop.LogInfo, Message: "hello"}
+	cmd := waitForEvent(ch)
+	msg := cmd()
+	if _, ok := msg.(logEntryMsg); !ok {
+		t.Fatalf("expected logEntryMsg, got %T", msg)
+	}
+}
+
+// TestWaitForEvent_ChannelClosed covers the loopDoneMsg return path.
+func TestWaitForEvent_ChannelClosed(t *testing.T) {
+	ch := make(chan loop.LogEntry)
+	close(ch)
+	cmd := waitForEvent(ch)
+	msg := cmd()
+	if _, ok := msg.(loopDoneMsg); !ok {
+		t.Fatalf("expected loopDoneMsg, got %T", msg)
+	}
+}
+
+// TestUpdate_TickMsg covers the tickMsg case in Update, which updates
+// m.now and reschedules the ticker.
+func TestUpdate_TickMsg(t *testing.T) {
+	m := newTestModel()
+	// Use a fixed future time so the comparison is deterministic regardless
+	// of clock resolution.
+	later := time.Now().Add(time.Hour)
+	tick := tickMsg(later)
+	updated, cmd := m.Update(tick)
+	m2 := updated.(Model)
+	if !m2.now.Equal(later) {
+		t.Errorf("tickMsg should set m.now to tick time; got %v, want %v", m2.now, later)
+	}
+	if cmd == nil {
+		t.Error("tickMsg should reschedule ticker via tickCmd()")
+	}
+}
+
+// TestHandleLogEntry_CannotTransition covers the false branches of
+// CanTransitionTo in handleLogEntry — when the current state cannot
+// legally transition to the target state, loopState remains unchanged.
+func TestHandleLogEntry_CannotTransition(t *testing.T) {
+	tests := []struct {
+		name    string
+		initial LoopState
+		entry   loop.LogEntry
+	}{
+		{
+			// StateIdle cannot transition to StateIdle (not in its valid set).
+			name:    "LogDone from Idle stays Idle",
+			initial: StateIdle,
+			entry:   loop.LogEntry{Kind: loop.LogDone},
+		},
+		{
+			// StateIdle cannot transition to StateFailed.
+			name:    "LogError from Idle stays Idle",
+			initial: StateIdle,
+			entry:   loop.LogEntry{Kind: loop.LogError},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestModel()
+			m.loopState = tt.initial
+			updated, _ := m.Update(logEntryMsg(tt.entry))
+			m2 := updated.(Model)
+			if m2.loopState != tt.initial {
+				t.Errorf("loopState changed from %v to %v, expected no transition", tt.initial, m2.loopState)
+			}
+		})
+	}
+}
+
+// TestUpdate_UnknownMsg covers the default case in Update (delegateToFocused
+// for any message type not explicitly handled by the switch).
+func TestUpdate_UnknownMsg(t *testing.T) {
+	m := newTestModel()
+	// tea.MouseMsg is not handled by any explicit case, so it falls through
+	// to the default delegateToFocused call at the end of Update.
+	type unknownMsg struct{}
+	updated, cmd := m.Update(unknownMsg{})
+	_ = updated.(Model)
+	_ = cmd // should not panic
+}

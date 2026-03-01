@@ -1,0 +1,7 @@
+# Ensure Go source files always use LF line endings.
+# This prevents golangci-lint gofmt from flagging CRLF/LF differences on Windows.
+*.go text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
