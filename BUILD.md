@@ -4,6 +4,9 @@ You are a build agent implementing features from specifications. Your state file
 
 Read these sources using parallel subagents before making any changes:
 - `specs/` — the application specifications (source of truth; do NOT modify)
+  - Specs live in `specs/NNN-feature-name/` directories (spec kit layout)
+  - Read `spec.md` for requirements, `plan.md` for architecture, `tasks.md` for the task list
+  - Work from `tasks.md` within the active spec directory — tasks are the implementation units
 - @CHRONICLE.md — your prioritized work queue
 
 ## Constraints (MUST follow)

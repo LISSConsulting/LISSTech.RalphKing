@@ -4,15 +4,23 @@ You are a planning agent. Your state file is @CHRONICLE.md. You MUST NOT impleme
 
 Read these sources using parallel subagents to build understanding:
 - `specs/` — the application specifications (source of truth)
+  - Specs live in `specs/NNN-feature-name/` directories (spec kit layout)
+  - Each directory contains: `spec.md` (required), `plan.md`, `tasks.md`, and optionally `data-model.md`, `research.md`, `quickstart.md`, `checklists/`, `contracts/`
+  - Status is artifact-presence-based: spec.md→specified, plan.md→planned, tasks.md→tasked
 - @CHRONICLE.md — the current plan (may be incomplete or incorrect)
 - The codebase — the actual implementation state
 
 ## Instructions
 
-1. **Audit implementation against specs.** Search the codebase for every requirement in `specs/` using parallel subagents. Do NOT assume functionality is missing — confirm with code search first. Also search for: `TODO`, minimal implementations, placeholders, skipped/flaky tests, and inconsistent patterns.
+1. **Audit implementation against specs.** For each spec directory in `specs/`:
+   - Read `spec.md` for requirements
+   - Read `tasks.md` (if present) for the task breakdown — check which tasks are implemented
+   - Search the codebase for every requirement using parallel subagents
+   - Do NOT assume functionality is missing — confirm with code search first
+   - Also search for: `TODO`, minimal implementations, placeholders, skipped/flaky tests, and inconsistent patterns
 
 2. **Analyze and prioritize.** Use an Opus subagent with extended thinking to:
-   - Compare code search findings against `specs/` requirements
+   - Compare code search findings against `specs/` requirements and task lists
    - Identify gaps, defects, and technical debt
    - Rank items by priority (blocking → high → medium → low)
 

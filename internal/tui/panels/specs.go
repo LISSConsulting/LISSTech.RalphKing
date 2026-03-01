@@ -32,6 +32,9 @@ func (s specItem) Title() string {
 }
 
 func (s specItem) Description() string {
+	if s.sf.IsDir {
+		return s.sf.Dir
+	}
 	return s.sf.Path
 }
 

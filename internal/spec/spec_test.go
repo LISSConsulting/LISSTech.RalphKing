@@ -3,7 +3,6 @@ package spec
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -152,6 +151,9 @@ func TestList(t *testing.T) {
 					if s.Status != wantStatus {
 						t.Errorf("spec %q status = %v, want %v", s.Name, s.Status, wantStatus)
 					}
+					if s.IsDir {
+						t.Errorf("spec %q should not be IsDir (flat file)", s.Name)
+					}
 					if s.Path != filepath.Join("specs", s.Name+".md") {
 						t.Errorf("spec %q path = %q, want %q", s.Name, s.Path, filepath.Join("specs", s.Name+".md"))
 					}
@@ -161,76 +163,91 @@ func TestList(t *testing.T) {
 	}
 }
 
-func TestList_SubdirLayout(t *testing.T) {
-	dir := t.TempDir()
-
-	// Create specs/001-the-genesis/{ralph-core.md,the-regent.md}
-	subDir := filepath.Join(dir, "specs", "001-the-genesis")
-	if err := os.MkdirAll(subDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for _, f := range []string{"ralph-core.md", "the-regent.md"} {
-		if err := os.WriteFile(filepath.Join(subDir, f), []byte("# Spec"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	// Write a plan that marks ralph-core as completed and the-regent as remaining.
-	plan := `# Plan
-## Completed Work
-| Feature | Notes |
-|---------|-------|
-| Config | ralph-core.md |
-
-## Remaining Work
-- Hang detection — the-regent.md
-`
-	if err := os.WriteFile(filepath.Join(dir, "CHRONICLE.md"), []byte(plan), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	specs, err := List(dir)
-	if err != nil {
-		t.Fatalf("List() error: %v", err)
-	}
-	if len(specs) != 2 {
-		t.Fatalf("List() returned %d specs, want 2", len(specs))
-	}
-
-	byName := make(map[string]SpecFile, len(specs))
-	for _, s := range specs {
-		byName[s.Name] = s
+func TestList_DirSpecKitLayout(t *testing.T) {
+	tests := []struct {
+		name       string
+		dirName    string
+		artifacts  []string // files to create inside the dir
+		wantStatus Status
+	}{
+		{
+			name:       "only spec.md → specified",
+			dirName:    "001-alpha",
+			artifacts:  []string{"spec.md"},
+			wantStatus: StatusSpecified,
+		},
+		{
+			name:       "spec.md + plan.md → planned",
+			dirName:    "002-beta",
+			artifacts:  []string{"spec.md", "plan.md"},
+			wantStatus: StatusPlanned,
+		},
+		{
+			name:       "spec.md + plan.md + tasks.md → tasked",
+			dirName:    "003-gamma",
+			artifacts:  []string{"spec.md", "plan.md", "tasks.md"},
+			wantStatus: StatusTasked,
+		},
+		{
+			name:       "empty directory → not_started",
+			dirName:    "004-delta",
+			artifacts:  []string{},
+			wantStatus: StatusNotStarted,
+		},
+		{
+			name:       "extra files + tasks.md → tasked",
+			dirName:    "005-epsilon",
+			artifacts:  []string{"spec.md", "plan.md", "tasks.md", "research.md", "data-model.md"},
+			wantStatus: StatusTasked,
+		},
 	}
 
-	wantPath := map[string]string{
-		"ralph-core": filepath.Join("specs", "001-the-genesis", "ralph-core.md"),
-		"the-regent": filepath.Join("specs", "001-the-genesis", "the-regent.md"),
-	}
-	wantStatus := map[string]Status{
-		"ralph-core": StatusDone,
-		"the-regent": StatusInProgress,
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			featureDir := filepath.Join(dir, "specs", tt.dirName)
+			if err := os.MkdirAll(featureDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			for _, f := range tt.artifacts {
+				if err := os.WriteFile(filepath.Join(featureDir, f), []byte("# "+f), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
 
-	for name, want := range wantStatus {
-		s, ok := byName[name]
-		if !ok {
-			t.Errorf("spec %q not found in results", name)
-			continue
-		}
-		if s.Status != want {
-			t.Errorf("spec %q status = %v, want %v", name, s.Status, want)
-		}
-		if s.Path != wantPath[name] {
-			t.Errorf("spec %q path = %q, want %q", name, s.Path, wantPath[name])
-		}
+			specs, err := List(dir)
+			if err != nil {
+				t.Fatalf("List() error: %v", err)
+			}
+			if len(specs) != 1 {
+				t.Fatalf("List() returned %d specs, want 1 for directory %q", len(specs), tt.dirName)
+			}
+
+			s := specs[0]
+			if s.Name != tt.dirName {
+				t.Errorf("Name = %q, want %q", s.Name, tt.dirName)
+			}
+			if !s.IsDir {
+				t.Error("IsDir should be true for directory-based spec")
+			}
+			if s.Dir != filepath.Join("specs", tt.dirName) {
+				t.Errorf("Dir = %q, want %q", s.Dir, filepath.Join("specs", tt.dirName))
+			}
+			if s.Path != filepath.Join("specs", tt.dirName, "spec.md") {
+				t.Errorf("Path = %q, want %q", s.Path, filepath.Join("specs", tt.dirName, "spec.md"))
+			}
+			if s.Status != tt.wantStatus {
+				t.Errorf("Status = %v, want %v", s.Status, tt.wantStatus)
+			}
+		})
 	}
 }
 
-func TestList_SubdirHiddenAndNested(t *testing.T) {
+func TestList_MixedFlatAndDir(t *testing.T) {
 	dir := t.TempDir()
 	specsDir := filepath.Join(dir, "specs")
 
-	// Flat spec
+	// Flat spec file
 	if err := os.MkdirAll(specsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -238,26 +255,15 @@ func TestList_SubdirHiddenAndNested(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Subdirectory spec
-	sub := filepath.Join(specsDir, "v2")
-	if err := os.MkdirAll(sub, 0o755); err != nil {
+	// Directory-based feature
+	featureDir := filepath.Join(specsDir, "001-feature")
+	if err := os.MkdirAll(featureDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(sub, "deep.md"), []byte("# Deep"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(featureDir, "spec.md"), []byte("# Spec"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
-	// Nested two levels deep — should be ignored.
-	nested := filepath.Join(sub, "further")
-	if err := os.MkdirAll(nested, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(nested, "ignored.md"), []byte("# Ignored"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Hidden file inside subdirectory — should be ignored.
-	if err := os.WriteFile(filepath.Join(sub, ".hidden.md"), []byte("# Hidden"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(featureDir, "plan.md"), []byte("# Plan"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -266,7 +272,7 @@ func TestList_SubdirHiddenAndNested(t *testing.T) {
 		t.Fatalf("List() error: %v", err)
 	}
 	if len(specs) != 2 {
-		t.Fatalf("List() returned %d specs, want 2 (flat + one subdir)", len(specs))
+		t.Fatalf("List() returned %d specs, want 2 (flat + directory)", len(specs))
 	}
 
 	byName := make(map[string]SpecFile, len(specs))
@@ -274,19 +280,118 @@ func TestList_SubdirHiddenAndNested(t *testing.T) {
 		byName[s.Name] = s
 	}
 
-	if _, ok := byName["flat"]; !ok {
-		t.Error("flat spec not found")
+	flat, ok := byName["flat"]
+	if !ok {
+		t.Fatal("flat spec not found")
 	}
-	if s, ok := byName["deep"]; !ok {
-		t.Error("deep spec not found")
-	} else if s.Path != filepath.Join("specs", "v2", "deep.md") {
-		t.Errorf("deep spec path = %q, want %q", s.Path, filepath.Join("specs", "v2", "deep.md"))
+	if flat.IsDir {
+		t.Error("flat spec should not be IsDir")
 	}
-	if _, ok := byName["ignored"]; ok {
-		t.Error("two-levels-deep spec should not be found")
+	if flat.Dir != "" {
+		t.Errorf("flat spec Dir should be empty, got %q", flat.Dir)
 	}
-	if _, ok := byName[".hidden"]; ok {
-		t.Error("hidden spec should not be found")
+
+	feat, ok := byName["001-feature"]
+	if !ok {
+		t.Fatal("001-feature spec not found")
+	}
+	if !feat.IsDir {
+		t.Error("directory spec should be IsDir")
+	}
+	if feat.Status != StatusPlanned {
+		t.Errorf("directory spec status = %v, want %v", feat.Status, StatusPlanned)
+	}
+}
+
+func TestList_DirHiddenIgnored(t *testing.T) {
+	dir := t.TempDir()
+	specsDir := filepath.Join(dir, "specs")
+
+	if err := os.MkdirAll(specsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Hidden directory — should be ignored
+	hiddenDir := filepath.Join(specsDir, ".hidden-feature")
+	if err := os.MkdirAll(hiddenDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hiddenDir, "spec.md"), []byte("# Hidden"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Visible feature
+	featureDir := filepath.Join(specsDir, "001-visible")
+	if err := os.MkdirAll(featureDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(featureDir, "spec.md"), []byte("# Visible"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	specs, err := List(dir)
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("List() returned %d specs, want 1 (hidden dir excluded)", len(specs))
+	}
+	if specs[0].Name != "001-visible" {
+		t.Errorf("got spec %q, want 001-visible", specs[0].Name)
+	}
+}
+
+func TestDetectDirStatus(t *testing.T) {
+	tests := []struct {
+		name      string
+		artifacts []string
+		want      Status
+	}{
+		{
+			name:      "no files",
+			artifacts: nil,
+			want:      StatusNotStarted,
+		},
+		{
+			name:      "spec.md only",
+			artifacts: []string{"spec.md"},
+			want:      StatusSpecified,
+		},
+		{
+			name:      "plan.md only (unusual)",
+			artifacts: []string{"plan.md"},
+			want:      StatusPlanned,
+		},
+		{
+			name:      "spec + plan",
+			artifacts: []string{"spec.md", "plan.md"},
+			want:      StatusPlanned,
+		},
+		{
+			name:      "tasks.md present → tasked regardless of others",
+			artifacts: []string{"spec.md", "plan.md", "tasks.md"},
+			want:      StatusTasked,
+		},
+		{
+			name:      "tasks.md only",
+			artifacts: []string{"tasks.md"},
+			want:      StatusTasked,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for _, f := range tt.artifacts {
+				if err := os.WriteFile(filepath.Join(dir, f), []byte("# "+f), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got := detectDirStatus(dir)
+			if got != tt.want {
+				t.Errorf("detectDirStatus() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -351,106 +456,6 @@ func TestDetectStatus(t *testing.T) {
 	}
 }
 
-func TestNew_SpecsDirIsFile(t *testing.T) {
-	dir := t.TempDir()
-	// Create a regular file where specs/ would be — MkdirAll returns ENOTDIR
-	specsPath := filepath.Join(dir, "specs")
-	if err := os.WriteFile(specsPath, []byte("not a dir"), 0644); err != nil {
-		t.Fatalf("setup WriteFile: %v", err)
-	}
-
-	_, err := New(dir, "my-feature")
-	if err == nil {
-		t.Fatal("expected error when specs/ is a regular file")
-	}
-	if !strings.Contains(err.Error(), "create specs directory") {
-		t.Errorf("error should mention 'create specs directory', got: %v", err)
-	}
-}
-
-func TestNew(t *testing.T) {
-	t.Run("creates spec file", func(t *testing.T) {
-		dir := t.TempDir()
-
-		path, err := New(dir, "my-feature")
-		if err != nil {
-			t.Fatalf("New() error: %v", err)
-		}
-
-		wantPath := filepath.Join(dir, "specs", "my-feature.md")
-		if path != wantPath {
-			t.Errorf("New() path = %q, want %q", path, wantPath)
-		}
-
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read created file: %v", err)
-		}
-		content := string(data)
-
-		if !strings.Contains(content, "My Feature") {
-			t.Error("template should contain title-cased name")
-		}
-		if !strings.Contains(content, "my-feature") {
-			t.Error("template should contain kebab-case branch name")
-		}
-		if !strings.Contains(content, "Feature Specification") {
-			t.Error("template should contain spec header")
-		}
-	})
-
-	t.Run("refuses to overwrite existing spec", func(t *testing.T) {
-		dir := t.TempDir()
-
-		if _, err := New(dir, "existing"); err != nil {
-			t.Fatalf("first New() error: %v", err)
-		}
-
-		_, err := New(dir, "existing")
-		if err == nil {
-			t.Fatal("second New() should return error for existing spec")
-		}
-		if !strings.Contains(err.Error(), "already exists") {
-			t.Errorf("error should mention 'already exists', got: %v", err)
-		}
-	})
-
-	t.Run("creates specs directory if missing", func(t *testing.T) {
-		dir := t.TempDir()
-
-		path, err := New(dir, "new-thing")
-		if err != nil {
-			t.Fatalf("New() error: %v", err)
-		}
-
-		if _, statErr := os.Stat(path); statErr != nil {
-			t.Errorf("created file should exist: %v", statErr)
-		}
-	})
-}
-
-func TestToTitle(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"my-feature", "My Feature"},
-		{"single", "Single"},
-		{"multi-word-name", "Multi Word Name"},
-		{"ALLCAPS", "ALLCAPS"},
-		{"", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			got := toTitle(tt.input)
-			if got != tt.want {
-				t.Errorf("toTitle(%q) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestStatusSymbol(t *testing.T) {
 	tests := []struct {
 		status Status
@@ -460,6 +465,9 @@ func TestStatusSymbol(t *testing.T) {
 		{StatusDone, "✅", "done"},
 		{StatusInProgress, "🔄", "in progress"},
 		{StatusNotStarted, "⬜", "not started"},
+		{StatusSpecified, "📋", "specified"},
+		{StatusPlanned, "📐", "planned"},
+		{StatusTasked, "✅", "tasked"},
 	}
 
 	for _, tt := range tests {

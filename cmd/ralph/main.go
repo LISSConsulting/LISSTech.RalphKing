@@ -25,8 +25,9 @@ func rootCmd() *cobra.Command {
 		Use:   "ralph",
 		Short: "RalphKing — spec-driven AI coding loop",
 		Long: "RalphKing — spec-driven AI coding loop\n\n" +
-			"Run without a subcommand to enter dashboard mode (TUI idle state).\n" +
-			"Press b to start build, p to plan, R for smart-run, x to stop.",
+			"Spec kit workflow: specify → clarify → plan → tasks → run\n" +
+			"Loop commands: ralph loop plan/build/run\n" +
+			"Run without a subcommand to enter dashboard mode (TUI idle state).",
 		Version: version,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return executeDashboard()
@@ -36,9 +37,16 @@ func rootCmd() *cobra.Command {
 	root.PersistentFlags().Bool("no-tui", false, "disable TUI, use plain text output")
 
 	root.AddCommand(
-		planCmd(),
+		// Spec kit workflow commands
+		specifyCmd(),
+		speckitPlanCmd(),
+		clarifyCmd(),
+		speckitTasksCmd(),
+		speckitRunCmd(),
+		// Autonomous loop (build kept at top-level; plan/run moved under loop)
 		buildCmd(),
-		runCmd(),
+		loopCmd(),
+		// Project management
 		statusCmd(),
 		initCmd(),
 		specCmd(),

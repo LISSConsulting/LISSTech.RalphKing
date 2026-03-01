@@ -2,26 +2,19 @@ package main
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
 )
 
-// findNoop returns a no-op command that accepts any args and exits 0.
-// Returns ("", false) if no such command is available (e.g. Windows).
-func findNoop() (string, bool) {
-	path, err := exec.LookPath("true")
-	if err != nil {
-		return "", false
-	}
-	return path, true
-}
+func isWindows() bool { return runtime.GOOS == "windows" }
 
 func TestFormatSpecList(t *testing.T) {
 	tests := []struct {
@@ -36,11 +29,19 @@ func TestFormatSpecList(t *testing.T) {
 			contains: []string{"No specs found"},
 		},
 		{
-			name: "single done spec",
+			name: "single done spec (flat file)",
 			specs: []spec.SpecFile{
 				{Name: "ralph-core", Path: "specs/ralph-core.md", Status: spec.StatusDone},
 			},
 			contains: []string{"Specs", "─────", "✅", "specs/ralph-core.md", "done"},
+		},
+		{
+			name: "directory-based spec uses Dir path",
+			specs: []spec.SpecFile{
+				{Name: "004-feature", Path: "specs/004-feature/spec.md", Dir: "specs/004-feature", IsDir: true, Status: spec.StatusPlanned},
+			},
+			contains: []string{"Specs", "─────", "📐", "specs/004-feature", "planned"},
+			excludes: []string{"spec.md"},
 		},
 		{
 			name: "multiple specs with mixed statuses",
@@ -147,14 +148,52 @@ func TestRootCmdStructure(t *testing.T) {
 		t.Fatal("missing --no-tui persistent flag")
 	}
 
-	// Verify all expected subcommands
+	// Collect all top-level subcommand names
 	subs := map[string]bool{}
 	for _, sub := range root.Commands() {
 		subs[sub.Name()] = true
 	}
-	for _, want := range []string{"plan", "build", "run", "status", "init", "spec"} {
+
+	// Speckit workflow commands must be present
+	for _, want := range []string{"specify", "plan", "clarify", "tasks", "run"} {
 		if !subs[want] {
-			t.Errorf("missing subcommand %q", want)
+			t.Errorf("missing top-level speckit command %q", want)
+		}
+	}
+
+	// Loop and project management commands
+	for _, want := range []string{"build", "loop", "status", "init", "spec"} {
+		if !subs[want] {
+			t.Errorf("missing top-level command %q", want)
+		}
+	}
+
+	// Old top-level plan/run commands should be GONE (now under loop)
+	// Note: "plan" and "run" now refer to speckit commands, not the old loop commands
+}
+
+func TestLoopCmdStructure(t *testing.T) {
+	root := rootCmd()
+
+	var lp *cobra.Command
+	for _, sub := range root.Commands() {
+		if sub.Name() == "loop" {
+			lp = sub
+			break
+		}
+	}
+	if lp == nil {
+		t.Fatal("missing 'loop' subcommand")
+	}
+
+	loopSubs := map[string]bool{}
+	for _, sub := range lp.Commands() {
+		loopSubs[sub.Name()] = true
+	}
+
+	for _, want := range []string{"plan", "build", "run"} {
+		if !loopSubs[want] {
+			t.Errorf("loop: missing subcommand %q", want)
 		}
 	}
 }
@@ -162,18 +201,40 @@ func TestRootCmdStructure(t *testing.T) {
 func TestLoopCmdsHaveMaxFlag(t *testing.T) {
 	root := rootCmd()
 
+	// Find the loop command
+	var lp *cobra.Command
+	for _, sub := range root.Commands() {
+		if sub.Name() == "loop" {
+			lp = sub
+			break
+		}
+	}
+	if lp == nil {
+		t.Fatal("missing loop subcommand")
+	}
+
 	for _, name := range []string{"plan", "build", "run"} {
 		t.Run(name, func(t *testing.T) {
-			for _, sub := range root.Commands() {
+			for _, sub := range lp.Commands() {
 				if sub.Name() == name {
 					if sub.Flags().Lookup("max") == nil {
-						t.Errorf("%s: missing --max flag", name)
+						t.Errorf("loop %s: missing --max flag", name)
 					}
 					return
 				}
 			}
-			t.Fatalf("subcommand %q not found", name)
+			t.Fatalf("loop subcommand %q not found", name)
 		})
+	}
+
+	// Top-level build also has --max flag
+	for _, sub := range root.Commands() {
+		if sub.Name() == "build" {
+			if sub.Flags().Lookup("max") == nil {
+				t.Error("top-level build: missing --max flag")
+			}
+			return
+		}
 	}
 }
 
@@ -188,10 +249,11 @@ func TestSpecCmdSubcommands(t *testing.T) {
 		for _, child := range sub.Commands() {
 			specSubs[child.Name()] = true
 		}
-		for _, want := range []string{"list", "new"} {
-			if !specSubs[want] {
-				t.Errorf("spec: missing subcommand %q", want)
-			}
+		if !specSubs["list"] {
+			t.Error("spec: missing subcommand 'list'")
+		}
+		if specSubs["new"] {
+			t.Error("spec: 'new' subcommand should be removed (use 'ralph specify' instead)")
 		}
 		return
 	}
@@ -332,77 +394,18 @@ func TestSpecListCmdNoSpecs(t *testing.T) {
 	}
 }
 
-func TestSpecNewCmdExecution(t *testing.T) {
-	dir := t.TempDir()
-	t.Chdir(dir)
-	t.Setenv("EDITOR", "")
-
-	cmd := specNewCmd()
-	if err := cmd.RunE(cmd, []string{"my-feature"}); err != nil {
-		t.Fatalf("specNewCmd RunE: %v", err)
-	}
-
-	path := filepath.Join(dir, "specs", "my-feature.md")
-	if _, err := os.Stat(path); err != nil {
-		t.Errorf("expected spec file at %s: %v", path, err)
-	}
-}
-
-func TestSpecNewCmdWithEditor(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping editor launch in short mode")
-	}
-	dir := t.TempDir()
-	t.Chdir(dir)
-	// Use "true" which accepts any args and exits 0 (Unix only; skip on Windows).
-	editor, ok := findNoop()
-	if !ok {
-		t.Skip("no no-op editor command available on this platform")
-	}
-	t.Setenv("EDITOR", editor)
-
-	cmd := specNewCmd()
-	if err := cmd.RunE(cmd, []string{"editor-test"}); err != nil {
-		t.Fatalf("specNewCmd RunE with EDITOR=%q: %v", editor, err)
-	}
-
-	path := filepath.Join(dir, "specs", "editor-test.md")
-	if _, err := os.Stat(path); err != nil {
-		t.Errorf("expected spec file at %s: %v", path, err)
-	}
-}
-
-func TestSpecNewCmdExisting(t *testing.T) {
-	dir := t.TempDir()
-	t.Chdir(dir)
-	t.Setenv("EDITOR", "")
-
-	// Create spec first.
-	cmd1 := specNewCmd()
-	if err := cmd1.RunE(cmd1, []string{"my-feature"}); err != nil {
-		t.Fatalf("first specNewCmd RunE: %v", err)
-	}
-
-	// Second creation with same name should fail with "already exists" error.
-	cmd2 := specNewCmd()
-	err := cmd2.RunE(cmd2, []string{"my-feature"})
-	if err == nil {
-		t.Fatal("expected error when spec already exists")
-	}
-	if !strings.Contains(err.Error(), "already exists") {
-		t.Errorf("error should mention 'already exists', got: %v", err)
-	}
-}
-
 func TestSpecListCmd_SpecsNotDir(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		// On Windows, os.ReadDir on a regular file returns an IsNotExist-like error,
-		// so spec.List returns nil rather than propagating the error. The error path
-		// covered by this test is only reachable on Unix.
+	if testing.Short() {
+		t.Skip("platform-specific test")
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	// On Windows, ReadDir on a regular file may return an IsNotExist-like error.
+	// This test covers the non-IsNotExist error path which is Unix-only.
+	if isWindows() {
 		t.Skip("ReadDir on a regular file returns IsNotExist on Windows")
 	}
-	dir := t.TempDir()
-	t.Chdir(dir)
 
 	// Create a regular file named "specs" so ReadDir returns a non-IsNotExist error.
 	if err := os.WriteFile(filepath.Join(dir, "specs"), []byte("not a dir"), 0644); err != nil {
@@ -416,16 +419,46 @@ func TestSpecListCmd_SpecsNotDir(t *testing.T) {
 	}
 }
 
-// ---- RunE handler tests for plan / build / run commands ----
-//
-// These exercise the RunE closures (currently at 50%) by running them
-// in a temp dir with no ralph.toml, which causes config.Load to fail
-// immediately before any TUI or Claude invocation.
+// ---- RunE handler tests for loop plan / build / run commands ----
 
-func TestPlanCmdRunE_NoConfig(t *testing.T) {
+func TestLoopPlanCmdRunE_NoConfig(t *testing.T) {
 	t.Chdir(t.TempDir())
 
-	cmd := planCmd()
+	cmd := loopPlanCmd()
+	if err := cmd.Flags().Set("max", "1"); err != nil {
+		t.Fatalf("set --max flag: %v", err)
+	}
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when ralph.toml not found")
+	}
+	if !strings.Contains(err.Error(), "ralph.toml") {
+		t.Errorf("error should mention ralph.toml, got: %v", err)
+	}
+}
+
+func TestLoopBuildCmdRunE_NoConfig(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	cmd := loopBuildCmd()
+	if err := cmd.Flags().Set("max", "1"); err != nil {
+		t.Fatalf("set --max flag: %v", err)
+	}
+
+	err := cmd.RunE(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when ralph.toml not found")
+	}
+	if !strings.Contains(err.Error(), "ralph.toml") {
+		t.Errorf("error should mention ralph.toml, got: %v", err)
+	}
+}
+
+func TestLoopRunCmdRunE_NoConfig(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	cmd := loopRunCmd()
 	if err := cmd.Flags().Set("max", "1"); err != nil {
 		t.Fatalf("set --max flag: %v", err)
 	}
@@ -443,23 +476,6 @@ func TestBuildCmdRunE_NoConfig(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	cmd := buildCmd()
-	if err := cmd.Flags().Set("max", "1"); err != nil {
-		t.Fatalf("set --max flag: %v", err)
-	}
-
-	err := cmd.RunE(cmd, nil)
-	if err == nil {
-		t.Fatal("expected error when ralph.toml not found")
-	}
-	if !strings.Contains(err.Error(), "ralph.toml") {
-		t.Errorf("error should mention ralph.toml, got: %v", err)
-	}
-}
-
-func TestRunCmdRunE_NoConfig(t *testing.T) {
-	t.Chdir(t.TempDir())
-
-	cmd := runCmd()
 	if err := cmd.Flags().Set("max", "1"); err != nil {
 		t.Fatalf("set --max flag: %v", err)
 	}

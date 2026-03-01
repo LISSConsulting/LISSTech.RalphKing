@@ -12,7 +12,17 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
 )
 
-func planCmd() *cobra.Command {
+// loopCmd returns the parent command for autonomous Claude loop commands.
+func loopCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "loop",
+		Short: "Autonomous Claude loop commands",
+	}
+	cmd.AddCommand(loopPlanCmd(), loopBuildCmd(), loopRunCmd())
+	return cmd
+}
+
+func loopPlanCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "plan",
 		Short: "Run Claude in plan mode",
@@ -26,7 +36,7 @@ func planCmd() *cobra.Command {
 	return cmd
 }
 
-func buildCmd() *cobra.Command {
+func loopBuildCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "build",
 		Short: "Run Claude in build mode",
@@ -40,7 +50,7 @@ func buildCmd() *cobra.Command {
 	return cmd
 }
 
-func runCmd() *cobra.Command {
+func loopRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Smart mode: plan if needed, then build",
@@ -48,6 +58,21 @@ func runCmd() *cobra.Command {
 			max, _ := cmd.Flags().GetInt("max")
 			noTUI, _ := cmd.Flags().GetBool("no-tui")
 			return executeSmartRun(max, noTUI)
+		},
+	}
+	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
+	return cmd
+}
+
+// buildCmd is preserved as a top-level alias for the common build workflow.
+func buildCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "build",
+		Short: "Run Claude in build mode",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			max, _ := cmd.Flags().GetInt("max")
+			noTUI, _ := cmd.Flags().GetBool("no-tui")
+			return executeLoop(loop.ModeBuild, max, noTUI)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
@@ -88,8 +113,7 @@ func specCmd() *cobra.Command {
 		Use:   "spec",
 		Short: "Manage spec files",
 	}
-
-	cmd.AddCommand(specListCmd(), specNewCmd())
+	cmd.AddCommand(specListCmd())
 	return cmd
 }
 
@@ -113,36 +137,9 @@ func specListCmd() *cobra.Command {
 	}
 }
 
-func specNewCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "new <name>",
-		Short: "Create a new spec file from template",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			dir, err := os.Getwd()
-			if err != nil {
-				return fmt.Errorf("get working directory: %w", err)
-			}
-
-			path, err := spec.New(dir, args[0])
-			if err != nil {
-				return err
-			}
-
-			fmt.Printf("Created %s\n", path)
-
-			editor := os.Getenv("EDITOR")
-			if editor == "" {
-				return nil
-			}
-
-			return openEditor(editor, path)
-		},
-	}
-}
-
 // formatSpecList renders a list of spec files as a formatted string with
-// status symbols. Returns a "no specs" message for empty input.
+// status symbols. Directory-based features show their Dir path; flat files show
+// their .md path. Returns a "no specs" message for empty input.
 func formatSpecList(specs []spec.SpecFile) string {
 	if len(specs) == 0 {
 		return "No specs found in specs/\n"
@@ -151,7 +148,11 @@ func formatSpecList(specs []spec.SpecFile) string {
 	b.WriteString("Specs\n")
 	b.WriteString("─────\n")
 	for _, s := range specs {
-		fmt.Fprintf(&b, "  %s  %-30s  %s\n", s.Status.Symbol(), s.Path, s.Status)
+		displayPath := s.Path
+		if s.IsDir {
+			displayPath = s.Dir
+		}
+		fmt.Fprintf(&b, "  %s  %-30s  %s\n", s.Status.Symbol(), displayPath, s.Status)
 	}
 	return b.String()
 }

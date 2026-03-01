@@ -383,7 +383,8 @@ func (m Model) handleCreateSpecRequest(msg panels.CreateSpecRequestMsg) (tea.Mod
 	workDir := m.workDir
 	name := msg.Name
 	return m, func() tea.Msg {
-		_, _ = spec.New(workDir, name)
+		// Create a spec kit feature directory; spec.md is created by 'ralph specify'.
+		_ = os.MkdirAll(filepath.Join(workDir, "specs", name), 0o755)
 		specs, _ := spec.List(workDir)
 		return specsRefreshedMsg{Specs: specs}
 	}

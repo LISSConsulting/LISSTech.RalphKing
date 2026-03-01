@@ -12,9 +12,15 @@ import (
 type Status string
 
 const (
+	// Legacy statuses (flat-file specs, CHRONICLE.md-based).
 	StatusDone       Status = "done"
 	StatusInProgress Status = "in_progress"
 	StatusNotStarted Status = "not_started"
+
+	// Directory-based statuses (artifact-presence detection).
+	StatusSpecified Status = "specified" // spec.md exists
+	StatusPlanned   Status = "planned"   // plan.md exists
+	StatusTasked    Status = "tasked"    // tasks.md exists
 )
 
 // Symbol returns the display indicator for this status.
@@ -24,6 +30,12 @@ func (s Status) Symbol() string {
 		return "✅"
 	case StatusInProgress:
 		return "🔄"
+	case StatusSpecified:
+		return "📋"
+	case StatusPlanned:
+		return "📐"
+	case StatusTasked:
+		return "✅"
 	default:
 		return "⬜"
 	}
@@ -36,6 +48,12 @@ func (s Status) String() string {
 		return "done"
 	case StatusInProgress:
 		return "in progress"
+	case StatusSpecified:
+		return "specified"
+	case StatusPlanned:
+		return "planned"
+	case StatusTasked:
+		return "tasked"
 	default:
 		return "not started"
 	}
@@ -43,13 +61,20 @@ func (s Status) String() string {
 
 // SpecFile represents a discovered spec with its status.
 type SpecFile struct {
-	Name   string // filename without extension (e.g. "ralph-core")
-	Path   string // relative path from project root (e.g. "specs/ralph-core.md")
+	Name   string // feature name (e.g. "ralph-core" or "004-speckit-alignment")
+	Path   string // relative path from project root (e.g. "specs/ralph-core.md" or "specs/004-speckit-alignment/spec.md")
+	Dir    string // relative path to feature directory (e.g. "specs/004-speckit-alignment"); empty for flat files
+	IsDir  bool   // true if this is a directory-based feature
 	Status Status
 }
 
-// List discovers specs/*.md and specs/*/*.md files (one level of subdirectories)
-// and detects their status by cross-referencing CHRONICLE.md.
+// List discovers spec features in the specs/ directory.
+//
+// Directory entries (specs/NNN-name/) are treated as single features with
+// artifact-presence-based status (spec.md→specified, plan.md→planned, tasks.md→tasked).
+//
+// Flat .md files (specs/name.md) use the legacy CHRONICLE.md-based status detection.
+//
 // The dir argument is the project root directory.
 func List(dir string) ([]SpecFile, error) {
 	specsDir := filepath.Join(dir, "specs")
@@ -71,22 +96,16 @@ func List(dir string) ([]SpecFile, error) {
 		}
 
 		if entry.IsDir() {
-			// Walk one level into subdirectory.
-			subEntries, subErr := os.ReadDir(filepath.Join(specsDir, entry.Name()))
-			if subErr != nil {
-				continue
-			}
-			for _, sub := range subEntries {
-				if sub.IsDir() || !strings.HasSuffix(sub.Name(), ".md") || strings.HasPrefix(sub.Name(), ".") {
-					continue
-				}
-				name := strings.TrimSuffix(sub.Name(), ".md")
-				specs = append(specs, SpecFile{
-					Name:   name,
-					Path:   filepath.Join("specs", entry.Name(), sub.Name()),
-					Status: detectStatus(sub.Name(), plan),
-				})
-			}
+			// Directory-based feature: emit one SpecFile per directory.
+			featureDir := filepath.Join("specs", entry.Name())
+			absDir := filepath.Join(specsDir, entry.Name())
+			specs = append(specs, SpecFile{
+				Name:   entry.Name(),
+				Dir:    featureDir,
+				Path:   filepath.Join(featureDir, "spec.md"),
+				IsDir:  true,
+				Status: detectDirStatus(absDir),
+			})
 			continue
 		}
 
@@ -103,6 +122,27 @@ func List(dir string) ([]SpecFile, error) {
 	}
 
 	return specs, nil
+}
+
+// detectDirStatus determines a directory-based spec's status by checking which
+// artifact files are present. Priority: tasks.md > plan.md > spec.md > not_started.
+func detectDirStatus(absDir string) Status {
+	switch {
+	case fileExists(filepath.Join(absDir, "tasks.md")):
+		return StatusTasked
+	case fileExists(filepath.Join(absDir, "plan.md")):
+		return StatusPlanned
+	case fileExists(filepath.Join(absDir, "spec.md")):
+		return StatusSpecified
+	default:
+		return StatusNotStarted
+	}
+}
+
+// fileExists reports whether a regular file exists at path.
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 // detectStatus determines the spec's progress by looking at where its filename

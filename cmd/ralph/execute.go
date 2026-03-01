@@ -318,9 +318,15 @@ func executeDashboard() error {
 	return runDashboard(ctx, cfg, dir, sw, sr)
 }
 
-// openEditor launches the given editor with the file path, connecting stdio.
-func openEditor(editor, path string) error {
-	cmd := exec.Command(editor, path)
+// executeSpeckit spawns `claude -p "/<skill> <args>" --verbose` with inherited
+// stdio, enabling interactive Claude Code speckit skill execution. Returns
+// Claude's exit code as an error when non-zero.
+func executeSpeckit(ctx context.Context, skill string, args []string) error {
+	prompt := "/" + skill
+	if len(args) > 0 {
+		prompt += " " + strings.Join(args, " ")
+	}
+	cmd := exec.CommandContext(ctx, "claude", "-p", prompt, "--verbose")
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
