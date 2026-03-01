@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **All specs (001–004) fully implemented. No remaining work items.** All 12 packages pass; go vet clean; golangci-lint 0 issues; tests green. `internal/tui/components` 100%, `internal/tui/panels` 100%. cmd/ralph ~72% — confirmed ceiling: `runWithRegentTUI`/`runWithTUIAndState`/`runDashboard` (0%) require real TTY; `os.Getwd()` error paths untriggerable in tests; `TestSpecListCmd_SpecsNotDir` skipped on Windows.
+> Current state: **All specs (001–004) fully implemented. No remaining work items.** All 12 packages pass; go vet clean; golangci-lint 0 issues; tests green. `internal/tui/components` 100%, `internal/tui/panels` 100%. cmd/ralph 76.2% — confirmed ceiling: `runWithRegentTUI`/`runWithTUIAndState`/`runDashboard` (0%) require real TTY; `os.Getwd()` error paths untriggerable in tests; `TestSpecListCmd_SpecsNotDir` skipped on Windows.
 
 ## Completed Work
 
@@ -26,7 +26,38 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 ## Remaining Work
 
-No actionable items remain. All specs (001–004) are fully implemented, tests pass, lint is clean.
+None. All code, tests, CI, and documentation are clean.
+
+### Improvement Sweep (v0.1.00, 2026-03-01)
+
+Full sweep completed — one documentation-only carry-forward finding, no functional changes:
+- **Test coverage**: All packages confirmed at or above established floors. Numbers unchanged from v0.0.99: `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 98.6%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling — `runWithRegentTUI`/`runWithTUIAndState`/`runDashboard` require real TTY; no further improvement without programFactory injection). `go vet ./...` clean.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere. No dead code. All unexported functions verified in active use. 8 legitimately skipped tests (platform/environment conditions).
+- **Documentation drift (resolved v0.1.01)**: Marked all 45 task checkboxes `[x]` in `specs/003-tui-redesign/tasks.md` and all 34 task checkboxes `[x]` in `specs/004-speckit-alignment/tasks.md`. Both specs were 100% implemented; runtime was unaffected throughout.
+- **Stale references**: None found. README.md, CLAUDE.md, .golangci.yml all current.
+- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (fifth consecutive confirmation); no action required.
+- **Dead code**: None found.
+- **Spec compliance**: Full compliance check against spec 003 (T001–T045) and spec 004 (T001–T034) — zero implementation drift found.
+
+### Improvement Sweep (v0.0.99, 2026-03-01)
+
+Full sweep completed — one documentation drift finding:
+- **Test coverage**: All packages confirmed at or above 90% floor. Current numbers unchanged from v0.0.98: `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 98.6%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere. No dead code. All unexported functions verified in active use. 8 skipped tests, all legitimately conditional (platform/environment reasons).
+- **Documentation drift (low priority)**: `specs/003-tui-redesign/tasks.md` has all 45 task checkboxes as `[ ]` despite spec being fully complete (T001–T045); `specs/004-speckit-alignment/tasks.md` has all 34 task checkboxes as `[ ]` despite spec being fully complete (T001–T034). These are documentation-only artifacts — `detectDirStatus()` uses file presence not checkbox state, so runtime behavior is unaffected. Update: mark all tasks `[x]` in both files.
+- **Stale references**: None found. README.md, CLAUDE.md all current. No deleted commands/features referenced.
+- **CI health**: `ci.yml` push triggers still list `develop` (does not exist) and `feat/**` (naming convention not used) — confirmed non-functional-gap for the fourth consecutive sweep. No action required.
+- **Dead code**: None found.
+
+### Improvement Sweep (v0.0.98, 2026-03-01)
+
+Full sweep completed — no actionable findings:
+- **Test coverage**: All packages confirmed at or above 90% floor. Current numbers: `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 98.6%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling — unchanged). Updated header from `~72%` to `76.2%` to reflect actual measured ceiling.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere. `ti.Placeholder` in specs.go and `constitution.md` mentions of "placeholder" are false positives (UI property name and documentation wording). No dead code. All unexported functions verified in active use.
+- **Stale references**: No drift found. CLAUDE.md, README.md all current.
+- **Spec consistency**: Full compliance check against spec 003 (T001–T045) and spec 004 (T001–T034) acceptance criteria — zero drift found.
+- **CI health**: One low-priority informational finding — `ci.yml` push triggers list `develop` (branch does not exist) and `feat/**` (naming convention not used; actual branches are `NNN-feature-name`). Feature branches only receive CI via PR-to-main triggers, which is the correct merge gate. Not a functional gap; no action required unless branch naming conventions change.
+- **Dead code**: None found.
 
 ### Improvement Sweep (v0.0.97, 2026-03-01)
 
