@@ -6,12 +6,23 @@ Ralph runs Claude Code against your specs in a continuous loop: plan → build �
 
 ```
 ralph               # Dashboard mode — interactive TUI with loop control
-ralph plan          # Run Claude in plan mode against specs/
-ralph build         # Run Claude in build mode
-ralph run           # Auto: plan if no CHRONICLE.md, then build
+
+# Spec kit workflow (drives Claude through spec kit skills)
+ralph specify       # Create a new spec from a description
+ralph plan          # Generate implementation plan for active spec
+ralph clarify       # Resolve ambiguities in active spec
+ralph tasks         # Break plan into actionable task list
+ralph run           # Execute spec kit run against active spec
+
+# Autonomous loop (continuous Claude iterations)
+ralph build         # Run Claude in build mode (alias for ralph loop build)
+ralph loop plan     # Run Claude in plan mode
+ralph loop build    # Run Claude in build mode
+ralph loop run      # Smart mode: plan if needed, then build
+
+# Project management
 ralph status        # Show last run, cost, iteration, branch
 ralph init          # Scaffold ralph.toml in current project
-ralph spec new      # Create a new spec
 ralph spec list     # List specs and their status
 ```
 
@@ -93,7 +104,7 @@ Minimum terminal size: 80×24. Set accent color via `[tui] accent_color = "#7D56
 
 ## Spec Kit Integration
 
-Ralph natively understands `specs/` directories. With `ralph spec new`, Ralph scaffolds a new spec using Spec Kit conventions. `ralph plan` feeds all specs to Claude for gap analysis.
+Ralph natively understands `specs/NNN-name/` directories. The spec kit workflow drives Claude through sequential phases: `ralph specify` creates a new spec, `ralph plan` generates a technical plan, `ralph clarify` resolves ambiguities, `ralph tasks` breaks the plan into actionable tasks, and `ralph run` executes the implementation. Use `ralph loop build` for continuous autonomous iterations once the spec is ready.
 
 ## Supported Agents
 
