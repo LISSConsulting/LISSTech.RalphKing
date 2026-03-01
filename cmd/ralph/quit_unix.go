@@ -11,7 +11,7 @@ import (
 
 // registerQuitHandler registers a SIGQUIT handler that exits immediately
 // without waiting for the current iteration to finish.
-// Per the-regent.md: "On SIGQUIT: stop immediately, kill Ralph child process."
+// On SIGQUIT: stop immediately, kill Ralph child process.
 func registerQuitHandler() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGQUIT)

@@ -61,8 +61,8 @@ func (s Status) String() string {
 
 // SpecFile represents a discovered spec with its status.
 type SpecFile struct {
-	Name   string // feature name (e.g. "ralph-core" or "004-speckit-alignment")
-	Path   string // relative path from project root (e.g. "specs/ralph-core.md" or "specs/004-speckit-alignment/spec.md")
+	Name   string // feature name (e.g. "004-speckit-alignment")
+	Path   string // relative path from project root (e.g. "specs/004-speckit-alignment/spec.md")
 	Dir    string // relative path to feature directory (e.g. "specs/004-speckit-alignment"); empty for flat files
 	IsDir  bool   // true if this is a directory-based feature
 	Status Status

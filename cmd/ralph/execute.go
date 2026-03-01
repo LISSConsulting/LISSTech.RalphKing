@@ -165,8 +165,8 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, sw, sr, smartRunFn)
 }
 
-// showStatus reads .ralph/regent-state.json and prints a formatted summary.
-// Per ralph-core.md: branch, last commit, iteration count, total cost, duration, pass/fail.
+// showStatus reads .ralph/regent-state.json and prints a formatted summary
+// including branch, last commit, iteration count, total cost, duration, and pass/fail.
 func showStatus() error {
 	dir, err := os.Getwd()
 	if err != nil {

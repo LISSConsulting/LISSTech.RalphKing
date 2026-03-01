@@ -28,6 +28,16 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 None. All code, tests, CI, and documentation are clean.
 
+### Improvement Sweep (v0.1.05, 2026-03-01)
+
+Full sweep completed — one stale-reference finding resolved:
+- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere.
+- **Stale references**: Fixed three doc comments referencing deleted spec files — `internal/spec/spec.go` SpecFile.Name/Path examples (removed `"ralph-core"` reference); `cmd/ralph/execute.go` showStatus doc (removed "Per ralph-core.md:" prefix); `cmd/ralph/quit_unix.go` registerQuitHandler doc (removed "Per the-regent.md:" prefix). README.md, CLAUDE.md all current.
+- **Spec consistency**: Full compliance check against spec 004 (T001–T034), all 12 FRs verified — zero drift found.
+- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (seventh consecutive confirmation); no action required.
+- **Dead code**: None found. All unexported helper functions verified in active use.
+
 ### Improvement Sweep (v0.1.04, 2026-03-01)
 
 Full sweep completed — no actionable findings:
