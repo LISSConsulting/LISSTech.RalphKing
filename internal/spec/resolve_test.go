@@ -124,6 +124,28 @@ func TestIsNumeric(t *testing.T) {
 	}
 }
 
+// TestCheckDir_PathIsFile covers the !info.IsDir() branch in checkDir:
+// when the path exists but is a regular file, Resolve should return a descriptive error.
+func TestCheckDir_PathIsFile(t *testing.T) {
+	dir := t.TempDir()
+	specsDir := filepath.Join(dir, "specs")
+	if err := os.MkdirAll(specsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Create a regular file where a spec directory is expected.
+	if err := os.WriteFile(filepath.Join(specsDir, "a-feature"), []byte{}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Resolve(dir, "a-feature", "")
+	if err == nil {
+		t.Fatal("Resolve: expected error when spec path is a file, not a directory")
+	}
+	if !strings.Contains(err.Error(), "not a directory") {
+		t.Errorf("Resolve: error should mention 'not a directory', got: %v", err)
+	}
+}
+
 func TestResolve_BranchSetWhenFromBranch(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "specs", "my-feature"), 0o755); err != nil {

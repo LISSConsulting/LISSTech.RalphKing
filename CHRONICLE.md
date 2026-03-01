@@ -28,6 +28,16 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 No actionable items remain. All specs (001–004) are fully implemented, tests pass, lint is clean.
 
+### Improvement Sweep (v0.0.95, 2026-03-01)
+
+Full sweep completed — actionable findings resolved:
+- **Test coverage**: Added 10 tests targeting speckit command coverage gaps. `specifyCmd`: 75%→90%; `speckitPlanCmd`/`clarifyCmd`/`speckitTasksCmd`/`speckitRunCmd`: 68.8%→93.8% each (resolve-error path + all-prereqs-reach-executeSpeckit path). Added `TestCheckDir_PathIsFile` covering `!info.IsDir()` branch in `checkDir`: 75%→87.5%. `internal/spec`: 96.9%→98.0%. `cmd/ralph`: 72.6%→76.2%. Remaining gaps are confirmed residuals: `checkDir()` non-IsNotExist stat error requires platform-specific null-byte path; `specifyCmd`/speckit cmds `os.Getwd()` error + `os.MkdirAll` error paths are OS-level impossibilities in tests.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere.
+- **Stale references**: No drift found.
+- **Spec consistency**: Full compliance check against spec 004 acceptance criteria — zero drift found.
+- **CI health**: Both `ci.yml` and `release.yml` are clean — `golangci-lint-action@v7` with `v2.1.6` pinned, all other actions at v4/v5.
+- **Dead code**: No orphaned functions or unused constants found.
+
 ### Improvement Sweep (v0.0.94, 2026-03-01)
 
 Full sweep completed — no actionable findings:
