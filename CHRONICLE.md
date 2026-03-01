@@ -28,6 +28,16 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 None. All code, tests, CI, and documentation are clean.
 
+### Improvement Sweep (v0.1.03, 2026-03-01)
+
+Full sweep completed — one stale-reference finding resolved:
+- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `executeDashboard` 22.7% is a TTY ceiling (same as runWithRegentTUI/runDashboard — path through store setup + runDashboard is blocked by TTY requirement). `go vet ./...` clean.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere.
+- **Stale references**: Fixed CLAUDE.md — removed references to deleted `specs/ralph-core.md` and `specs/the-regent.md` (replaced with current spec kit layout description); removed `specs/ralph-core.md` reference from Config section; added `internal/store/` and `internal/notify/` to Architecture section; added TUI subdirs note.
+- **Spec consistency**: Full compliance check against spec 004 (T001–T034) — zero drift found. All 12 FRs implemented and verified.
+- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned.
+- **Dead code**: None found. All 26 unexported helper functions verified in active use.
+
 ### Improvement Sweep (v0.1.02, 2026-03-01)
 
 Full sweep completed — one actionable finding resolved:

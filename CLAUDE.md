@@ -14,10 +14,12 @@ Regent (supervisor) → Ralph (loop) → Claude (worker)
 - `internal/git/` — pull, push, branch helpers
 - `internal/loop/` — Core iteration: prompt → claude → parse → git
 - `internal/spec/` — Spec file discovery and active spec resolution
-- `internal/tui/` — bubbletea + lipgloss TUI
+- `internal/tui/` — bubbletea + lipgloss multi-panel TUI (`components/`, `panels/` subdirs)
+- `internal/store/` — JSONL session log storage and querying
+- `internal/notify/` — desktop notifications on loop events
 - `internal/regent/` — Supervisor: crash/hang detection, test-gated rollback
 
-Specs live in `specs/`. Read `specs/ralph-core.md` and `specs/the-regent.md` before implementing anything.
+Specs live in `specs/NNN-name/` directories (spec kit layout). Read `spec.md`, `plan.md`, and `tasks.md` from the relevant spec directory before implementing anything.
 
 ## Build & Test
 
@@ -44,4 +46,4 @@ Project constitution at `.specify/memory/constitution.md`. Five principles: spec
 
 ## Config
 
-`ralph.toml` at repo root is the example config. All config fields documented in `specs/ralph-core.md` under Configuration.
+`ralph.toml` at repo root is the example config. All available config fields and their defaults are shown there.
