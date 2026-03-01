@@ -28,6 +28,16 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 No actionable items remain. All specs (001–004) are fully implemented, tests pass, lint is clean.
 
+### Improvement Sweep (v0.0.97, 2026-03-01)
+
+Full sweep completed — actionable findings resolved:
+- **Test coverage**: Added `TestHandleLogEntry_LogIterComplete` covering the `LogIterComplete` case in `handleLogEntry` (app.go:309-319, 3 statements — iterationsPanel.AddIteration + secondary.AddIteration); added `TestParseStream_AssistantNoMessage` covering the `msg.Message == nil` early-return in `parseAssistantMessage` (parser.go:94-96). `internal/claude`: 97.8%→100%; `internal/tui`: 98.2%→99.1%. Remaining gaps: `tickCmd()` (tea.Tick callback unreachable), `tea.ExecProcess` closure body in `handleEditSpecRequest` (requires running editor subprocess; not reliably testable on Windows), all previously confirmed residuals.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere.
+- **Stale references**: Updated CLAUDE.md — corrected `internal/spec/` description ("templating"→"active spec resolution") and added `charmbracelet/bubbles` to approved deps list.
+- **Spec consistency**: No drift found (same as v0.0.96 sweep).
+- **CI health**: Clean (same as v0.0.96 sweep).
+- **Dead code**: None found.
+
 ### Improvement Sweep (v0.0.96, 2026-03-01)
 
 Full sweep completed — actionable findings resolved:

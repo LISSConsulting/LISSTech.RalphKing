@@ -278,6 +278,22 @@ func (r *errAfterReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// TestParseStream_AssistantNoMessage covers the msg.Message == nil branch in
+// parseAssistantMessage — an "assistant" line without a "message" field
+// results in no events being emitted.
+func TestParseStream_AssistantNoMessage(t *testing.T) {
+	// Send an assistant event with no "message" field so msg.Message == nil.
+	input := `{"type":"assistant"}`
+	ch := ParseStream(strings.NewReader(input))
+	var got []Event
+	for ev := range ch {
+		got = append(got, ev)
+	}
+	if len(got) != 0 {
+		t.Errorf("assistant with no message field should emit 0 events, got %d", len(got))
+	}
+}
+
 func TestParseStream_ScannerError(t *testing.T) {
 	validLine := `{"type":"result","cost_usd":0.05,"duration_ms":1000}` + "\n"
 	r := &errAfterReader{

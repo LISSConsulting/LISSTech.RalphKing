@@ -13,7 +13,7 @@ Regent (supervisor) → Ralph (loop) → Claude (worker)
 - `internal/claude/` — Claude CLI adapter, stream-JSON event parser
 - `internal/git/` — pull, push, branch helpers
 - `internal/loop/` — Core iteration: prompt → claude → parse → git
-- `internal/spec/` — Spec file discovery and templating
+- `internal/spec/` — Spec file discovery and active spec resolution
 - `internal/tui/` — bubbletea + lipgloss TUI
 - `internal/regent/` — Supervisor: crash/hang detection, test-gated rollback
 
@@ -32,7 +32,7 @@ Cross-compile targets: `darwin/arm64`, `darwin/amd64`, `linux/amd64`, `windows/a
 ## Rules
 
 - **Specs are law.** Every feature originates from a spec in `specs/`. Read the spec before writing code.
-- **Idiomatic Go.** Standard library first. Approved deps: `cobra`, `BurntSushi/toml`, `bubbletea`, `lipgloss`. Justify any new dependency.
+- **Idiomatic Go.** Standard library first. Approved deps: `cobra`, `BurntSushi/toml`, `bubbletea`, `lipgloss`, `charmbracelet/bubbles`. Justify any new dependency.
 - **Table-driven tests.** Use `t.Run` subtests. Target 80% coverage.
 - **No global mutable state.** Pass dependencies explicitly. Structs hold state, functions transform it.
 - **Errors are values.** Wrap with `fmt.Errorf("context: %w", err)`. Never swallow errors silently.
