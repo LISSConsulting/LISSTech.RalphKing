@@ -158,6 +158,19 @@ func TestSpecItem_Description(t *testing.T) {
 	}
 }
 
+func TestSpecItem_Description_IsDir(t *testing.T) {
+	sf := spec.SpecFile{
+		Name:  "004-feature",
+		Path:  "specs/004-feature/spec.md",
+		Dir:   "specs/004-feature",
+		IsDir: true,
+	}
+	item := specItem{sf: sf}
+	if got := item.Description(); got != "specs/004-feature" {
+		t.Errorf("Description() = %q, want %q", got, "specs/004-feature")
+	}
+}
+
 func TestSpecItem_FilterValue(t *testing.T) {
 	item := specItem{sf: makeSpec("bar", "specs/bar.md", spec.StatusDone)}
 	if got := item.FilterValue(); got != "bar" {

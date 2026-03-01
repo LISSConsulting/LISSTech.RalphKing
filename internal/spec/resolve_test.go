@@ -106,6 +106,24 @@ func TestResolve(t *testing.T) {
 	}
 }
 
+func TestIsNumeric(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"", false},
+		{"0", true},
+		{"123", true},
+		{"12a", false},
+		{"abc", false},
+	}
+	for _, tt := range tests {
+		if got := isNumeric(tt.input); got != tt.want {
+			t.Errorf("isNumeric(%q) = %v, want %v", tt.input, got, tt.want)
+		}
+	}
+}
+
 func TestResolve_BranchSetWhenFromBranch(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "specs", "my-feature"), 0o755); err != nil {
