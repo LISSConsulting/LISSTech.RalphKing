@@ -28,6 +28,16 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 No actionable items remain. All specs (001–004) are fully implemented, tests pass, lint is clean.
 
+### Improvement Sweep (v0.0.94, 2026-03-01)
+
+Full sweep completed — no actionable findings:
+- **Test coverage**: Added `TestIsNumeric` (empty-string branch in `isNumeric()`) and `TestSpecItem_Description_IsDir` (IsDir=true path in `specItem.Description()`). panels: 99.7%→100%; spec: 95.9%→96.9%. Remaining gaps are confirmed residuals: `List()` non-IsNotExist ReadDir error unreachable on Windows (`TestSpecListCmd_SpecsNotDir` Windows skip pattern), `checkDir()` non-IsNotExist stat error requires platform-specific null-byte path.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere.
+- **Stale references**: Fixed README.md — removed deleted `ralph spec new` command, added speckit workflow commands (`specify`/`plan`/`clarify`/`tasks`/`run`), moved loop commands under `ralph loop` in docs. Updated Spec Kit Integration section.
+- **Spec consistency**: Full compliance check against spec 004 acceptance criteria — zero drift found. All 12 FRs implemented and tested.
+- **CI health**: Both `ci.yml` and `release.yml` are clean — `golangci-lint-action@v7` with `v2.1.6` pinned, all other actions at v4/v5.
+- **Dead code**: No orphaned functions or unused constants found.
+
 ## Future Backlog (from GitHub Issues #1 and #2)
 
 All items from Issues #1 (TUI) and #2 (RK) are resolved. Two items remain pending but are out of scope for current specs:
