@@ -69,7 +69,7 @@ report on any session, running or completed.
 
 ## Technical Constraints
 
-- **Language**: Go 1.23+
+- **Language**: Go 1.24+
 - **Build targets**: darwin/arm64, darwin/amd64, linux/amd64, windows/amd64
 - **Configuration**: TOML (`ralph.toml`) parsed with `BurntSushi/toml`
 - **TUI**: `bubbletea` + `lipgloss` — no raw ANSI escape sequences

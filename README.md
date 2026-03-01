@@ -22,7 +22,7 @@ ralph loop run      # Smart mode: plan if needed, then build
 
 # Project management
 ralph status        # Show last run, cost, iteration, branch
-ralph init          # Scaffold ralph.toml in current project
+ralph init          # Scaffold ralph project (config, prompts, specs dir)
 ralph spec list     # List specs and their status
 ```
 
@@ -74,6 +74,10 @@ enabled = true
 rollback_on_test_failure = true
 max_retries = 3
 retry_backoff_seconds = 30
+
+[tui]
+accent_color = "#7D56F4"  # hex color for header/accent elements
+log_retention = 20        # number of session logs to keep; 0 = unlimited
 ```
 
 ## TUI Keyboard Reference
@@ -87,7 +91,7 @@ The four-panel TUI is available for all loop commands and via `ralph` (dashboard
 | `b` | Start build loop |
 | `p` | Start plan loop |
 | `R` | Smart run (plan if needed, then build) |
-| `x` | Stop loop after current iteration |
+| `x` | Cancel running loop immediately (dashboard mode) |
 | `s` | Graceful stop after current iteration |
 | `?` | Toggle help overlay |
 | `q` / `ctrl+c` | Quit |

@@ -28,6 +28,18 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 None. All code, tests, CI, and documentation are clean.
 
+### Improvement Sweep (v0.1.12, 2026-03-01)
+
+Full sweep completed — five doc/config fixes applied:
+- **Stale references**: Fixed `cmd/ralph/main.go` Long description — spec kit workflow order was `specify → clarify → plan` (wrong); corrected to `specify → plan → clarify → tasks → run` (matches README and spec kit concept: clarify resolves plan ambiguities).
+- **Stale references**: Fixed README.md `x` key description — "Stop loop after current iteration" was incorrect (`x` calls `StopLoop()` which immediately cancels context, not after-iteration); corrected to "Cancel running loop immediately (dashboard mode)".
+- **Stale references**: Fixed README.md `ralph init` comment — "Scaffold ralph.toml in current project" was incomplete; corrected to "Scaffold ralph project (config, prompts, specs dir)" matching the cobra `Short` text and actual behavior.
+- **Stale references**: Added `[tui] log_retention = 20` to both `README.md` config example and `ralph.toml` — the field was implemented (config.go:283, default=20, tested) but absent from user-facing config examples.
+- **Stale references**: Fixed `.specify/memory/constitution.md` — Technical Constraints said `Go 1.23+` but `go.mod` requires `go 1.24.2`; corrected to `Go 1.24+`.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found. No dead code removal attempted (FooterProps.ScrollOffset/NewBelow, MainView.SwitchToOutput, Regent.NotifyOutput, tui.DimBorderStyle are exported symbols retained for testing utility and future wiring).
+- **Test coverage**: All packages at confirmed floors (unchanged).
+- **CI health**: Both workflows clean — golangci-lint-action@v7 with v2.1.6 pinned. ci.yml push triggers for develop/feat/** remain non-functional (fourteenth consecutive confirmation); no action required.
+
 ### Improvement Sweep (v0.1.11, 2026-03-01)
 
 Full sweep completed — no actionable findings:

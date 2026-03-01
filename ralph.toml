@@ -31,3 +31,4 @@ hang_timeout_seconds = 300  # kill Ralph if no output for 5 min
 
 [tui]
 accent_color = "#7D56F4"  # hex color for header/accent elements
+log_retention = 20        # number of session logs to keep; 0 = unlimited
