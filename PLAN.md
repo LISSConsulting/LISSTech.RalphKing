@@ -26,6 +26,15 @@ Read these sources using parallel subagents to build understanding:
 
 3. **Update @CHRONICLE.md.** Create or rewrite as a priority-sorted bullet list of items yet to be implemented or fixed. Mark items confirmed complete by code search. Remove stale entries that code search proves are resolved.
 
+4. **If no spec gaps found, widen the search.** When all spec requirements are implemented, audit for:
+   - Test coverage below 90% (excluding documented ceilings)
+   - `TODO`, `FIXME`, `HACK`, `XXX` comments in the codebase
+   - Stale documentation (README.md, CLAUDE.md, doc comments referencing removed features or old names)
+   - CI workflow issues (deprecated actions, missing checks)
+   - Dead code (unexported functions with zero callers, unused constants)
+
+   Add any findings to @CHRONICLE.md as low-priority items so the build agent can act on them.
+
 ## Completion criteria
 
-This iteration is complete when @CHRONICLE.md accurately reflects the current gap between `specs/` and the codebase, with every item confirmed by code search — not assumption.
+This iteration is complete when @CHRONICLE.md accurately reflects the current gap between `specs/` and the codebase — including code hygiene findings — with every item confirmed by code search, not assumption.
