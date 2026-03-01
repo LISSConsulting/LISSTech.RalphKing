@@ -28,6 +28,14 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 None. All code, tests, CI, and documentation are clean.
 
+### Improvement Sweep (v0.1.13, 2026-03-01)
+
+Full sweep completed — one stale-reference finding resolved:
+- **Stale references**: Fixed README.md Iterations panel description — `]` was listed as a key for "view summary" in the Iterations panel (`2`), but `]` is only handled in the Main panel (`3`) for tab cycling. The actual flow is: press `enter` in Iterations panel → iteration log loads in Main panel → press `]` in Main panel to reach Iteration Summary tab. Updated description to: `j`/`k` navigate · `enter` view log (loads in Main panel; use `]` there for summary).
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found. No dead code found.
+- **Test coverage**: All packages at confirmed floors (unchanged).
+- **CI health**: Both workflows clean — golangci-lint-action@v7 with v2.1.6 pinned. ci.yml push triggers for develop/feat/** remain non-functional (fifteenth consecutive confirmation); no action required.
+
 ### Improvement Sweep (v0.1.12, 2026-03-01)
 
 Full sweep completed — five doc/config fixes applied:

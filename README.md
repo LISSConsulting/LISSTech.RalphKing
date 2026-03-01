@@ -98,7 +98,7 @@ The four-panel TUI is available for all loop commands and via `ralph` (dashboard
 
 **Specs panel (`1`):** `j`/`k` navigate · `enter` view · `e` open in `$EDITOR` · `n` create new
 
-**Iterations panel (`2`):** `j`/`k` navigate · `enter` view log · `]` view summary
+**Iterations panel (`2`):** `j`/`k` navigate · `enter` view log (loads in Main panel; use `]` there for summary)
 
 **Main panel (`3`):** `[`/`]` switch tabs · `f` toggle follow · `j`/`k` scroll · `ctrl+u`/`ctrl+d` page
 
