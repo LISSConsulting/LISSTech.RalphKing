@@ -58,12 +58,15 @@ name = "MyProject"
 
 [claude]
 model = "sonnet"
+max_turns = 0  # 0 = unlimited agentic turns per iteration
 danger_skip_permissions = true
 
 [plan]
+prompt_file = "PLAN.md"
 max_iterations = 3
 
 [build]
+prompt_file = "BUILD.md"
 max_iterations = 0  # 0 = unlimited
 roam = false        # enable cross-spec improvement sweep (--roam flag overrides)
 
@@ -73,9 +76,11 @@ auto_push = true
 
 [regent]
 enabled = true
-rollback_on_test_failure = true
+rollback_on_test_failure = false  # set true once test command configured
+test_command = "go test ./..."    # command run by Regent after each iteration
 max_retries = 3
 retry_backoff_seconds = 30
+hang_timeout_seconds = 300        # kill Ralph if no output for 5 min
 
 [tui]
 accent_color = "#7D56F4"  # hex color for header/accent elements

@@ -27,6 +27,16 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 ## Remaining Work
 
+### Improvement Sweep (v0.1.20, 2026-03-02)
+
+Full sweep completed — one stale-reference finding resolved:
+- **Stale references**: Fixed README.md config example — (1) `rollback_on_test_failure = true` was incorrect; actual default is `false` per `config.go:167` and `ralph.toml:27`; corrected. (2) Added `max_turns = 0` to `[claude]` section. (3) Added `prompt_file = "PLAN.md"` and `prompt_file = "BUILD.md"` to `[plan]`/`[build]` sections. (4) Added `test_command = "go test ./..."` and `hang_timeout_seconds = 300` to `[regent]` section. README config example now matches `ralph.toml` for all documented fields.
+- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.7%, `internal/store` 91.0%, `cmd/ralph` 75.9% (confirmed ceiling). `go vet ./...` clean.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
+- **CI health**: Both workflows clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (twenty-first consecutive confirmation); no action required.
+- **Dead code**: None found.
+- **Spec consistency**: Full compliance check against spec 005 (T001–T020, FR-001–FR-014) — zero drift found. FR-010 (`--roam` + `--spec` conflict guard) is intentionally unreachable since `--spec` flag does not exist on build commands; documented in tasks.md as "defensive check for future compatibility".
+
 ### Improvement Sweep (v0.1.19, 2026-03-02)
 
 Full sweep completed — no findings:
