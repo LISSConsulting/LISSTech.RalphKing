@@ -27,6 +27,17 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 ## Remaining Work
 
+### Improvement Sweep (v0.1.23, 2026-03-02)
+
+Full sweep completed — one bug found and fixed:
+- **TUI state bug fixed**: `LogSpecComplete` and `LogSweepComplete` were not handled in `handleLogEntry`'s state-transition switch (`app.go`). When the loop exits via spec/sweep completion, it emits one of these events and returns `nil` **without** emitting `LogDone`. The TUI therefore never transitioned to `StateIdle`, leaving the dashboard in a stale "building" state. Fix: added both kinds to the `LogDone, LogStopped` case. Also added specific rendering in `theme.go` (same ✅ + `resultStyle` as `LogDone`). Added 4 test cases: 2 in `TestUpdate_LogEntry_LogDoneStoppedErrorRegent` (state transitions) and 2 in `TestRenderLogLine_AllKinds` (rendering). All 12 packages pass; `go vet ./...` clean.
+- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.7%, `internal/store` 91.0%, `cmd/ralph` 75.9% (confirmed ceiling). `go vet ./...` clean.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
+- **Stale references**: None found. README.md, CLAUDE.md all current.
+- **Spec consistency**: Full compliance check against spec 005 (T001–T020, FR-001–FR-014) — zero drift found.
+- **CI health**: Both workflows clean — `golangci-lint-action@v7` with `v2.1.6` pinned.
+- **Dead code**: None found. All unexported helper functions verified in active use.
+
 ### Improvement Sweep (v0.1.22, 2026-03-02)
 
 Full sweep completed — no findings:

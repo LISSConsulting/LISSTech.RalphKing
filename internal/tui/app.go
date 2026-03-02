@@ -318,7 +318,7 @@ func (m Model) handleLogEntry(msg logEntryMsg) (tea.Model, tea.Cmd) {
 		m.iterationsPanel = m.iterationsPanel.AddIteration(summary).SetCurrent(0)
 		m.secondary = m.secondary.AddIteration(summary)
 
-	case loop.LogDone, loop.LogStopped:
+	case loop.LogDone, loop.LogStopped, loop.LogSpecComplete, loop.LogSweepComplete:
 		if m.loopState.CanTransitionTo(StateIdle) {
 			m.loopState = StateIdle
 		}

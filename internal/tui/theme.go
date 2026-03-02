@@ -122,7 +122,7 @@ func (t Theme) RenderLogLine(entry loop.LogEntry, width int) string {
 	case loop.LogGitPush:
 		return fmt.Sprintf("%s  %s", ts, t.gitStyle.Render("⬇ "+singleLine(entry.Message)))
 
-	case loop.LogDone:
+	case loop.LogDone, loop.LogSpecComplete, loop.LogSweepComplete:
 		return fmt.Sprintf("%s  %s", ts, resultStyle.Render("✅ "+singleLine(entry.Message)))
 
 	case loop.LogStopped:

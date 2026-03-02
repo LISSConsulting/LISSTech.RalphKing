@@ -642,8 +642,8 @@ func TestUpdate_SpecSelected_ShowsContent(t *testing.T) {
 }
 
 // TestUpdate_LogEntry_LogDoneStoppedErrorRegent covers state transitions for
-// LogDone, LogStopped, LogError, and LogRegent kinds — the branches in
-// handleLogEntry that were previously uncovered.
+// LogDone, LogStopped, LogSpecComplete, LogSweepComplete, LogError, and
+// LogRegent kinds — the branches in handleLogEntry that update loopState.
 func TestUpdate_LogEntry_LogDoneStoppedErrorRegent(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -658,6 +658,16 @@ func TestUpdate_LogEntry_LogDoneStoppedErrorRegent(t *testing.T) {
 		{
 			name:      "LogStopped → StateIdle",
 			entry:     loop.LogEntry{Kind: loop.LogStopped, Message: "stopped"},
+			wantState: StateIdle,
+		},
+		{
+			name:      "LogSpecComplete → StateIdle",
+			entry:     loop.LogEntry{Kind: loop.LogSpecComplete, Message: "spec complete"},
+			wantState: StateIdle,
+		},
+		{
+			name:      "LogSweepComplete → StateIdle",
+			entry:     loop.LogEntry{Kind: loop.LogSweepComplete, Message: "sweep complete"},
 			wantState: StateIdle,
 		},
 		{

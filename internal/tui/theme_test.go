@@ -103,6 +103,16 @@ func TestRenderLogLine_AllKinds(t *testing.T) {
 			contains: []string{"✅", "loop finished"},
 		},
 		{
+			name:     "LogSpecComplete",
+			entry:    loop.LogEntry{Kind: loop.LogSpecComplete, Timestamp: now, Message: "spec complete"},
+			contains: []string{"✅", "spec complete"},
+		},
+		{
+			name:     "LogSweepComplete",
+			entry:    loop.LogEntry{Kind: loop.LogSweepComplete, Timestamp: now, Message: "sweep complete"},
+			contains: []string{"✅", "sweep complete"},
+		},
+		{
 			name:     "LogStopped",
 			entry:    loop.LogEntry{Kind: loop.LogStopped, Timestamp: now, Message: "loop stopped"},
 			contains: []string{"⏹", "loop stopped"},
