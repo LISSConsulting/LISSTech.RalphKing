@@ -3,8 +3,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -72,4 +74,33 @@ func signalContext() (context.Context, context.CancelFunc) {
 		signal.Stop(sigs)
 	}()
 	return ctx, cancel
+}
+
+// signalContextGraceful returns a context, cancel, and a stop channel for
+// two-stage SIGINT handling in --no-tui mode:
+//   - First SIGINT/SIGTERM closes stopCh (graceful: finish current iteration)
+//   - Second SIGINT/SIGTERM cancels ctx (hard stop: kill Claude immediately)
+func signalContextGraceful() (context.Context, context.CancelFunc, <-chan struct{}) {
+	ctx, cancel := context.WithCancel(context.Background())
+	stopCh := make(chan struct{})
+	var stopOnce sync.Once
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		select {
+		case <-sigs:
+			stopOnce.Do(func() { close(stopCh) })
+			fmt.Fprintln(os.Stderr, "\nGraceful stop requested — finishing current iteration (Ctrl+C again to force quit)")
+		case <-ctx.Done():
+			signal.Stop(sigs)
+			return
+		}
+		select {
+		case <-sigs:
+			cancel()
+		case <-ctx.Done():
+		}
+		signal.Stop(sigs)
+	}()
+	return ctx, cancel, stopCh
 }

@@ -47,7 +47,14 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 		return fmt.Errorf("prompt file %s: %w", promptFile, statErr)
 	}
 
-	ctx, cancel := signalContext()
+	var ctx context.Context
+	var cancel context.CancelFunc
+	var stopCh <-chan struct{}
+	if noTUI {
+		ctx, cancel, stopCh = signalContextGraceful()
+	} else {
+		ctx, cancel = signalContext()
+	}
 	defer cancel()
 
 	gitRunner := git.NewRunner(dir)
@@ -56,6 +63,9 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 		Git:    gitRunner,
 		Config: cfg,
 		Dir:    dir,
+	}
+	if stopCh != nil {
+		lp.StopAfter = stopCh
 	}
 	if cfg.Notifications.URL != "" {
 		n := notify.New(cfg.Notifications.URL, cfg.Project.Name,
@@ -109,7 +119,14 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 		return fmt.Errorf("get working directory: %w", err)
 	}
 
-	ctx, cancel := signalContext()
+	var ctx context.Context
+	var cancel context.CancelFunc
+	var stopCh <-chan struct{}
+	if noTUI {
+		ctx, cancel, stopCh = signalContextGraceful()
+	} else {
+		ctx, cancel = signalContext()
+	}
 	defer cancel()
 
 	gitRunner := git.NewRunner(dir)
@@ -118,6 +135,9 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 		Git:    gitRunner,
 		Config: cfg,
 		Dir:    dir,
+	}
+	if stopCh != nil {
+		lp.StopAfter = stopCh
 	}
 	if cfg.Notifications.URL != "" {
 		n := notify.New(cfg.Notifications.URL, cfg.Project.Name,

@@ -50,6 +50,16 @@ type Loop struct {
 // configured max is reached, the context is cancelled, or an error occurs.
 // If maxOverride > 0, it overrides the config's max_iterations.
 func (l *Loop) Run(ctx context.Context, mode Mode, maxOverride int) error {
+	// If stop was already requested (e.g., Ctrl+C during a prior phase of
+	// smart run), exit immediately without starting a new run.
+	if l.StopAfter != nil {
+		select {
+		case <-l.StopAfter:
+			return nil
+		default:
+		}
+	}
+
 	promptFile, maxIter := l.modeConfig(mode)
 	if maxOverride > 0 {
 		maxIter = maxOverride

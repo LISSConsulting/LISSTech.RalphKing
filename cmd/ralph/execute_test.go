@@ -794,3 +794,72 @@ func TestSignalContext_SIGTERMCancelsContext(t *testing.T) {
 		t.Fatal("context not cancelled after sending SIGTERM to self")
 	}
 }
+
+// TestSignalContextGraceful_TwoStageStop verifies the two-stage SIGINT
+// behaviour: first signal closes stopCh, second signal cancels context.
+func TestSignalContextGraceful_TwoStageStop(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("SIGINT cannot be reliably sent to self on Windows")
+	}
+
+	ctx, cancel, stopCh := signalContextGraceful()
+	defer cancel()
+
+	proc, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatalf("FindProcess: %v", err)
+	}
+
+	// First SIGINT: should close stopCh but NOT cancel context.
+	if err := proc.Signal(syscall.SIGINT); err != nil {
+		t.Fatalf("Signal(SIGINT) #1: %v", err)
+	}
+
+	select {
+	case <-stopCh:
+		// stopCh closed — good.
+	case <-time.After(2 * time.Second):
+		t.Fatal("stopCh not closed after first SIGINT")
+	}
+
+	// Context should still be alive after first signal.
+	select {
+	case <-ctx.Done():
+		t.Fatal("context should NOT be cancelled after first SIGINT")
+	default:
+	}
+
+	// Second SIGINT: should cancel context.
+	if err := proc.Signal(syscall.SIGINT); err != nil {
+		t.Fatalf("Signal(SIGINT) #2: %v", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		// Context cancelled — test passes.
+	case <-time.After(2 * time.Second):
+		t.Fatal("context not cancelled after second SIGINT")
+	}
+}
+
+// TestSignalContextGraceful_CancelCleansUp verifies that calling the cancel
+// func exits the signal goroutine without requiring any signals.
+func TestSignalContextGraceful_CancelCleansUp(t *testing.T) {
+	ctx, cancel, stopCh := signalContextGraceful()
+
+	cancel()
+
+	select {
+	case <-ctx.Done():
+		// Expected.
+	case <-time.After(2 * time.Second):
+		t.Fatal("context not cancelled by cancel()")
+	}
+
+	// stopCh should NOT be closed by cancel — only by signals.
+	select {
+	case <-stopCh:
+		t.Fatal("stopCh should not be closed by cancel()")
+	default:
+	}
+}
