@@ -15,11 +15,29 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/notify"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
 )
 
+// createSweepBranch creates and checks out a sweep/YYYY-MM-DD branch.
+// If the exact date branch already exists, it retries with -2 through -10 suffixes.
+func createSweepBranch(r *git.Runner) error {
+	date := time.Now().Format("2006-01-02")
+	name := fmt.Sprintf("sweep/%s", date)
+	if err := r.CreateAndCheckout(name); err == nil {
+		return nil
+	}
+	for i := 2; i <= 10; i++ {
+		candidate := fmt.Sprintf("sweep/%s-%d", date, i)
+		if err := r.CreateAndCheckout(candidate); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("roam: could not create sweep branch sweep/%s (all suffixes taken)", date)
+}
+
 // executeLoop loads config, builds the loop, and runs it in the given mode.
-func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
+func executeLoop(mode loop.Mode, maxOverride int, noTUI bool, roam bool) error {
 	cfg, err := config.Load("")
 	if err != nil {
 		return err
@@ -58,11 +76,20 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 	defer cancel()
 
 	gitRunner := git.NewRunner(dir)
+
+	effectiveRoam := roam || cfg.Build.Roam
+	if effectiveRoam {
+		if err := createSweepBranch(gitRunner); err != nil {
+			return err
+		}
+	}
+
 	lp := &loop.Loop{
 		Agent:  loop.NewClaudeAgent(),
 		Git:    gitRunner,
 		Config: cfg,
 		Dir:    dir,
+		Roam:   effectiveRoam,
 	}
 	if stopCh != nil {
 		lp.StopAfter = stopCh
@@ -71,6 +98,15 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 		n := notify.New(cfg.Notifications.URL, cfg.Project.Name,
 			cfg.Notifications.OnComplete, cfg.Notifications.OnError, cfg.Notifications.OnStop)
 		lp.NotificationHook = n.Hook
+	}
+
+	if !effectiveRoam {
+		if branch, branchErr := gitRunner.CurrentBranch(); branchErr == nil {
+			if as, resolveErr := spec.Resolve(dir, "", branch); resolveErr == nil {
+				lp.Spec = as.Name
+				lp.SpecDir = as.Dir
+			}
+		}
 	}
 
 	logsDir := filepath.Join(dir, ".ralph", "logs")
@@ -105,7 +141,7 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool) error {
 }
 
 // executeSmartRun runs plan if CHRONICLE.md doesn't exist, then build.
-func executeSmartRun(maxOverride int, noTUI bool) error {
+func executeSmartRun(maxOverride int, noTUI bool, roam bool) error {
 	cfg, err := config.Load("")
 	if err != nil {
 		return err
@@ -130,6 +166,14 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 	defer cancel()
 
 	gitRunner := git.NewRunner(dir)
+
+	effectiveRoam := roam || cfg.Build.Roam
+	if effectiveRoam {
+		if err := createSweepBranch(gitRunner); err != nil {
+			return err
+		}
+	}
+
 	lp := &loop.Loop{
 		Agent:  loop.NewClaudeAgent(),
 		Git:    gitRunner,
@@ -143,6 +187,15 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 		n := notify.New(cfg.Notifications.URL, cfg.Project.Name,
 			cfg.Notifications.OnComplete, cfg.Notifications.OnError, cfg.Notifications.OnStop)
 		lp.NotificationHook = n.Hook
+	}
+
+	if !effectiveRoam {
+		if branch, branchErr := gitRunner.CurrentBranch(); branchErr == nil {
+			if as, resolveErr := spec.Resolve(dir, "", branch); resolveErr == nil {
+				lp.Spec = as.Name
+				lp.SpecDir = as.Dir
+			}
+		}
 	}
 
 	logsDir := filepath.Join(dir, ".ralph", "logs")
@@ -169,6 +222,7 @@ func executeSmartRun(maxOverride int, noTUI bool) error {
 				return fmt.Errorf("plan phase: %w", planErr)
 			}
 		}
+		lp.Roam = effectiveRoam
 		return lp.Run(ctx, loop.ModeBuild, maxOverride)
 	}
 

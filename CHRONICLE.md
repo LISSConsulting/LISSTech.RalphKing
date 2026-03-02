@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **Specs 001–004 fully implemented. Spec 005 planned+tasked, not yet implemented (20 tasks remaining).** All 12 packages pass; go vet clean; golangci-lint 0 issues; tests green. `internal/tui/components` 100%, `internal/tui/panels` 100%. cmd/ralph 76.2% — confirmed ceiling: `runWithRegentTUI`/`runWithTUIAndState`/`runDashboard` (0%) require real TTY; `os.Getwd()` error paths untriggerable in tests; `TestSpecListCmd_SpecsNotDir` skipped on Windows.
+> Current state: **Specs 001–005 fully implemented. No remaining work items.** All 12 packages pass; go vet clean; golangci-lint 0 issues; tests green. `internal/tui/components` 100%, `internal/tui/panels` 100%. cmd/ralph 76.2% — confirmed ceiling: `runWithRegentTUI`/`runWithTUIAndState`/`runDashboard` (0%) require real TTY; `os.Getwd()` error paths untriggerable in tests; `TestSpecListCmd_SpecsNotDir` skipped on Windows.
 
 ## Completed Work
 
@@ -18,52 +18,24 @@
 | Test coverage | Git 93.2%, TUI 97.0% (internal/tui; +9.5pp via comprehensive new tests v0.0.86), loop 98.6% (cross-platform runner.Run tests via self-exec init()), claude 97.8%, regent 95.9%, config 93.1%, spec 96.2%, notify 100.0%, **cmd/ralph 72.5%** (was 71.6% → +0.9pp via `TestFinishTUI_Success` using `tea.WithoutRenderer()` + test I/O — `finishTUI` 0%→50%), **rootCmd 100%** (was 80% — added TestRootCmd_NoSubcommand_CallsDashboard), **components 100%** (was 89.1% — added LogView.Update tests covering KeyMsg/MouseMsg/non-scroll paths), **store 91.0%** (was 90.0% — added onAppend commit-from-complete branch test), **panels 100%** (was 94.7% — added AbbreviatePath home-dir, zero-height constructors/SetSize, Update f/[/default-key/non-key branches, splitLines trailing-newline, iterDelegate.Render selected, SpecsPanel j/k cmd invocation) | 0.0.6, 0.0.14, 0.0.16, v0.0.32, v0.0.36–v0.0.40, v0.0.56, v0.0.58–v0.0.63, v0.0.65, v0.0.68, v0.0.70, v0.0.71, v0.0.72, v0.0.75, v0.0.83, v0.0.84, v0.0.86, v0.0.89, v0.0.90, v0.0.91, v0.0.92 |
 | Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, prompt files, extract `classifyResult`/`needsPlanPhase`/`formatStatus`/`formatLogLine`/`formatSpecList`/`formatScaffoldResult` pure functions with table-driven tests, command tree structure tests, end-to-end command execution tests (cmd/ralph 8.8% → 41.8%); added `runWithStateTracking`/`runWithRegent`/`openEditor` tests (41.8% → 53.4%); added `executeLoop`/`executeSmartRun` integration tests + plan/build/run RunE tests (53.4% → 70.7%); added config-invalid/regent-enabled/corrupted-state-file tests for `executeSmartRun` and `showStatus` (70.7% → 72.0%) | 0.0.9, v0.0.21, v0.0.33–v0.0.38 |
 
-Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` specs. Spec `003-tui-redesign/spec.md` **fully complete** (T001–T045, all phases including Phase 8 polish). Spec `004-speckit-alignment/` **fully complete** (T001–T034, all phases).
+Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` specs. Spec `003-tui-redesign/spec.md` **fully complete** (T001–T045, all phases including Phase 8 polish). Spec `004-speckit-alignment/` **fully complete** (T001–T034, all phases). Spec `005-spec-bounded-roam/` **fully complete** (T001–T020, all phases).
 
 | Phase | Features | Branch |
 |-------|----------|--------|
 | Spec kit alignment (spec 004, all phases) | Directory-based spec discovery (`List()` emits one SpecFile per `specs/NNN-name/` dir with artifact-presence status: specified→planned→tasked); new status constants (StatusSpecified 📋, StatusPlanned 📐, StatusTasked ✅); SpecFile.Dir + SpecFile.IsDir fields; `detectDirStatus()` checks tasks.md>plan.md>spec.md; `spec.New()` removed (template.go, spec-template.md deleted); `specNewCmd()` removed from CLI; `formatSpecList()` shows Dir for directory specs; TUI specItem.Description() shows Dir for IsDir specs; TUI `n` key creates directory (not flat file); `ralph loop` parent with plan/build/run subcommands (old top-level plan/run freed for speckit); top-level `build` preserved as alias; speckit commands: `specify`/`plan`/`clarify`/`tasks`/`run` at top level; `executeSpeckit()` spawns `claude -p "/<skill>" --verbose`; `spec.Resolve()` maps branch name or --spec flag to spec directory; `internal/spec/resolve.go` with ActiveSpec struct; PLAN.md + BUILD.md updated for spec kit directory awareness | 004-speckit-alignment |
+| Spec-bounded loop with --roam (spec 005, all phases) | `LogSpecComplete`/`LogSweepComplete` log kinds in `event.go`; `iteration()` refactored to `(cost, subtype, commitsProduced, err)` — `headBefore`/`headAfter` diff detects new commits; completion state machine (`prevSubtype`+`commitsProduced`) in `Run()`; `git.CreateAndCheckout(name)` (`git checkout -b`); `BuildConfig.Roam bool` with `toml:"roam"` tag; `--roam` flag on `buildCmd`/`loopBuildCmd`/`loopRunCmd`; `createSweepBranch()` helper (`sweep/YYYY-MM-DD`, collision retry `-2`…`-10`); `Loop.Roam`/`Loop.Spec`/`Loop.SpecDir` fields; `augmentPrompt()` helper (spec-boundary or sweep directive); `spec.Resolve()` wired in `executeLoop`/`executeSmartRun` for `!effectiveRoam`; `roam = false` in `ralph.toml`; full test coverage across all 20 tasks | 005-spec-bounded-roam |
 
 ## Remaining Work
 
-### Spec 005 — Spec-Bounded Loop with --roam Flag (`specs/005-spec-bounded-roam/`)
+### Improvement Sweep (v0.1.17, 2026-03-02)
 
-All 20 tasks unimplemented. Code search confirms: no `LogSpecComplete`/`LogSweepComplete` in `event.go`, no `Loop.Roam`/`Loop.Spec`/`Loop.SpecDir` fields, `iteration()` still returns `(float64, error)`, no `CreateAndCheckout` on `git.Runner`, no `Roam` field in `BuildConfig`, no `--roam` flag on any command, no prompt augmentation in `loop.go`.
-
-#### Phase 1 — Foundational (blocking prerequisite)
-
-- **[BLOCKING] T001** Add `LogSpecComplete` and `LogSweepComplete` log kinds to `LogKind` enum in `internal/loop/event.go`, after `LogRegent`. Required by all subsequent phases.
-
-#### Phase 2 — User Story 1: Default Loop Stops at Spec Boundary (P1 — MVP)
-
-- **[HIGH] T002** Write table-driven tests in `internal/loop/loop_test.go`: enhance `mockGit` with `lastCommitSequence []string` (successive `LastCommit()` calls return different hashes), enhance `mockAgent` to capture `lastPrompt string`. Test cases: success+no-commits→`LogSpecComplete`+`return nil`; success+has-commits→loop continues; max-iterations with commits→`LogDone`; single iteration (`--max 1`) success+no-commits→`LogDone` (no early exit); `error_max_turns`+no-commits→continues; two successes second has no commits→complete on second.
-- **[HIGH] T003** Refactor `iteration()` return in `internal/loop/loop.go` from `(float64, error)` to `(cost float64, subtype string, commitsProduced bool, err error)`: capture `headBefore` via `l.Git.LastCommit()` before `l.Agent.Run()`, capture `headAfter` after event drain+push, extract `subtype` from `claude.EventResult`, set `commitsProduced = headBefore != headAfter`. Update call site in `Run()`.
-- **[HIGH] T004** Add completion state machine in `Run()` in `internal/loop/loop.go`: declare `var prevSubtype string` before iteration loop; after each `iteration()` call, if `prevSubtype == "success" && !commitsProduced` emit `LogSpecComplete` (or `LogSweepComplete` when `l.Roam` — placeholder for US2) and `return nil`; otherwise set `prevSubtype = subtype`.
-
-#### Phase 3 — User Story 2: Roam Mode (P2)
-
-- **[HIGH] T005** [P] Write tests for `CreateAndCheckout` in `internal/git/git_test.go`: (a) new branch succeeds, `CurrentBranch()` returns new name; (b) existing branch returns error.
-- **[HIGH] T006** [P] Write tests for `Roam` config field in `internal/config/config_test.go`: (a) `Defaults()` has `Roam: false`; (b) TOML `roam = true` under `[build]` parses; (c) unknown key near `roam` is rejected.
-- **[HIGH] T007** [P] Add `CreateAndCheckout(name string) error` to `git.Runner` in `internal/git/git.go` (`git checkout -b <name>`). NOT added to `GitOps` interface — only called from command layer.
-- **[HIGH] T008** [P] Add `Roam bool` field to `BuildConfig` in `internal/config/config.go` with `toml:"roam"` tag. Update `Defaults()` to `Roam: false`. Update `InitFile()` template with `roam = false` under `[build]`.
-- **[HIGH] T009** Add `--roam` flag to `buildCmd()`, `loopBuildCmd()`, `loopRunCmd()` in `cmd/ralph/commands.go`. Parse and pass `roam bool` to `executeLoop()` and `executeSmartRun()`.
-- **[HIGH] T010** Update `executeLoop()` in `cmd/ralph/execute.go`: accept `roam bool`; compute `effectiveRoam := roam || cfg.Build.Roam`; create sweep branch (`sweep/YYYY-MM-DD`, collision retry `-2`…`-10`) via `gitRunner.CreateAndCheckout()` when `effectiveRoam`; set `lp.Roam = true`. Add `Roam bool` field to `Loop` struct in `internal/loop/loop.go`.
-- **[HIGH] T011** Update `executeSmartRun()` in `cmd/ralph/execute.go`: accept `roam bool`; apply same roam pre-flight as `executeLoop()` (sweep branch creation, `lp.Roam`). Roam applies to build phase only; plan phase unchanged.
-- **[HIGH] T012** Update completion detection in `Run()` in `internal/loop/loop.go` to branch on `l.Roam`: when true emit `LogSweepComplete` with message `"Sweep complete (N iterations, $X.XX)"`; when false emit `LogSpecComplete`.
-- **[HIGH] T013** Write tests for roam orchestration in `cmd/ralph/execute_test.go`: (a) `executeLoop` with `roam=true` creates branch starting with `sweep/`; (b) collision suffix `-2`; (c) `--roam` flag registered on `buildCmd`/`loopBuildCmd`/`loopRunCmd`.
-
-#### Phase 4 — User Story 3: Prompt Guardrails (P3)
-
-- **[MEDIUM] T014** Write tests for prompt augmentation in `internal/loop/loop_test.go` using `mockAgent.lastPrompt`: (a) `Loop.Spec` set + `Roam=false` → prompt contains `"## Spec Context"` + spec name + directory; (b) `Roam=true` → prompt contains `"## Spec Context"` + `"improvement sweep"`; (c) `Spec=""` + `Roam=false` → prompt unchanged.
-- **[MEDIUM] T015** Add `Spec string` and `SpecDir string` fields to `Loop` struct in `internal/loop/loop.go` (if not already present from T010).
-- **[MEDIUM] T016** Implement prompt augmentation in `Run()` in `internal/loop/loop.go`: after reading prompt file, before iteration loop, append `"\n\n## Spec Context\n\n"` section — roam: sweep directive; spec set: spec-boundary directive with name+dir; neither: no change.
-- **[MEDIUM] T017** Wire spec resolution in `executeLoop()` and `executeSmartRun()` in `cmd/ralph/execute.go`: when `!effectiveRoam`, call `spec.Resolve(dir, "", branch)` (branch from `gitRunner.CurrentBranch()`); on success set `lp.Spec` and `lp.SpecDir`; on failure continue silently (backwards-compatible).
-
-#### Phase 5 — Polish
-
-- **[LOW] T018** Update `ralph.toml` at repo root: add `roam = false` under `[build]` with comment `# enable cross-spec improvement sweep (--roam flag overrides)`.
-- **[LOW] T019** Run `go test ./...`, `go vet ./...`, `golangci-lint run` — zero failures/warnings. Fix any lint issues (`ifElseChain`, `errcheck`, etc.).
-- **[LOW] T020** Verify backwards compatibility: `ralph build` without `--roam` on main branch — no spec augmentation, no early exit, full budget consumed.
+Full sweep completed — Spec 005 complete, no additional findings:
+- **Spec 005 complete**: All 20 tasks implemented and verified. `LogSpecComplete`/`LogSweepComplete` in `event.go`; `iteration()` returns `(cost, subtype, commitsProduced, err)`; completion state machine in `Run()`; `git.CreateAndCheckout()`; `BuildConfig.Roam`; `--roam` on build/loopBuild/loopRun; `createSweepBranch()`; `augmentPrompt()`; `spec.Resolve()` wired; `roam = false` in `ralph.toml`. All 12 packages pass; go vet clean; golangci-lint 0 issues.
+- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
+- **Stale references**: None found. README.md, CLAUDE.md all current.
+- **CI health**: Both workflows clean.
+- **Dead code**: None found.
 
 ### Improvement Sweep (v0.1.16, 2026-03-02)
 

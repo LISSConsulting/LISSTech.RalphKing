@@ -6,17 +6,19 @@ import "time"
 type LogKind int
 
 const (
-	LogInfo         LogKind = iota // General informational message
-	LogIterStart                   // Iteration starting
-	LogToolUse                     // Claude tool use event
-	LogText                        // Claude text/reasoning output between tool calls
-	LogIterComplete                // Iteration finished
-	LogError                       // Error from Claude or loop
-	LogGitPull                     // Git pull operation
-	LogGitPush                     // Git push operation
-	LogDone                        // Loop finished normally
-	LogStopped                     // Loop stopped (context cancelled)
-	LogRegent                      // Regent supervisor message
+	LogInfo          LogKind = iota // General informational message
+	LogIterStart                    // Iteration starting
+	LogToolUse                      // Claude tool use event
+	LogText                         // Claude text/reasoning output between tool calls
+	LogIterComplete                 // Iteration finished
+	LogError                        // Error from Claude or loop
+	LogGitPull                      // Git pull operation
+	LogGitPush                      // Git push operation
+	LogDone                         // Loop finished normally
+	LogStopped                      // Loop stopped (context cancelled)
+	LogRegent                       // Regent supervisor message
+	LogSpecComplete                 // Spec boundary reached — success with no new commits (default mode)
+	LogSweepComplete                // Cross-spec sweep complete (--roam mode)
 )
 
 // LogEntry is a structured event emitted by the loop during execution.

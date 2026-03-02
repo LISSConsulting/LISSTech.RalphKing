@@ -22,6 +22,7 @@ func TestDefaults(t *testing.T) {
 		{"plan.max_iterations", cfg.Plan.MaxIterations, 3},
 		{"build.prompt_file", cfg.Build.PromptFile, "BUILD.md"},
 		{"build.max_iterations", cfg.Build.MaxIterations, 0},
+		{"build.roam", cfg.Build.Roam, false},
 		{"git.auto_pull_rebase", cfg.Git.AutoPullRebase, true},
 		{"git.auto_push", cfg.Git.AutoPush, true},
 		{"regent.enabled", cfg.Regent.Enabled, true},
@@ -597,4 +598,36 @@ func TestValidateMultipleErrors(t *testing.T) {
 			t.Errorf("error %q does not contain %q", msg, want)
 		}
 	}
+}
+
+func TestBuildRoam(t *testing.T) {
+	t.Run("roam = true parses from TOML", func(t *testing.T) {
+		dir := t.TempDir()
+		content := "[plan]\nprompt_file = \"PLAN.md\"\n[build]\nprompt_file = \"BUILD.md\"\nroam = true\n"
+		if err := os.WriteFile(filepath.Join(dir, "ralph.toml"), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(filepath.Join(dir, "ralph.toml"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !cfg.Build.Roam {
+			t.Error("expected Build.Roam = true after parsing roam = true")
+		}
+	})
+
+	t.Run("unknown key near roam is rejected", func(t *testing.T) {
+		dir := t.TempDir()
+		content := "[build]\nprompt_file = \"BUILD.md\"\nroam = true\nroam_typo = true\n"
+		if err := os.WriteFile(filepath.Join(dir, "ralph.toml"), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := Load(filepath.Join(dir, "ralph.toml"))
+		if err == nil {
+			t.Fatal("expected error for unknown key 'roam_typo'")
+		}
+		if !strings.Contains(err.Error(), "unknown keys") {
+			t.Errorf("error should mention unknown keys, got: %v", err)
+		}
+	})
 }

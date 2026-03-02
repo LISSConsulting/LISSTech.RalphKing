@@ -44,6 +44,9 @@ type Loop struct {
 	PostIteration    func()          // optional: called after each iteration (e.g., test-gated rollback)
 	StopAfter        <-chan struct{} // optional: closed to request graceful stop after current iteration
 	NotificationHook func(LogEntry)  // optional: called on every emitted event for external notifications
+	Roam             bool            // enable cross-spec sweep mode (--roam flag)
+	Spec             string          // active spec name for prompt augmentation (empty = no augmentation)
+	SpecDir          string          // active spec directory for prompt augmentation
 }
 
 // Run executes the loop in the given mode. It runs iterations until the
@@ -66,10 +69,13 @@ func (l *Loop) Run(ctx context.Context, mode Mode, maxOverride int) error {
 	}
 
 	promptPath := filepath.Join(l.Dir, promptFile)
-	prompt, err := os.ReadFile(promptPath)
+	promptBytes, err := os.ReadFile(promptPath)
 	if err != nil {
 		return fmt.Errorf("loop: read prompt %s: %w", promptFile, err)
 	}
+
+	// Augment prompt with spec context guardrails when applicable.
+	prompt := augmentPrompt(string(promptBytes), l.Spec, l.SpecDir, l.Roam)
 
 	branch, err := l.Git.CurrentBranch()
 	if err != nil {
@@ -90,6 +96,7 @@ func (l *Loop) Run(ctx context.Context, mode Mode, maxOverride int) error {
 	})
 
 	var totalCost float64
+	var prevSubtype string
 	for i := 1; maxIter == 0 || i <= maxIter; i++ {
 		select {
 		case <-ctx.Done():
@@ -101,11 +108,31 @@ func (l *Loop) Run(ctx context.Context, mode Mode, maxOverride int) error {
 		default:
 		}
 
-		cost, iterErr := l.iteration(ctx, i, maxIter, string(prompt), branch)
+		cost, subtype, commitsProduced, iterErr := l.iteration(ctx, i, maxIter, prompt, branch)
 		if iterErr != nil {
 			return fmt.Errorf("loop: iteration %d: %w", i, iterErr)
 		}
 		totalCost += cost
+
+		// Spec completion detection: two-signal check — previous iteration
+		// reported "success" and this iteration produced no new commits.
+		if prevSubtype == "success" && !commitsProduced {
+			if l.Roam {
+				l.emit(LogEntry{
+					Kind:      LogSweepComplete,
+					Message:   fmt.Sprintf("Sweep complete (%d iterations, $%.2f)", i, totalCost),
+					TotalCost: totalCost,
+				})
+			} else {
+				l.emit(LogEntry{
+					Kind:      LogSpecComplete,
+					Message:   fmt.Sprintf("Spec complete (%d iterations, $%.2f)", i, totalCost),
+					TotalCost: totalCost,
+				})
+			}
+			return nil
+		}
+		prevSubtype = subtype
 
 		// Run post-iteration hook (e.g., test-gated rollback from Regent)
 		if l.PostIteration != nil {
@@ -141,7 +168,7 @@ func (l *Loop) Run(ctx context.Context, mode Mode, maxOverride int) error {
 	return nil
 }
 
-func (l *Loop) iteration(ctx context.Context, n, maxIter int, prompt, branch string) (float64, error) {
+func (l *Loop) iteration(ctx context.Context, n, maxIter int, prompt, branch string) (cost float64, subtype string, commitsProduced bool, err error) {
 	l.emit(LogEntry{
 		Kind:      LogIterStart,
 		Message:   fmt.Sprintf("── iteration %d ──", n),
@@ -153,7 +180,7 @@ func (l *Loop) iteration(ctx context.Context, n, maxIter int, prompt, branch str
 	// Stash uncommitted changes before pulling
 	stashed, err := l.stashIfDirty()
 	if err != nil {
-		return 0, err
+		return 0, "", false, err
 	}
 
 	// Pull latest from remote
@@ -181,22 +208,24 @@ func (l *Loop) iteration(ctx context.Context, n, maxIter int, prompt, branch str
 		}
 	}
 
+	// Capture HEAD before Claude runs to detect new commits afterward.
+	headBefore, _ := l.Git.LastCommit()
+
 	// Run Claude
 	l.emit(LogEntry{
 		Kind:    LogInfo,
 		Message: "Running Claude...",
 	})
-	events, err := l.Agent.Run(ctx, prompt, claude.RunOptions{
+	events, agentErr := l.Agent.Run(ctx, prompt, claude.RunOptions{
 		Model:                 l.Config.Claude.Model,
 		MaxTurns:              l.Config.Claude.MaxTurns,
 		DangerSkipPermissions: l.Config.Claude.DangerSkipPermissions,
 	})
-	if err != nil {
-		return 0, fmt.Errorf("start claude: %w", err)
+	if agentErr != nil {
+		return 0, "", false, fmt.Errorf("start claude: %w", agentErr)
 	}
 
 	// Drain events
-	var cost float64
 	for ev := range events {
 		switch ev.Type {
 		case claude.EventToolUse:
@@ -215,6 +244,7 @@ func (l *Loop) iteration(ctx context.Context, n, maxIter int, prompt, branch str
 			}
 		case claude.EventResult:
 			cost = ev.CostUSD
+			subtype = ev.Subtype
 			msg := fmt.Sprintf("Iteration %d complete — $%.2f — %.1fs", n, ev.CostUSD, ev.Duration)
 			if ev.Subtype != "" {
 				msg += fmt.Sprintf(" — %s", ev.Subtype)
@@ -245,7 +275,11 @@ func (l *Loop) iteration(ctx context.Context, n, maxIter int, prompt, branch str
 		}
 	}
 
-	return cost, nil
+	// Detect whether Claude produced new commits during this iteration.
+	headAfter, _ := l.Git.LastCommit()
+	commitsProduced = headBefore != headAfter
+
+	return cost, subtype, commitsProduced, nil
 }
 
 func (l *Loop) stashIfDirty() (bool, error) {
@@ -341,6 +375,21 @@ func iterLabel(max int) string {
 		return "unlimited"
 	}
 	return fmt.Sprintf("%d", max)
+}
+
+// augmentPrompt appends a ## Spec Context section to the prompt when applicable.
+// In roam mode, the section describes a cross-spec improvement sweep.
+// When a spec name is set (and roam is false), the section names the active spec
+// and its directory to keep Claude focused on the spec boundary.
+// When neither applies, the prompt is returned unchanged.
+func augmentPrompt(prompt, spec, specDir string, roam bool) string {
+	if roam {
+		return prompt + "\n\n## Spec Context\n\nThis is a cross-spec improvement sweep. Review and improve the codebase broadly, applying lessons learned across all specs rather than targeting any single feature."
+	}
+	if spec != "" {
+		return prompt + fmt.Sprintf("\n\n## Spec Context\n\nActive spec: %s\nSpec directory: %s\n\nStay focused on this spec. When the work described in this spec is complete, stop making changes.", spec, specDir)
+	}
+	return prompt
 }
 
 func summarizeInput(input map[string]any) string {

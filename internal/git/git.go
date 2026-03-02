@@ -100,6 +100,16 @@ func (r *Runner) LastCommit() (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
+// CreateAndCheckout creates and switches to a new branch.
+// Returns an error if the branch already exists.
+func (r *Runner) CreateAndCheckout(name string) error {
+	_, err := r.run("checkout", "-b", name)
+	if err != nil {
+		return fmt.Errorf("git checkout -b %s: %w", name, err)
+	}
+	return nil
+}
+
 // Revert reverts the commit at the given SHA without opening an editor.
 func (r *Runner) Revert(sha string) error {
 	_, err := r.run("revert", sha, "--no-edit")

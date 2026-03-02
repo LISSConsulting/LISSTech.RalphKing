@@ -29,7 +29,7 @@ func loopPlanCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			max, _ := cmd.Flags().GetInt("max")
 			noTUI, _ := cmd.Flags().GetBool("no-tui")
-			return executeLoop(loop.ModePlan, max, noTUI)
+			return executeLoop(loop.ModePlan, max, noTUI, false)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
@@ -43,10 +43,12 @@ func loopBuildCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			max, _ := cmd.Flags().GetInt("max")
 			noTUI, _ := cmd.Flags().GetBool("no-tui")
-			return executeLoop(loop.ModeBuild, max, noTUI)
+			roam, _ := cmd.Flags().GetBool("roam")
+			return executeLoop(loop.ModeBuild, max, noTUI, roam)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
+	cmd.Flags().Bool("roam", false, "enable cross-spec improvement sweep on a sweep/ branch")
 	return cmd
 }
 
@@ -57,10 +59,12 @@ func loopRunCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			max, _ := cmd.Flags().GetInt("max")
 			noTUI, _ := cmd.Flags().GetBool("no-tui")
-			return executeSmartRun(max, noTUI)
+			roam, _ := cmd.Flags().GetBool("roam")
+			return executeSmartRun(max, noTUI, roam)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
+	cmd.Flags().Bool("roam", false, "enable cross-spec improvement sweep on a sweep/ branch")
 	return cmd
 }
 
@@ -72,10 +76,12 @@ func buildCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			max, _ := cmd.Flags().GetInt("max")
 			noTUI, _ := cmd.Flags().GetBool("no-tui")
-			return executeLoop(loop.ModeBuild, max, noTUI)
+			roam, _ := cmd.Flags().GetBool("roam")
+			return executeLoop(loop.ModeBuild, max, noTUI, roam)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
+	cmd.Flags().Bool("roam", false, "enable cross-spec improvement sweep on a sweep/ branch")
 	return cmd
 }
 

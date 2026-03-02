@@ -552,3 +552,41 @@ func TestDiffFromRemote(t *testing.T) {
 		}
 	})
 }
+
+func TestCreateAndCheckout(t *testing.T) {
+	t.Run("creates and switches to new branch", func(t *testing.T) {
+		dir := initTestRepo(t)
+		r := NewRunner(dir)
+
+		if err := r.CreateAndCheckout("feat/new-feature"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		branch, err := r.CurrentBranch()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if branch != "feat/new-feature" {
+			t.Errorf("expected branch 'feat/new-feature', got %q", branch)
+		}
+	})
+
+	t.Run("returns error if branch already exists", func(t *testing.T) {
+		dir := initTestRepo(t)
+		r := NewRunner(dir)
+
+		// Create the branch first.
+		if err := r.CreateAndCheckout("feat/duplicate"); err != nil {
+			t.Fatalf("setup: unexpected error creating branch: %v", err)
+		}
+		// Switch back to main so we can try to create feat/duplicate again.
+		cmd := exec.Command("git", "checkout", "main")
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git checkout main: %s (%v)", out, err)
+		}
+		// Second creation attempt must fail.
+		if err := r.CreateAndCheckout("feat/duplicate"); err == nil {
+			t.Error("expected error when creating an already-existing branch")
+		}
+	})
+}

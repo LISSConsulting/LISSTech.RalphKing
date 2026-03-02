@@ -16,13 +16,15 @@ import (
 
 // mockAgent is a test double for claude.Agent.
 type mockAgent struct {
-	events []claude.Event
-	err    error
-	calls  int
+	events     []claude.Event
+	err        error
+	calls      int
+	lastPrompt string // captures the prompt passed to the most recent Run() call
 }
 
-func (m *mockAgent) Run(_ context.Context, _ string, _ claude.RunOptions) (<-chan claude.Event, error) {
+func (m *mockAgent) Run(_ context.Context, prompt string, _ claude.RunOptions) (<-chan claude.Event, error) {
 	m.calls++
+	m.lastPrompt = prompt
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -49,6 +51,11 @@ type mockGit struct {
 	lastCommit     string
 	lastCommitErr  error
 
+	// lastCommitSequence, when non-empty, is consumed in order by LastCommit().
+	// Once exhausted, the final element is repeated. Takes precedence over lastCommit.
+	lastCommitSequence []string
+	lastCommitCallIdx  int
+
 	pullCalls     int
 	pushCalls     int
 	stashCalls    int
@@ -61,8 +68,22 @@ func (m *mockGit) Pull(_ string) error                   { m.pullCalls++; return
 func (m *mockGit) Push(_ string) error                   { m.pushCalls++; return m.pushErr }
 func (m *mockGit) Stash() error                          { m.stashCalls++; return m.stashErr }
 func (m *mockGit) StashPop() error                       { m.stashPopCalls++; return m.stashPopErr }
-func (m *mockGit) LastCommit() (string, error)           { return m.lastCommit, m.lastCommitErr }
 func (m *mockGit) DiffFromRemote(_ string) (bool, error) { return m.diffFromRemote, m.diffErr }
+
+func (m *mockGit) LastCommit() (string, error) {
+	if m.lastCommitErr != nil {
+		return "", m.lastCommitErr
+	}
+	if len(m.lastCommitSequence) > 0 {
+		idx := m.lastCommitCallIdx
+		if idx >= len(m.lastCommitSequence) {
+			idx = len(m.lastCommitSequence) - 1
+		}
+		m.lastCommitCallIdx++
+		return m.lastCommitSequence[idx], nil
+	}
+	return m.lastCommit, nil
+}
 
 func defaultTestConfig() *config.Config {
 	cfg := config.Defaults()
@@ -115,7 +136,13 @@ func TestRun(t *testing.T) {
 		agent := &mockAgent{
 			events: []claude.Event{claude.ResultEvent(0.05, 1.0, "success")},
 		}
-		git := &mockGit{branch: "feat/test", lastCommit: "def456 test"}
+		// Each iteration produces a new commit (different headBefore/headAfter) so
+		// the completion state machine never fires early. 7 calls: 1 initial +
+		// 3 iters × 2 (headBefore, headAfter).
+		git := &mockGit{
+			branch:             "feat/test",
+			lastCommitSequence: []string{"h0", "h1", "h2", "h2", "h3", "h3", "h4"},
+		}
 		cfg := defaultTestConfig()
 		cfg.Build.MaxIterations = 0 // unlimited in config
 
@@ -657,7 +684,13 @@ func TestPostIteration(t *testing.T) {
 		agent := &mockAgent{
 			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
-		git := &mockGit{branch: "main", lastCommit: "abc test"}
+		// Produce commits on every iteration so the spec-completion state machine
+		// never fires early (prevSubtype=="success" && commitsProduced==true → no exit).
+		// 7 calls: 1 initial + 3 iters × 2 (headBefore, headAfter).
+		git := &mockGit{
+			branch:             "main",
+			lastCommitSequence: []string{"h0", "h1", "h2", "h2", "h3", "h3", "h4"},
+		}
 		cfg := defaultTestConfig()
 		cfg.Plan.MaxIterations = 3
 
@@ -1051,7 +1084,11 @@ func TestRunStopAfter(t *testing.T) {
 		agent := &mockAgent{
 			events: []claude.Event{claude.ResultEvent(0.05, 1.0, "success")},
 		}
-		git := &mockGit{branch: "main"}
+		// Produce commits so the completion state machine does not fire early.
+		git := &mockGit{
+			branch:             "main",
+			lastCommitSequence: []string{"h0", "h1", "h2", "h2", "h3", "h3", "h4"},
+		}
 		cfg := defaultTestConfig()
 		cfg.Build.MaxIterations = 3
 
@@ -1087,6 +1124,296 @@ func TestRunStopAfter(t *testing.T) {
 		}
 		if agent.calls != 2 {
 			t.Errorf("expected 2 agent calls, got %d", agent.calls)
+		}
+	})
+}
+
+// TestSpecCompletion verifies the two-signal spec-boundary completion detection:
+// prevSubtype=="success" + commitsProduced==false in the current iteration → early exit.
+func TestSpecCompletion(t *testing.T) {
+	t.Run("two successes second has no commits emits LogSpecComplete", func(t *testing.T) {
+		// Iter1: success + commits (h1→h2). Iter2: success + no commits (h2→h2).
+		// Call order: initial(h0), iter1-headBefore(h1), iter1-headAfter(h2),
+		// iter2-headBefore(h2), iter2-headAfter(h2).
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
+		}
+		git := &mockGit{
+			branch:             "feat/spec",
+			lastCommitSequence: []string{"h0", "h1", "h2", "h2", "h2"},
+		}
+		cfg := defaultTestConfig()
+		cfg.Build.MaxIterations = 0 // unlimited
+
+		ch := make(chan LogEntry, 32)
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+		lp.Events = ch
+
+		err := lp.Run(context.Background(), ModeBuild, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if agent.calls != 2 {
+			t.Errorf("expected 2 agent calls, got %d", agent.calls)
+		}
+		close(ch)
+		var found bool
+		for e := range ch {
+			if e.Kind == LogSpecComplete {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected LogSpecComplete event")
+		}
+	})
+
+	t.Run("success with commits in every iteration does not trigger early exit", func(t *testing.T) {
+		// All 3 iterations produce commits → no early exit → LogDone at maxIter.
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
+		}
+		git := &mockGit{
+			branch:             "feat/spec",
+			lastCommitSequence: []string{"h0", "h1", "h2", "h2", "h3", "h3", "h4"},
+		}
+		cfg := defaultTestConfig()
+		cfg.Build.MaxIterations = 3
+
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+		err := lp.Run(context.Background(), ModeBuild, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if agent.calls != 3 {
+			t.Errorf("expected 3 agent calls (no early exit when commits produced), got %d", agent.calls)
+		}
+	})
+
+	t.Run("single iteration max1 success no-commits emits LogDone not LogSpecComplete", func(t *testing.T) {
+		// With max=1, prevSubtype is "" when checked after iter1, so no early exit.
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
+		}
+		git := &mockGit{branch: "feat/spec", lastCommit: "abc same"}
+		cfg := defaultTestConfig()
+
+		ch := make(chan LogEntry, 32)
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+		lp.Events = ch
+
+		err := lp.Run(context.Background(), ModeBuild, 1) // maxOverride=1
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if agent.calls != 1 {
+			t.Errorf("expected 1 agent call, got %d", agent.calls)
+		}
+		close(ch)
+		var gotLogDone, gotLogSpecComplete bool
+		for e := range ch {
+			switch e.Kind {
+			case LogDone:
+				gotLogDone = true
+			case LogSpecComplete:
+				gotLogSpecComplete = true
+			}
+		}
+		if !gotLogDone {
+			t.Error("expected LogDone when max=1, even with success+no-commits")
+		}
+		if gotLogSpecComplete {
+			t.Error("should not emit LogSpecComplete when only 1 iteration runs")
+		}
+	})
+
+	t.Run("error_max_turns does not trigger completion even with no commits", func(t *testing.T) {
+		// error_max_turns never satisfies the "success" precondition.
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "error_max_turns")},
+		}
+		git := &mockGit{branch: "feat/spec", lastCommit: "abc same"}
+		cfg := defaultTestConfig()
+		cfg.Build.MaxIterations = 2
+
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+		err := lp.Run(context.Background(), ModeBuild, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if agent.calls != 2 {
+			t.Errorf("expected 2 agent calls (error_max_turns never triggers completion), got %d", agent.calls)
+		}
+	})
+}
+
+// TestRoamCompletion verifies that roam mode emits LogSweepComplete instead of
+// LogSpecComplete when the two-signal completion fires.
+func TestRoamCompletion(t *testing.T) {
+	t.Run("roam mode emits LogSweepComplete on completion", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
+		}
+		git := &mockGit{
+			branch:             "sweep/2026-03-02",
+			lastCommitSequence: []string{"h0", "h1", "h2", "h2", "h2"},
+		}
+		cfg := defaultTestConfig()
+		cfg.Build.MaxIterations = 0
+
+		ch := make(chan LogEntry, 32)
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+		lp.Events = ch
+		lp.Roam = true
+
+		err := lp.Run(context.Background(), ModeBuild, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		close(ch)
+		var gotSweep, gotSpec bool
+		for e := range ch {
+			switch e.Kind {
+			case LogSweepComplete:
+				gotSweep = true
+			case LogSpecComplete:
+				gotSpec = true
+			}
+		}
+		if !gotSweep {
+			t.Error("expected LogSweepComplete in roam mode")
+		}
+		if gotSpec {
+			t.Error("should not emit LogSpecComplete in roam mode")
+		}
+	})
+}
+
+// TestAugmentPrompt directly tests the augmentPrompt helper.
+func TestAugmentPrompt(t *testing.T) {
+	tests := []struct {
+		name          string
+		prompt        string
+		spec          string
+		specDir       string
+		roam          bool
+		wantParts     []string
+		wantUnchanged bool
+	}{
+		{
+			name:      "roam mode adds sweep section",
+			prompt:    "base",
+			roam:      true,
+			wantParts: []string{"## Spec Context", "improvement sweep"},
+		},
+		{
+			name:      "spec set adds spec-boundary section",
+			prompt:    "base",
+			spec:      "005-test",
+			specDir:   "specs/005-test",
+			wantParts: []string{"## Spec Context", "005-test", "specs/005-test"},
+		},
+		{
+			name:          "no spec no roam returns prompt unchanged",
+			prompt:        "base",
+			wantUnchanged: true,
+		},
+		{
+			name:      "roam takes precedence — sweep section not spec section",
+			prompt:    "base",
+			spec:      "some-spec",
+			specDir:   "specs/some-spec",
+			roam:      true,
+			wantParts: []string{"improvement sweep"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := augmentPrompt(tt.prompt, tt.spec, tt.specDir, tt.roam)
+			for _, part := range tt.wantParts {
+				if !strings.Contains(got, part) {
+					t.Errorf("augmentPrompt() output should contain %q\ngot: %q", part, got)
+				}
+			}
+			if tt.wantUnchanged && got != tt.prompt {
+				t.Errorf("augmentPrompt() should return prompt unchanged\nwant: %q\ngot:  %q", tt.prompt, got)
+			}
+		})
+	}
+}
+
+// TestPromptAugmentationInRun verifies that Loop.Run() passes an augmented
+// prompt to the agent when Spec or Roam fields are set.
+func TestPromptAugmentationInRun(t *testing.T) {
+	t.Run("spec set includes spec context in prompt", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
+		}
+		git := &mockGit{branch: "feat/spec", lastCommit: "abc test"}
+		cfg := defaultTestConfig()
+
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+		lp.Spec = "005-spec-bounded-roam"
+		lp.SpecDir = "specs/005-spec-bounded-roam"
+
+		err := lp.Run(context.Background(), ModeBuild, 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(agent.lastPrompt, "## Spec Context") {
+			t.Errorf("prompt should contain Spec Context section, got: %q", agent.lastPrompt)
+		}
+		if !strings.Contains(agent.lastPrompt, "005-spec-bounded-roam") {
+			t.Errorf("prompt should contain spec name, got: %q", agent.lastPrompt)
+		}
+		if !strings.Contains(agent.lastPrompt, "specs/005-spec-bounded-roam") {
+			t.Errorf("prompt should contain spec directory, got: %q", agent.lastPrompt)
+		}
+	})
+
+	t.Run("roam mode includes sweep directive in prompt", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
+		}
+		git := &mockGit{branch: "sweep/2026-03-02", lastCommit: "abc test"}
+		cfg := defaultTestConfig()
+
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+		lp.Roam = true
+
+		err := lp.Run(context.Background(), ModeBuild, 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(agent.lastPrompt, "## Spec Context") {
+			t.Errorf("prompt should contain Spec Context section in roam mode, got: %q", agent.lastPrompt)
+		}
+		if !strings.Contains(agent.lastPrompt, "improvement sweep") {
+			t.Errorf("prompt should contain sweep directive in roam mode, got: %q", agent.lastPrompt)
+		}
+	})
+
+	t.Run("no spec and no roam leaves prompt unchanged", func(t *testing.T) {
+		agent := &mockAgent{
+			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
+		}
+		git := &mockGit{branch: "main", lastCommit: "abc test"}
+		cfg := defaultTestConfig()
+
+		lp, _ := setupTestLoop(t, agent, git, cfg)
+		// Spec="" and Roam=false by default — prompt must be passed through unmodified.
+
+		err := lp.Run(context.Background(), ModeBuild, 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if strings.Contains(agent.lastPrompt, "## Spec Context") {
+			t.Errorf("prompt should not be augmented when no spec and no roam, got: %q", agent.lastPrompt)
+		}
+		if agent.lastPrompt != "build prompt" {
+			t.Errorf("prompt should be unchanged, want %q got %q", "build prompt", agent.lastPrompt)
 		}
 	})
 }
