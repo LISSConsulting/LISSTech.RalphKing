@@ -27,6 +27,16 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 ## Remaining Work
 
+### Improvement Sweep (v0.1.21, 2026-03-02)
+
+Full sweep completed — one documentation-drift finding resolved:
+- **Spec consistency**: Fixed `specs/005-spec-bounded-roam/tasks.md` — all 20 task checkboxes were `[ ]` despite spec being fully complete (T001–T020). Marked all `[x]`. Same documentation-only fix as spec 003 and 004 in v0.1.00. Runtime behavior unaffected (detectDirStatus uses file presence, not checkbox state).
+- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.7%, `internal/store` 91.0%, `cmd/ralph` 75.9% (confirmed ceiling). `go vet ./...` clean.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
+- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, key bindings, and config fields match the implementation.
+- **CI health**: Both workflows clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (twenty-second consecutive confirmation); no action required.
+- **Dead code**: None found.
+
 ### Improvement Sweep (v0.1.20, 2026-03-02)
 
 Full sweep completed — one stale-reference finding resolved:
