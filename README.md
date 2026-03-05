@@ -16,7 +16,7 @@ ralph run           # Execute spec kit run against active spec
 
 # Autonomous loop (continuous Claude iterations)
 ralph build         # Run Claude in build mode (alias for ralph loop build)
-ralph build --roam  # Cross-spec improvement sweep on a sweep/YYYY-MM-DD branch
+ralph build --roam  # Roam freely across the codebase (no spec boundary)
 ralph loop plan     # Run Claude in plan mode
 ralph loop build    # Run Claude in build mode
 ralph loop run      # Smart mode: plan if needed, then build
@@ -68,7 +68,7 @@ max_iterations = 3
 [build]
 prompt_file = "BUILD.md"
 max_iterations = 0  # 0 = unlimited
-roam = false        # enable cross-spec improvement sweep (--roam flag overrides)
+roam = false        # roam freely across the codebase (--roam flag overrides)
 
 [git]
 auto_pull_rebase = true

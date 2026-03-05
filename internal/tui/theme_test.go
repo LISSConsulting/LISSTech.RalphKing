@@ -109,8 +109,8 @@ func TestRenderLogLine_AllKinds(t *testing.T) {
 		},
 		{
 			name:     "LogSweepComplete",
-			entry:    loop.LogEntry{Kind: loop.LogSweepComplete, Timestamp: now, Message: "sweep complete"},
-			contains: []string{"✅", "sweep complete"},
+			entry:    loop.LogEntry{Kind: loop.LogSweepComplete, Timestamp: now, Message: "roam complete"},
+			contains: []string{"✅", "roam complete"},
 		},
 		{
 			name:     "LogStopped",

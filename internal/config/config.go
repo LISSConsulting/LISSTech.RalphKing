@@ -67,7 +67,7 @@ type PlanConfig struct {
 type BuildConfig struct {
 	PromptFile    string `toml:"prompt_file"`
 	MaxIterations int    `toml:"max_iterations"`
-	Roam          bool   `toml:"roam"` // enable cross-spec improvement sweep (--roam flag overrides)
+	Roam          bool   `toml:"roam"` // roam freely across the codebase (--roam flag overrides)
 }
 
 // GitConfig controls git operations between iterations.
@@ -267,7 +267,7 @@ max_iterations = 3
 [build]
 prompt_file = "BUILD.md"
 max_iterations = 0  # 0 = unlimited
-roam = false        # enable cross-spec improvement sweep (--roam flag overrides)
+roam = false        # roam freely across the codebase (--roam flag overrides)
 
 [git]
 auto_pull_rebase = true

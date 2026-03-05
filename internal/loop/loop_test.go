@@ -1256,7 +1256,7 @@ func TestRoamCompletion(t *testing.T) {
 			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
 		git := &mockGit{
-			branch:             "sweep/2026-03-02",
+			branch:             "feature/anything",
 			lastCommitSequence: []string{"h0", "h1", "h2", "h2", "h2"},
 		}
 		cfg := defaultTestConfig()
@@ -1272,16 +1272,16 @@ func TestRoamCompletion(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		close(ch)
-		var gotSweep, gotSpec bool
+		var gotRoamComplete, gotSpec bool
 		for e := range ch {
 			switch e.Kind {
 			case LogSweepComplete:
-				gotSweep = true
+				gotRoamComplete = true
 			case LogSpecComplete:
 				gotSpec = true
 			}
 		}
-		if !gotSweep {
+		if !gotRoamComplete {
 			t.Error("expected LogSweepComplete in roam mode")
 		}
 		if gotSpec {
@@ -1302,10 +1302,10 @@ func TestAugmentPrompt(t *testing.T) {
 		wantUnchanged bool
 	}{
 		{
-			name:      "roam mode adds sweep section",
+			name:      "roam mode adds roam section",
 			prompt:    "base",
 			roam:      true,
-			wantParts: []string{"## Spec Context", "improvement sweep"},
+			wantParts: []string{"## Spec Context", "Roam mode"},
 		},
 		{
 			name:      "spec set adds spec-boundary section",
@@ -1320,12 +1320,12 @@ func TestAugmentPrompt(t *testing.T) {
 			wantUnchanged: true,
 		},
 		{
-			name:      "roam takes precedence — sweep section not spec section",
+			name:      "roam takes precedence — roam section not spec section",
 			prompt:    "base",
 			spec:      "some-spec",
 			specDir:   "specs/some-spec",
 			roam:      true,
-			wantParts: []string{"improvement sweep"},
+			wantParts: []string{"Roam mode"},
 		},
 	}
 
@@ -1373,11 +1373,11 @@ func TestPromptAugmentationInRun(t *testing.T) {
 		}
 	})
 
-	t.Run("roam mode includes sweep directive in prompt", func(t *testing.T) {
+	t.Run("roam mode includes roam directive in prompt", func(t *testing.T) {
 		agent := &mockAgent{
 			events: []claude.Event{claude.ResultEvent(0.10, 1.0, "success")},
 		}
-		git := &mockGit{branch: "sweep/2026-03-02", lastCommit: "abc test"}
+		git := &mockGit{branch: "feature/whatever", lastCommit: "abc test"}
 		cfg := defaultTestConfig()
 
 		lp, _ := setupTestLoop(t, agent, git, cfg)
@@ -1390,8 +1390,8 @@ func TestPromptAugmentationInRun(t *testing.T) {
 		if !strings.Contains(agent.lastPrompt, "## Spec Context") {
 			t.Errorf("prompt should contain Spec Context section in roam mode, got: %q", agent.lastPrompt)
 		}
-		if !strings.Contains(agent.lastPrompt, "improvement sweep") {
-			t.Errorf("prompt should contain sweep directive in roam mode, got: %q", agent.lastPrompt)
+		if !strings.Contains(agent.lastPrompt, "Roam mode") {
+			t.Errorf("prompt should contain roam directive in roam mode, got: %q", agent.lastPrompt)
 		}
 	})
 

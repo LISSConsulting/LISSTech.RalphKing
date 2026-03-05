@@ -667,7 +667,7 @@ func TestUpdate_LogEntry_LogDoneStoppedErrorRegent(t *testing.T) {
 		},
 		{
 			name:      "LogSweepComplete → StateIdle",
-			entry:     loop.LogEntry{Kind: loop.LogSweepComplete, Message: "sweep complete"},
+			entry:     loop.LogEntry{Kind: loop.LogSweepComplete, Message: "roam complete"},
 			wantState: StateIdle,
 		},
 		{

@@ -44,7 +44,7 @@ type Loop struct {
 	PostIteration    func()          // optional: called after each iteration (e.g., test-gated rollback)
 	StopAfter        <-chan struct{} // optional: closed to request graceful stop after current iteration
 	NotificationHook func(LogEntry)  // optional: called on every emitted event for external notifications
-	Roam             bool            // enable cross-spec sweep mode (--roam flag)
+	Roam             bool            // roam freely across the codebase (--roam flag)
 	Spec             string          // active spec name for prompt augmentation (empty = no augmentation)
 	SpecDir          string          // active spec directory for prompt augmentation
 }
@@ -120,7 +120,7 @@ func (l *Loop) Run(ctx context.Context, mode Mode, maxOverride int) error {
 			if l.Roam {
 				l.emit(LogEntry{
 					Kind:      LogSweepComplete,
-					Message:   fmt.Sprintf("Sweep complete (%d iterations, $%.2f)", i, totalCost),
+					Message:   fmt.Sprintf("Roam complete (%d iterations, $%.2f)", i, totalCost),
 					TotalCost: totalCost,
 				})
 			} else {
@@ -378,13 +378,13 @@ func iterLabel(max int) string {
 }
 
 // augmentPrompt appends a ## Spec Context section to the prompt when applicable.
-// In roam mode, the section describes a cross-spec improvement sweep.
+// In roam mode, Claude is told to roam freely across the entire codebase.
 // When a spec name is set (and roam is false), the section names the active spec
 // and its directory to keep Claude focused on the spec boundary.
 // When neither applies, the prompt is returned unchanged.
 func augmentPrompt(prompt, spec, specDir string, roam bool) string {
 	if roam {
-		return prompt + "\n\n## Spec Context\n\nThis is a cross-spec improvement sweep. Review and improve the codebase broadly, applying lessons learned across all specs rather than targeting any single feature."
+		return prompt + "\n\n## Spec Context\n\nRoam mode is active. You are free to review and improve the entire codebase — refactor, fix, optimise, and tidy without being confined to any single spec."
 	}
 	if spec != "" {
 		return prompt + fmt.Sprintf("\n\n## Spec Context\n\nActive spec: %s\nSpec directory: %s\n\nStay focused on this spec. When the work described in this spec is complete, stop making changes.", spec, specDir)

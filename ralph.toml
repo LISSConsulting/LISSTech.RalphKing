@@ -16,7 +16,7 @@ max_iterations = 3
 [build]
 prompt_file = "BUILD.md"
 max_iterations = 20  # 0 = unlimited
-roam = false  # enable cross-spec improvement sweep (--roam flag overrides)
+roam = false  # roam freely across the codebase (--roam flag overrides)
 
 [git]
 auto_pull_rebase = true

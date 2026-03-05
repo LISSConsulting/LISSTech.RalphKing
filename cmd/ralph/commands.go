@@ -48,7 +48,7 @@ func loopBuildCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
-	cmd.Flags().Bool("roam", false, "enable cross-spec improvement sweep on a sweep/ branch")
+	cmd.Flags().Bool("roam", false, "roam freely across the codebase instead of targeting the active spec")
 	return cmd
 }
 
@@ -64,7 +64,7 @@ func loopRunCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
-	cmd.Flags().Bool("roam", false, "enable cross-spec improvement sweep on a sweep/ branch")
+	cmd.Flags().Bool("roam", false, "roam freely across the codebase instead of targeting the active spec")
 	return cmd
 }
 
@@ -81,7 +81,7 @@ func buildCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
-	cmd.Flags().Bool("roam", false, "enable cross-spec improvement sweep on a sweep/ branch")
+	cmd.Flags().Bool("roam", false, "roam freely across the codebase instead of targeting the active spec")
 	return cmd
 }
 

@@ -19,23 +19,6 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
 )
 
-// createSweepBranch creates and checks out a sweep/YYYY-MM-DD branch.
-// If the exact date branch already exists, it retries with -2 through -10 suffixes.
-func createSweepBranch(r *git.Runner) error {
-	date := time.Now().Format("2006-01-02")
-	name := fmt.Sprintf("sweep/%s", date)
-	if err := r.CreateAndCheckout(name); err == nil {
-		return nil
-	}
-	for i := 2; i <= 10; i++ {
-		candidate := fmt.Sprintf("sweep/%s-%d", date, i)
-		if err := r.CreateAndCheckout(candidate); err == nil {
-			return nil
-		}
-	}
-	return fmt.Errorf("roam: could not create sweep branch sweep/%s (all suffixes taken)", date)
-}
-
 // executeLoop loads config, builds the loop, and runs it in the given mode.
 func executeLoop(mode loop.Mode, maxOverride int, noTUI bool, roam bool) error {
 	cfg, err := config.Load("")
@@ -78,11 +61,6 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool, roam bool) error {
 	gitRunner := git.NewRunner(dir)
 
 	effectiveRoam := roam || cfg.Build.Roam
-	if effectiveRoam {
-		if err := createSweepBranch(gitRunner); err != nil {
-			return err
-		}
-	}
 
 	lp := &loop.Loop{
 		Agent:  loop.NewClaudeAgent(),
@@ -168,11 +146,6 @@ func executeSmartRun(maxOverride int, noTUI bool, roam bool) error {
 	gitRunner := git.NewRunner(dir)
 
 	effectiveRoam := roam || cfg.Build.Roam
-	if effectiveRoam {
-		if err := createSweepBranch(gitRunner); err != nil {
-			return err
-		}
-	}
 
 	lp := &loop.Loop{
 		Agent:  loop.NewClaudeAgent(),

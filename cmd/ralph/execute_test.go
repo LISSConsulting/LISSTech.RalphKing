@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -868,59 +867,34 @@ func TestSignalContextGraceful_CancelCleansUp(t *testing.T) {
 
 // ---- Roam orchestration tests ----
 
-func TestExecuteLoop_Roam_CreatesBranch(t *testing.T) {
+func TestExecuteLoop_Roam_StaysOnCurrentBranch(t *testing.T) {
 	dir := t.TempDir()
 	initGitRepo(t, dir)
 	t.Chdir(dir)
 	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
 	writeExecTestFile(t, dir, "BUILD.md", "# Build\n")
 
-	// roam=true: createSweepBranch runs before the loop starts.
-	// Ignore the run result — the branch is created regardless of how the loop ends.
+	// Record the branch before running with roam.
+	before := exec.Command("git", "branch", "--show-current")
+	before.Dir = dir
+	outBefore, err := before.Output()
+	if err != nil {
+		t.Fatalf("git branch --show-current: %v", err)
+	}
+	branchBefore := strings.TrimSpace(string(outBefore))
+
+	// roam=true: should stay on the current branch (no sweep branch creation).
 	_ = executeLoop(loop.ModeBuild, 1, true, true)
 
-	// Verify we are now on a sweep/ branch.
-	cmd := exec.Command("git", "branch", "--show-current")
-	cmd.Dir = dir
-	out, cmdErr := cmd.Output()
-	if cmdErr != nil {
-		t.Fatalf("git branch --show-current: %v", cmdErr)
+	after := exec.Command("git", "branch", "--show-current")
+	after.Dir = dir
+	outAfter, err := after.Output()
+	if err != nil {
+		t.Fatalf("git branch --show-current: %v", err)
 	}
-	branch := strings.TrimSpace(string(out))
-	if !strings.HasPrefix(branch, "sweep/") {
-		t.Errorf("expected branch starting with 'sweep/', got %q", branch)
-	}
-}
+	branchAfter := strings.TrimSpace(string(outAfter))
 
-func TestExecuteLoop_Roam_CollisionRetry(t *testing.T) {
-	dir := t.TempDir()
-	initGitRepo(t, dir)
-	t.Chdir(dir)
-	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
-	writeExecTestFile(t, dir, "BUILD.md", "# Build\n")
-
-	// Pre-create sweep/<today> so the first attempt collides and -2 is used.
-	date := time.Now().Format("2006-01-02")
-	sweepName := fmt.Sprintf("sweep/%s", date)
-	preCreate := exec.Command("git", "branch", sweepName)
-	preCreate.Dir = dir
-	if out, err := preCreate.CombinedOutput(); err != nil {
-		t.Fatalf("pre-create branch %s: %v\n%s", sweepName, err, out)
-	}
-
-	// Ignore the run result — the branch is created regardless of how the loop ends.
-	_ = executeLoop(loop.ModeBuild, 1, true, true)
-
-	// Should have landed on sweep/<date>-2 after collision.
-	cmd := exec.Command("git", "branch", "--show-current")
-	cmd.Dir = dir
-	out, cmdErr := cmd.Output()
-	if cmdErr != nil {
-		t.Fatalf("git branch --show-current: %v", cmdErr)
-	}
-	branch := strings.TrimSpace(string(out))
-	want := fmt.Sprintf("sweep/%s-2", date)
-	if branch != want {
-		t.Errorf("expected branch %q after collision retry, got %q", want, branch)
+	if branchAfter != branchBefore {
+		t.Errorf("roam should stay on current branch %q, but switched to %q", branchBefore, branchAfter)
 	}
 }
