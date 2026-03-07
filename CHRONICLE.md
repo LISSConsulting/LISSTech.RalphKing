@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **Spec 007 (worktree support) in progress — Phases 1-3 complete (MVP).** All 14 packages pass; go vet clean. Tasks T001–T028 done. Remaining: Phases 4-8 (TUI dashboard multi-agent, auto-merge, per-worktree Regent, polish).
+> Current state: **Spec 007 (worktree support) in progress — Phases 1-4 complete.** All 14 packages pass; go vet clean. Tasks T001–T037 done. Remaining: Phases 5-8 (auto-merge, per-worktree Regent, TUI status polish, docs).
 
 ## Completed Work
 
@@ -34,8 +34,8 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 **Spec 007 in progress — Phases 4-8 remaining:**
 
-- [ ] T029-T037: Phase 4 (US2) — WorktreesPanel TUI component + Orchestrator wiring into dashboard; `W` keybind to launch from Specs panel; `x`/`M`/`D` keybinds for stop/merge/clean in WorktreesPanel; Main panel shows selected worktree log
-- [ ] T038-T041: Phase 5 (US3) — Auto-merge trigger in Orchestrator with test-gating; notification on merge/failure
+- [x] T029-T037: Phase 4 (US2) — WorktreesPanel TUI component + Orchestrator wiring into dashboard; `W` keybind to launch from Specs panel; `x`/`M`/`D` keybinds for stop/merge/clean in WorktreesPanel; Main panel shows selected worktree log
+- [ ] T038-T041: Phase 5 (US3) — Auto-merge trigger in Orchestrator with test-gating; notification on merge/failure (T038-T039 largely done via existing auto-merge in orchestrator.go; need T040-T041 tests and notification)
 - [ ] T042-T045: Phase 6 (US4) — Enhanced WorktreesPanel rendering with status icons; real-time status updates via TaggedLogEntry; WorktreePaths() log aggregation
 - [ ] T046-T049: Phase 7 (US5) — Multi-worktree Regent; per-agent hang/crash detection; per-worktree rollback
 - [ ] T050-T055: Phase 8 — README worktree section; TUI keyboard reference; quickstart validation; lint + tests
@@ -178,6 +178,14 @@ All items from Issues #1 (TUI) and #2 (RK) are resolved. Two items remain pendin
 - `spec.Resolve()` maps a branch name or --spec flag to an active spec directory. Resolution: specFlag→exact match; branch→exact match, then try stripping leading NNN- numeric prefix (so "004-speckit-alignment" also matches "speckit-alignment" dir). main/master and empty-branch cases return descriptive errors suggesting `--spec`.
 - `executeSpeckit()` spawns `claude -p "/<skill> <args>" --verbose` with inherited stdio; `execkit_cmds.go` contains `specifyCmd`/`speckitPlanCmd`/`clarifyCmd`/`speckitTasksCmd`/`speckitRunCmd` — each validates prerequisite artifacts before calling claude. TUI `n` key now creates spec directories (not flat files) via `os.MkdirAll`.
 - Speckit command tests use `initGitRepoOnBranch(t, dir, branch)` to create a real git repo on a named branch — fake `.git/HEAD` files don't work because `git branch --show-current` requires a proper git repo with at least one commit.
+
+- `WorktreesPanel` in `internal/tui/panels/worktrees.go`: `WorktreeEntry` view-model (no import of orchestrator); `worktreeStateIcon()` maps state strings to emoji; j/k navigation delegates to `bubbles/list`; x/M/D keybinds emit `WorktreeActionMsg{Action}`; enter emits `WorktreeSelectedMsg`; empty panel shows "No worktrees" hint
+- `FocusWorktrees = 4` added as 5th constant in focus.go; `Next()`/`Prev()` methods UNCHANGED (still 4-panel cycle); 5-panel cycling implemented in Model via `nextFocus()`/`prevFocus()` helpers that use an explicit `[]FocusTarget` cycle slice when `m.orch != nil` — avoids breaking existing focus_test.go tests
+- `tui.Model.WithOrchestrator(*orchestrator.Orchestrator)` builder method: sets `m.orch`, initialises `worktreeLogsByBranch` map, creates `worktreesPanel` using `worktreesSplitDims(m.layout.Iterations)`; returns modified model value — all existing `New()` callers remain unchanged (8 args)
+- `worktreesSplitDims(itersRect Rect)` splits Iterations rect into two halves; each panel gets its own border (+2 to outer); sum of two outer heights always equals `itersRect.Height`; clamping applies for rects with height < 6 but that is below the minimum 24-row layout threshold anyway
+- `waitForTaggedEvent(ch <-chan orchestrator.TaggedLogEntry)` — mirrors `waitForEvent` pattern; reads from orchestrator MergedEvents; returns `taggedEventMsg` (defined in msg.go without importing orchestrator); reschedules itself in `handleTaggedEvent` return cmd
+- `runDashboard` in wiring.go creates `worktree.Runner` + `orchestrator.New()` when `cfg.Worktree.Enabled`; calls `wtRunner.Detect()` and silently skips if worktrunk not installed; passes orchestrator to `model.WithOrchestrator()`
+- `TestWorktreesSplitDims_HalvesCorrectly` edge-case: clamping to inner=1 makes outer=3 not 2, so the outer-height-sum property only holds for rects ≥ 6 rows high; test updated to use ≥6 rects
 
 ## Out of Scope (for now)
 

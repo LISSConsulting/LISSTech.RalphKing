@@ -30,3 +30,11 @@ type iterationLogLoadedMsg struct {
 
 // specsRefreshedMsg carries refreshed spec list after creation/edit.
 type specsRefreshedMsg struct{ Specs []spec.SpecFile }
+
+// taggedEventMsg wraps a log entry from the orchestrator fan-in channel together
+// with the source worktree branch name.  Defined here without importing
+// orchestrator so that msg.go stays import-free of business-logic packages.
+type taggedEventMsg struct {
+	Branch string
+	Entry  loop.LogEntry
+}

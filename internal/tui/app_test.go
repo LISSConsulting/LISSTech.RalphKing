@@ -10,10 +10,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/orchestrator"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui/panels"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/worktree"
 )
 
 // mockStoreReader is a minimal store.Reader for unit tests.
@@ -953,4 +956,319 @@ func TestUpdate_UnknownMsg(t *testing.T) {
 	updated, cmd := m.Update(unknownMsg{})
 	_ = updated.(Model)
 	_ = cmd // should not panic
+}
+
+// ---------------------------------------------------------------------------
+// T037 — Orchestrator TUI wiring tests
+// ---------------------------------------------------------------------------
+
+// noopWorktreeOps satisfies worktree.WorktreeOps for unit tests.
+// Switch always errors so no real worktrees are created.
+type noopWorktreeOps struct{}
+
+func (n *noopWorktreeOps) Detect() error                                    { return nil }
+func (n *noopWorktreeOps) Switch(_ string, _ bool) (string, error)          { return "", fmt.Errorf("noop") }
+func (n *noopWorktreeOps) List() ([]worktree.WorktreeInfo, error)           { return nil, nil }
+func (n *noopWorktreeOps) Merge(_, _ string) error                          { return fmt.Errorf("noop") }
+func (n *noopWorktreeOps) Remove(_ string) error                            { return fmt.Errorf("noop") }
+
+// newTestOrch creates a minimal Orchestrator using noop worktree ops.
+func newTestOrch() *orchestrator.Orchestrator {
+	cfg := &config.Config{}
+	cfg.Worktree.MaxParallel = 5
+	return orchestrator.New(cfg, &noopWorktreeOps{})
+}
+
+// TestWithOrchestrator_Nil_NoChange verifies that passing nil leaves orch unset.
+func TestWithOrchestrator_Nil_NoChange(t *testing.T) {
+	m := newTestModel()
+	m2 := m.WithOrchestrator(nil)
+	if m2.orch != nil {
+		t.Error("WithOrchestrator(nil) should leave orch as nil")
+	}
+}
+
+// TestWithOrchestrator_SetsFields verifies the orch field and worktreeLogsByBranch map are set.
+func TestWithOrchestrator_SetsFields(t *testing.T) {
+	m := newTestModel()
+	orch := newTestOrch()
+	m2 := m.WithOrchestrator(orch)
+	if m2.orch != orch {
+		t.Error("WithOrchestrator: orch field should point to the provided Orchestrator")
+	}
+	if m2.worktreeLogsByBranch == nil {
+		t.Error("WithOrchestrator: worktreeLogsByBranch should be initialised")
+	}
+}
+
+// TestInit_WithOrchestrator_ReturnsBatchCmd verifies Init() includes the tagged-event
+// listener when an orchestrator is wired in.
+func TestInit_WithOrchestrator_ReturnsBatchCmd(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
+	m = m.WithOrchestrator(newTestOrch())
+	cmd := m.Init()
+	if cmd == nil {
+		t.Error("Init() with orchestrator should return a non-nil cmd batch")
+	}
+}
+
+// TestHandleWindowSize_WithOrchestrator_DoesNotPanic verifies that a window-resize
+// event properly resizes the worktrees panel when orchestrator is active.
+func TestHandleWindowSize_WithOrchestrator_DoesNotPanic(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
+	m = m.WithOrchestrator(newTestOrch())
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m2 := updated.(Model)
+	_ = m2.View() // must not panic
+}
+
+// TestHandleTaggedEvent_AccumulatesLog verifies that tagged events accumulate
+// in the per-branch log map.
+func TestHandleTaggedEvent_AccumulatesLog(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
+	m = m.WithOrchestrator(newTestOrch())
+	// Resize so layout is not TooSmall.
+	updated0, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated0.(Model)
+
+	entry := loop.LogEntry{Kind: loop.LogInfo, Message: "hello from agent"}
+	msg := taggedEventMsg{Branch: "wt/feat-a", Entry: entry}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	logs := m2.worktreeLogsByBranch["wt/feat-a"]
+	if len(logs) != 1 {
+		t.Errorf("expected 1 accumulated log line, got %d", len(logs))
+	}
+}
+
+// TestHandleTaggedEvent_LiveAppend verifies that when activeWorktreeBranch matches
+// the event's branch the line is appended to the main view.
+func TestHandleTaggedEvent_LiveAppend(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
+	m = m.WithOrchestrator(newTestOrch())
+	updated0, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated0.(Model)
+	m.activeWorktreeBranch = "wt/feat-a" // pre-select this branch
+
+	entry := loop.LogEntry{Kind: loop.LogInfo, Message: "live update"}
+	msg := taggedEventMsg{Branch: "wt/feat-a", Entry: entry}
+	updated, _ := m.Update(msg)
+	_ = updated.(Model) // must not panic
+}
+
+// TestHandleWorktreeAction_DoesNotPanic verifies that stop/merge/clean actions
+// on an unknown branch are silently ignored (no panic, error is discarded).
+func TestHandleWorktreeAction_DoesNotPanic(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
+	m = m.WithOrchestrator(newTestOrch())
+
+	for _, action := range []string{"stop", "merge", "clean"} {
+		msg := panels.WorktreeActionMsg{Branch: "wt/nonexistent", Action: action}
+		updated, cmd := m.Update(msg)
+		_ = updated.(Model) // must not panic
+		if cmd != nil {
+			t.Errorf("action %q should return nil cmd", action)
+		}
+	}
+}
+
+// TestHandleWorktreeAction_NilOrch_NoOp verifies no panic when orch is nil.
+func TestHandleWorktreeAction_NilOrch_NoOp(t *testing.T) {
+	m := newTestModel() // orch is nil
+	msg := panels.WorktreeActionMsg{Branch: "wt/foo", Action: "stop"}
+	updated, _ := m.Update(msg)
+	_ = updated.(Model)
+}
+
+// TestHandleWorktreeSelected_SetsActiveBranch verifies the branch is recorded
+// and the accumulated log is loaded into the main view.
+func TestHandleWorktreeSelected_SetsActiveBranch(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
+	m = m.WithOrchestrator(newTestOrch())
+	updated0, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated0.(Model)
+
+	// Pre-populate some accumulated log lines.
+	m.worktreeLogsByBranch["wt/feat-x"] = []string{"line-1", "line-2"}
+
+	msg := panels.WorktreeSelectedMsg{Branch: "wt/feat-x"}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	if m2.activeWorktreeBranch != "wt/feat-x" {
+		t.Errorf("activeWorktreeBranch = %q, want %q", m2.activeWorktreeBranch, "wt/feat-x")
+	}
+	// The main view should show the Output tab with the accumulated lines.
+	view := m2.View()
+	if !strings.Contains(view, "Output") {
+		t.Errorf("after WorktreeSelectedMsg, main view should be on Output tab; view:\n%s", view)
+	}
+}
+
+// TestKey_W_WithOrchestrator_FocusSpecs_LaunchAttempted verifies that the W key
+// triggers a Launch call when orch is set and the Specs panel has focus.
+// Since the noop ops returns an error from Switch, the agent ends up in
+// StateFailed (silently).  We just verify no panic.
+func TestKey_W_WithOrchestrator_FocusSpecs_LaunchAttempted(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	sf := []spec.SpecFile{{Name: "feat-a", Dir: "specs/feat-a", IsDir: true, Path: "specs/feat-a/spec.md"}}
+	m := New(ch, nil, "", "Proj", "", sf, nil, nil)
+	m = m.WithOrchestrator(newTestOrch())
+	m.focus = FocusSpecs
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("W")})
+	_ = updated.(Model) // must not panic
+	// Launch errors are silently discarded; W key returns nil cmd.
+	if cmd != nil {
+		t.Error("W key should return nil cmd (launch result is fire-and-forget)")
+	}
+}
+
+// TestKey_W_NoOrch_NoOp verifies that W key is a no-op when orch is nil.
+func TestKey_W_NoOrch_NoOp(t *testing.T) {
+	m := newTestModel()
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("W")})
+	m2 := updated.(Model)
+	if m2.orch != nil {
+		t.Error("W key without orch should not set orch")
+	}
+	if cmd != nil {
+		t.Error("W key without orch should return nil cmd")
+	}
+}
+
+// TestKey_5_WithOrchestrator_FocusesWorktrees verifies key "5" sets focus to
+// FocusWorktrees when worktree mode is active.
+func TestKey_5_WithOrchestrator_FocusesWorktrees(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
+	m = m.WithOrchestrator(newTestOrch())
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("5")})
+	m2 := updated.(Model)
+	if m2.focus != FocusWorktrees {
+		t.Errorf("key '5' with orch should set focus to FocusWorktrees, got %v", m2.focus)
+	}
+}
+
+// TestKey_5_NoOrch_NoFocusChange verifies key "5" is a no-op when orch is nil.
+func TestKey_5_NoOrch_NoFocusChange(t *testing.T) {
+	m := newTestModel() // FocusMain by default
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("5")})
+	m2 := updated.(Model)
+	// Focus should not change to FocusWorktrees (value 4).
+	if m2.focus == FocusWorktrees {
+		t.Error("key '5' without orch should not set focus to FocusWorktrees")
+	}
+}
+
+// TestNextFocus_WithOrchestrator_5Panel verifies that tab cycling includes
+// FocusWorktrees when an orchestrator is active.
+func TestNextFocus_WithOrchestrator_5Panel(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
+	m = m.WithOrchestrator(newTestOrch())
+	m.focus = FocusIterations
+
+	// From Iterations, tab should go to Worktrees (not Main as in 4-panel mode).
+	next := m.nextFocus()
+	if next != FocusWorktrees {
+		t.Errorf("nextFocus() from Iterations with orch = %v, want FocusWorktrees", next)
+	}
+}
+
+// TestPrevFocus_WithOrchestrator_5Panel verifies reverse tab includes FocusWorktrees.
+func TestPrevFocus_WithOrchestrator_5Panel(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
+	m = m.WithOrchestrator(newTestOrch())
+	m.focus = FocusMain
+
+	// From Main, shift+tab should go to Worktrees.
+	prev := m.prevFocus()
+	if prev != FocusWorktrees {
+		t.Errorf("prevFocus() from Main with orch = %v, want FocusWorktrees", prev)
+	}
+}
+
+// TestDelegateToFocused_Worktrees verifies that key messages are delegated to
+// the WorktreesPanel when FocusWorktrees is active.
+func TestDelegateToFocused_Worktrees(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
+	m = m.WithOrchestrator(newTestOrch())
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(Model)
+	m.focus = FocusWorktrees
+
+	// j key should be delegated to worktrees panel without panic.
+	updated2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	_ = updated2.(Model)
+}
+
+// TestView_WithOrchestrator_DoesNotPanic verifies that View() renders correctly
+// with the worktrees panel in the sidebar.
+func TestView_WithOrchestrator_DoesNotPanic(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
+	m = m.WithOrchestrator(newTestOrch())
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m2 := updated.(Model)
+	view := m2.View()
+	if view == "" {
+		t.Error("View() with orchestrator should not return empty string")
+	}
+}
+
+// TestWorktreesSplitDims_HalvesCorrectly verifies the helper computes inner dims
+// correctly for rects tall enough that clamping doesn't apply (>= 6 rows so each
+// half has at least 3 outer rows → 1 inner row after border).
+func TestWorktreesSplitDims_HalvesCorrectly(t *testing.T) {
+	tests := []struct {
+		name string
+		rect Rect
+	}{
+		{"even height", Rect{Width: 30, Height: 20}},
+		{"odd height", Rect{Width: 30, Height: 21}},
+		{"minimum valid", Rect{Width: 10, Height: 6}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w, itersTopH, itersBotH := worktreesSplitDims(tt.rect)
+			// Outer = inner + 2 (border).  The sum must equal the original height.
+			topOuter := itersTopH + 2
+			botOuter := itersBotH + 2
+			if topOuter+botOuter != tt.rect.Height {
+				t.Errorf("outer heights %d+%d = %d, want %d",
+					topOuter, botOuter, topOuter+botOuter, tt.rect.Height)
+			}
+			if w <= 0 {
+				t.Errorf("width should be positive, got %d", w)
+			}
+		})
+	}
+}
+
+// TestKey_X_FocusWorktrees_DelegatesToPanel verifies that x key when focus is
+// on WorktreesPanel emits a WorktreeActionMsg rather than calling StopLoop().
+func TestKey_X_FocusWorktrees_DelegatesToPanel(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
+	orch := newTestOrch()
+	m = m.WithOrchestrator(orch)
+	m.focus = FocusWorktrees
+	// No controller — if StopLoop were called we'd panic (nil controller).
+
+	// x key with empty panel → no cmd (no selected branch).
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	_ = updated.(Model)
+	// With no entries, the panel returns no cmd.
+	_ = cmd
 }

@@ -55,13 +55,15 @@ func RenderFooter(props FooterProps, width int) string {
 func panelHints(focus string) string {
 	switch focus {
 	case "specs":
-		return "j/k:navigate  e:edit  n:new  enter:view  tab:next panel"
+		return "j/k:navigate  e:edit  n:new  enter:view  W:worktree  tab:next"
 	case "iterations":
 		return "j/k:navigate  enter:view  tab:next panel"
 	case "main":
 		return "f:follow  [/]:tab  ctrl+u/d:scroll  tab:next panel"
 	case "secondary":
 		return "[/]:tab  j/k:scroll  tab:next panel"
+	case "worktrees":
+		return "j/k:navigate  enter:view log  x:stop  M:merge  D:clean  tab:next"
 	default:
 		return "tab:next panel"
 	}
