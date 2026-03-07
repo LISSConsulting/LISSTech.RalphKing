@@ -136,12 +136,15 @@ func TestDetect_NotWorktrunk(t *testing.T) {
 
 	var wtBin string
 	if runtime.GOOS == "windows" {
-		// Use a batch script that pretends to be Windows Terminal, not worktrunk.
-		wtBin = filepath.Join(dir, "wt.bat")
+		// Batch scripts that pretend to be Windows Terminal, not the wt CLI.
 		script := "@echo off\r\necho Windows Terminal v1.20.0\r\n"
-		if err := os.WriteFile(wtBin, []byte(script), 0644); err != nil {
-			t.Fatalf("write wt.bat: %v", err)
+		for _, name := range []string{"wt.bat", "git-wt.bat"} {
+			p := filepath.Join(dir, name)
+			if err := os.WriteFile(p, []byte(script), 0644); err != nil {
+				t.Fatalf("write %s: %v", name, err)
+			}
 		}
+		_ = wtBin
 	} else {
 		exe, _ := os.Executable()
 		wtBin = filepath.Join(dir, "wt")
@@ -151,7 +154,8 @@ func TestDetect_NotWorktrunk(t *testing.T) {
 		t.Setenv("_FAKE_WT_NOT_WORKTRUNK", "1")
 	}
 
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// Use only the temp dir so the real git-wt on the system PATH is not found.
+	t.Setenv("PATH", dir)
 
 	r := NewRunner(dir)
 	err := r.Detect()
@@ -488,12 +492,15 @@ func TestDetect_VersionCmdFails(t *testing.T) {
 
 	var wtBin string
 	if runtime.GOOS == "windows" {
-		// Batch script that exits 1 unconditionally (fails on --version).
-		wtBin = filepath.Join(dir, "wt.bat")
-		script := "@echo off\r\nexit /b 1\r\n"
-		if err := os.WriteFile(wtBin, []byte(script), 0644); err != nil {
-			t.Fatalf("write wt.bat: %v", err)
+		// Batch scripts that exit 1 unconditionally (fail on --version).
+		for _, name := range []string{"wt.bat", "git-wt.bat"} {
+			p := filepath.Join(dir, name)
+			script := "@echo off\r\nexit /b 1\r\n"
+			if err := os.WriteFile(p, []byte(script), 0644); err != nil {
+				t.Fatalf("write %s: %v", name, err)
+			}
 		}
+		_ = wtBin
 	} else {
 		exe, err := os.Executable()
 		if err != nil {
@@ -511,7 +518,8 @@ func TestDetect_VersionCmdFails(t *testing.T) {
 		t.Setenv("_FAKE_WT_VERSION_FAIL", "1")
 	}
 
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// Use only the temp dir so the real git-wt on the system PATH is not found.
+	t.Setenv("PATH", dir)
 
 	r := NewRunner(dir)
 	err := r.Detect()

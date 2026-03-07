@@ -21,9 +21,10 @@ func (r *Runner) Detect() error {
 		}
 
 		// Validate that it's the wt CLI (not Windows Terminal or some other
-		// binary) by checking the --version output.
+		// binary) by checking the --version output. CombinedOutput is used
+		// because Rust/clap CLIs (and scoop shims) may write to stderr.
 		cmd := exec.Command(path, "--version")
-		out, err := cmd.Output()
+		out, err := cmd.CombinedOutput()
 		if err != nil {
 			continue
 		}
