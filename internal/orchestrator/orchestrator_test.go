@@ -399,6 +399,126 @@ func TestFanIn_OnEntryCallback_UpdatesStats(t *testing.T) {
 	}
 }
 
+// ─── Per-agent Regent supervision (T046-T049) ─────────────────────────────────
+
+// waitAgentTerminal polls until the agent for branch is in a non-Running,
+// non-Creating state, or the timeout expires.
+func waitAgentTerminal(t *testing.T, o *Orchestrator, branch string, timeout time.Duration) *WorktreeAgent {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if a := o.AgentByBranch(branch); a != nil {
+			if a.State != StateRunning && a.State != StateCreating {
+				return a
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("agent %q did not reach terminal state within %s", branch, timeout)
+	return nil
+}
+
+// TestLaunch_RegentEnabled_AgentFails verifies that when Regent is enabled and
+// the loop fails (no claude binary), the agent eventually reaches StateFailed
+// after max_retries exhausted.
+func TestLaunch_RegentEnabled_AgentFails(t *testing.T) {
+	wtDir := t.TempDir()
+	ops := &fakeWorktreeOps{switchPath: wtDir}
+
+	cfg := defaultCfg()
+	cfg.Regent.Enabled = true
+	cfg.Regent.MaxRetries = 0           // give up after first failure
+	cfg.Regent.RetryBackoffSeconds = 0  // no sleep between retries
+	cfg.Regent.HangTimeoutSeconds = 0   // no hang detection
+	cfg.Build.PromptFile = "BUILD.md"   // loop needs this but it won't exist → fail fast
+
+	o := New(cfg, ops)
+
+	ctx := context.Background()
+	err := o.Launch(ctx, "feat/regent-fail", "", "", loop.ModeBuild, 1)
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	agent := waitAgentTerminal(t, o, "feat/regent-fail", 5*time.Second)
+	if agent.State != StateFailed {
+		t.Errorf("expected StateFailed, got %v", agent.State)
+	}
+}
+
+// TestLaunch_RegentIsolation_TwoAgentsFail verifies that two agents supervised
+// independently both reach terminal states without interfering with each other
+// (FR-020: failure in one agent must not affect others).
+func TestLaunch_RegentIsolation_TwoAgentsFail(t *testing.T) {
+	wtDirA := t.TempDir()
+	wtDirB := t.TempDir()
+
+	// Alternate switch paths per branch.
+	callCount := 0
+	dirs := []string{wtDirA, wtDirB}
+	ops := &fakeWorktreeOps{}
+	switchFn := func() string {
+		d := dirs[callCount%2]
+		callCount++
+		return d
+	}
+
+	cfg := defaultCfg()
+	cfg.Regent.Enabled = true
+	cfg.Regent.MaxRetries = 0
+	cfg.Regent.RetryBackoffSeconds = 0
+	cfg.Regent.HangTimeoutSeconds = 0
+	cfg.Build.PromptFile = "BUILD.md"
+
+	o := New(cfg, ops)
+
+	// Override switch to return different dirs per agent.
+	ops.switchPath = switchFn()
+	err := o.Launch(context.Background(), "feat/a", "", "", loop.ModeBuild, 1)
+	if err != nil {
+		t.Fatalf("Launch a: %v", err)
+	}
+	ops.switchPath = switchFn()
+	err = o.Launch(context.Background(), "feat/b", "", "", loop.ModeBuild, 1)
+	if err != nil {
+		t.Fatalf("Launch b: %v", err)
+	}
+
+	agentA := waitAgentTerminal(t, o, "feat/a", 5*time.Second)
+	agentB := waitAgentTerminal(t, o, "feat/b", 5*time.Second)
+
+	// Both must be terminal — neither blocks the other.
+	if agentA.State == StateRunning || agentA.State == StateCreating {
+		t.Errorf("agent a still running after timeout")
+	}
+	if agentB.State == StateRunning || agentB.State == StateCreating {
+		t.Errorf("agent b still running after timeout")
+	}
+}
+
+// TestLaunch_RegentDisabled_AgentFails ensures that without Regent the loop
+// failure still sets StateFailed (regression guard for non-Regent path).
+func TestLaunch_RegentDisabled_AgentFails(t *testing.T) {
+	wtDir := t.TempDir()
+	ops := &fakeWorktreeOps{switchPath: wtDir}
+
+	cfg := defaultCfg()
+	cfg.Regent.Enabled = false
+	cfg.Build.PromptFile = "BUILD.md"
+
+	o := New(cfg, ops)
+
+	err := o.Launch(context.Background(), "feat/no-regent", "", "", loop.ModeBuild, 1)
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	agent := waitAgentTerminal(t, o, "feat/no-regent", 5*time.Second)
+	if agent.State != StateFailed {
+		t.Errorf("expected StateFailed, got %v", agent.State)
+	}
+}
+
 // ─── WorktreePaths ────────────────────────────────────────────────────────────
 
 func TestWorktreePaths(t *testing.T) {

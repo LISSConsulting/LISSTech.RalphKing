@@ -161,7 +161,20 @@ func (o *Orchestrator) Launch(ctx context.Context, branch, specName, specDir str
 	}
 
 	go func() {
-		runErr := lp.Run(ctx, mode, maxOverride)
+		// Each agent runs its own Regent instance for independent supervision
+		// (crash detection, hang detection, per-worktree rollback). Creating one
+		// Regent per agent satisfies FR-019/FR-020: failures are isolated — a
+		// hanging or crashing agent does not affect any peer.
+		var runErr error
+		if o.cfg.Regent.Enabled {
+			rgt := regent.New(o.cfg.Regent, wtPath, git.NewRunner(wtPath), events)
+			lp.PostIteration = rgt.RunPostIterationTests
+			runErr = rgt.Supervise(ctx, func(ctx context.Context) error {
+				return lp.Run(ctx, mode, maxOverride)
+			})
+		} else {
+			runErr = lp.Run(ctx, mode, maxOverride)
+		}
 
 		o.mu.Lock()
 		if runErr != nil && runErr != context.Canceled {
