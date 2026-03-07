@@ -29,6 +29,16 @@ type Config struct {
 	Regent        RegentConfig        `toml:"regent"`
 	TUI           TUIConfig           `toml:"tui"`
 	Notifications NotificationsConfig `toml:"notifications"`
+	Worktree      WorktreeConfig      `toml:"worktree"`
+}
+
+// WorktreeConfig controls git worktree support via worktrunk.
+type WorktreeConfig struct {
+	Enabled      bool   `toml:"enabled"`
+	MaxParallel  int    `toml:"max_parallel"`
+	AutoMerge    bool   `toml:"auto_merge"`
+	MergeTarget  string `toml:"merge_target"`
+	PathTemplate string `toml:"path_template"`
 }
 
 // NotificationsConfig controls webhook/ntfy.sh notifications.
@@ -138,6 +148,10 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if c.Worktree.MaxParallel < 1 {
+		errs = append(errs, fmt.Errorf("worktree.max_parallel must be >= 1"))
+	}
+
 	return errors.Join(errs...)
 }
 
@@ -179,6 +193,12 @@ func Defaults() Config {
 			OnComplete: true,
 			OnError:    true,
 			OnStop:     true,
+		},
+		Worktree: WorktreeConfig{
+			Enabled:     false,
+			MaxParallel: 5,
+			AutoMerge:   false,
+			MergeTarget: "",
 		},
 	}
 }
@@ -290,6 +310,13 @@ url = ""           # ntfy.sh topic URL or any HTTP webhook (empty = disabled)
 on_complete = true # notify on each iteration complete
 on_error = true    # notify on loop error
 on_stop = true     # notify when loop finishes or is stopped
+
+[worktree]
+enabled = false        # enable git worktree support via worktrunk
+max_parallel = 5       # maximum number of concurrent worktree agents
+auto_merge = false     # automatically merge on spec-complete + tests pass
+merge_target = ""      # branch to merge into (empty = branch worktree was created from)
+path_template = ""     # worktree path template (empty = worktrunk default)
 `
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return "", fmt.Errorf("config: write %s: %w", path, err)

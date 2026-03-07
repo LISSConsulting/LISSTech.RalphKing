@@ -14,10 +14,12 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/orchestrator"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/worktree"
 )
 
 // runWithRegent runs the loop under Regent supervision without TUI.
@@ -388,6 +390,8 @@ func (lc *loopController) runLoop(ctx context.Context, mode string) {
 
 // runDashboard launches the TUI in idle (dashboard) state with no loop running.
 // The user can press b/p/R to start a loop and x to stop it.
+// When [worktree] is enabled in config, an Orchestrator is created and wired
+// into the TUI so the W/x/M/D keybinds become active.
 func runDashboard(ctx context.Context, cfg *config.Config, dir string, sw store.Writer, sr store.Reader) error {
 	tuiEvents := make(chan loop.LogEntry, 128)
 	// Note: tuiEvents is intentionally never closed; the TUI exits when user presses q.
@@ -404,6 +408,17 @@ func runDashboard(ctx context.Context, cfg *config.Config, dir string, sw store.
 
 	specFiles, _ := spec.List(dir)
 	model := tui.New(tuiEvents, sr, cfg.TUI.AccentColor, cfg.Project.Name, dir, specFiles, nil, ctrl)
+
+	// Wire orchestrator when worktree mode is enabled.
+	if cfg.Worktree.Enabled {
+		wtRunner := worktree.NewRunner(dir)
+		if err := wtRunner.Detect(); err == nil {
+			orch := orchestrator.New(cfg, wtRunner)
+			model = model.WithOrchestrator(orch)
+		}
+		// If Detect fails (worktrunk not installed), silently skip worktree mode.
+	}
+
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	return finishTUI(program)
 }

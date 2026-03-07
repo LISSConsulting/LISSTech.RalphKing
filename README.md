@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/Claude_Code-CLI-A78BFA?style=for-the-badge&logoColor=000&labelColor=000" alt="Claude Code CLI">
   <img src="https://img.shields.io/badge/TUI-Bubbletea-FF6B9D?style=for-the-badge&labelColor=000" alt="Bubbletea TUI">
   <img src="https://img.shields.io/badge/Platforms-macOS_·_Linux_·_Windows-FFE66D?style=for-the-badge&labelColor=000" alt="Cross-platform">
-  <img src="https://img.shields.io/badge/Coverage-92%25-C7F464?style=for-the-badge&labelColor=000" alt="92% Coverage">
+  <img src="https://img.shields.io/badge/Coverage-90%25-C7F464?style=for-the-badge&labelColor=000" alt="90% Coverage">
   <img src="https://img.shields.io/badge/Spec--Driven-Development-FF6B35?style=for-the-badge&labelColor=000" alt="Spec-Driven">
 </p>
 
@@ -29,6 +29,7 @@
 - [📜 Spec Kit Workflow](#-spec-kit-workflow)
 - [🖥️ TUI Dashboard](#️-tui-dashboard)
 - [🏰 The Regent](#-the-regent)
+- [🌿 Worktrees (Parallel Agents)](#-worktrees-parallel-agents)
 - [⚙️ Configuration](#️-configuration)
 - [🎯 CLI Reference](#-cli-reference)
 - [📁 Project Structure](#-project-structure)
@@ -169,6 +170,7 @@ Launch with `ralph` (no arguments) for the full four-panel interactive dashboard
 |-----|--------|
 | `tab` / `shift+tab` | Cycle panel focus |
 | `1` `2` `3` `4` | Jump to Specs / Iterations / Main / Secondary |
+| `5` | Jump to Worktrees panel (when worktree support enabled) |
 | `b` | Start build loop |
 | `p` | Start plan loop |
 | `R` | Smart run (plan if needed, then build) |
@@ -181,10 +183,11 @@ Launch with `ralph` (no arguments) for the full four-panel interactive dashboard
 
 | Panel | Keys |
 |-------|------|
-| 📋 Specs | `j`/`k` navigate · `enter` view · `e` edit in `$EDITOR` · `n` create new |
+| 📋 Specs | `j`/`k` navigate · `enter` view · `e` edit in `$EDITOR` · `n` create new · `W` launch in worktree |
 | 📊 Iterations | `j`/`k` navigate · `enter` view log · `]` switch to summary |
 | 📝 Main | `[`/`]` switch tabs · `f` toggle follow · `ctrl+u`/`ctrl+d` page |
 | 📡 Secondary | `[`/`]` switch tabs (Regent / Git / Tests / Cost) · `j`/`k` scroll |
+| 🌿 Worktrees | `j`/`k` navigate · `enter` view log · `x` stop · `M` merge · `D` discard |
 
 > [!TIP]
 > Minimum terminal size: **80×24**. Set your accent color via `[tui] accent_color` in `ralph.toml`.
@@ -231,6 +234,66 @@ graph TD
 
 ---
 
+## 🌿 Worktrees (Parallel Agents)
+
+Requires [worktrunk](https://github.com/nicholasgasior/worktrunk) (`wt`) installed on your PATH.
+
+### Quick Start
+
+```sh
+# Run a build in an isolated git worktree (your working dir stays clean)
+ralph build --worktree
+
+# Same in headless mode
+ralph build -w --no-tui --max 10
+
+# List active worktrees
+ralph worktree list
+
+# Merge a completed worktree branch and clean up
+ralph worktree merge feat/my-branch
+
+# Discard a worktree without merging
+ralph worktree clean feat/my-branch
+```
+
+### Parallel Agents from the Dashboard
+
+Open the TUI (`ralph`), navigate to the **Specs** panel, and press `W` on any spec to launch it in its own worktree. The **Worktrees** panel (panel 5) shows all active agents in real-time.
+
+| Key | Action |
+|-----|--------|
+| `W` | Launch selected spec in a new worktree (Specs panel) |
+| `x` | Stop the selected worktree agent (Worktrees panel) |
+| `M` | Merge the selected worktree (Worktrees panel) |
+| `D` | Clean (discard) the selected worktree (Worktrees panel) |
+| `enter` | View the selected agent's live log in the Main panel |
+
+### Worktree Config
+
+```toml
+[worktree]
+enabled       = false         # enable worktree support
+max_parallel  = 5             # max concurrent agents
+auto_merge    = false         # auto-merge on completion (requires tests to pass)
+merge_target  = ""            # branch to merge into (default: current branch)
+path_template = ""            # worktree path template (uses worktrunk default)
+```
+
+With `auto_merge = true` and a `test_command` configured in `[regent]`, completed agents are automatically merged and cleaned up when tests pass. On test failure the worktree is left intact for review.
+
+### Worktree CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `ralph worktree list` | List active worktrees and their status |
+| `ralph worktree list --json` | JSON output for scripting |
+| `ralph worktree merge [branch]` | Merge a completed worktree branch |
+| `ralph worktree clean [branch]` | Remove a worktree without merging |
+| `ralph worktree clean --all` | Remove all non-running worktrees |
+
+---
+
 ## ⚙️ Configuration
 
 Place `ralph.toml` in your project root. All fields are optional with sensible defaults:
@@ -274,6 +337,13 @@ url = ""                      # ntfy.sh topic URL or HTTP webhook
 on_complete = true            # notify on iteration complete
 on_error = true               # notify on loop error
 on_stop = true                # notify when loop finishes
+
+[worktree]
+enabled       = false         # enable worktree support (requires worktrunk)
+max_parallel  = 5             # max concurrent worktree agents
+auto_merge    = false         # auto-merge and clean up on successful completion
+merge_target  = ""            # target branch for auto-merge (default: current branch)
+path_template = ""            # worktree directory template (uses worktrunk default)
 ```
 
 ### 🔑 Environment Variables
@@ -327,6 +397,7 @@ on_stop = true                # notify when loop finishes
 | `--no-color` | Disable ANSI color output (pipe-safe) |
 | `--max N` | Override max iterations (0 = use config) |
 | `--roam` | Roam freely across the codebase (no spec boundary) |
+| `--worktree` / `-w` | Run loop in an isolated git worktree via worktrunk |
 
 ### Examples
 
@@ -345,6 +416,12 @@ ralph loop run
 
 # 📐 Run 3 planning iterations only
 ralph loop plan --max 3
+
+# 🌿 Isolated build in a git worktree (requires worktrunk)
+ralph build --worktree
+
+# 🌿 Headless worktree build
+ralph build -w --no-tui --max 5
 ```
 
 ---

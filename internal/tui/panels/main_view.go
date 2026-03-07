@@ -87,6 +87,16 @@ func (v MainView) SwitchToOutput() MainView {
 	return v
 }
 
+// ShowWorktreeLog loads a worktree agent's accumulated log entries into the
+// Output tab so the user can review a specific agent's activity.
+// lines are pre-rendered strings (app.go renders via theme.RenderLogLine).
+func (v MainView) ShowWorktreeLog(lines []string) MainView {
+	v.logview = v.logview.SetContent(lines)
+	v.activeTab = TabOutput
+	v.tabbar = components.NewTabBar(mainTabLabels).SetWidth(v.width)
+	return v
+}
+
 // SetSize resizes the main view.
 func (v MainView) SetSize(w, h int) MainView {
 	v.width = w

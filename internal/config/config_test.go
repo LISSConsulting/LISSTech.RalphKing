@@ -37,6 +37,10 @@ func TestDefaults(t *testing.T) {
 		{"notifications.on_complete", cfg.Notifications.OnComplete, true},
 		{"notifications.on_error", cfg.Notifications.OnError, true},
 		{"notifications.on_stop", cfg.Notifications.OnStop, true},
+		{"worktree.enabled", cfg.Worktree.Enabled, false},
+		{"worktree.max_parallel", cfg.Worktree.MaxParallel, 5},
+		{"worktree.auto_merge", cfg.Worktree.AutoMerge, false},
+		{"worktree.merge_target", cfg.Worktree.MergeTarget, ""},
 	}
 
 	for _, tt := range tests {
@@ -341,6 +345,12 @@ hang_timeout_seconds = 300
 [tui]
 accent_color = "#FF0000"
 log_retention = 20
+[worktree]
+enabled = false
+max_parallel = 5
+auto_merge = false
+merge_target = ""
+path_template = ""
 `,
 		},
 		{
@@ -551,6 +561,28 @@ func TestValidate(t *testing.T) {
 			name:    "invalid notifications.url ftp scheme",
 			modify:  func(c *Config) { c.Notifications.URL = "ftp://example.com/webhook" },
 			wantErr: "notifications.url must be a valid http or https URL",
+		},
+		{
+			name:    "worktree.max_parallel zero is invalid",
+			modify:  func(c *Config) { c.Worktree.MaxParallel = 0 },
+			wantErr: "worktree.max_parallel must be >= 1",
+		},
+		{
+			name:    "worktree.max_parallel negative is invalid",
+			modify:  func(c *Config) { c.Worktree.MaxParallel = -1 },
+			wantErr: "worktree.max_parallel must be >= 1",
+		},
+		{
+			name:   "worktree.max_parallel one is valid",
+			modify: func(c *Config) { c.Worktree.MaxParallel = 1 },
+		},
+		{
+			name:   "worktree.merge_target empty is valid",
+			modify: func(c *Config) { c.Worktree.MergeTarget = "" },
+		},
+		{
+			name:   "worktree.merge_target set is valid",
+			modify: func(c *Config) { c.Worktree.MergeTarget = "main" },
 		},
 	}
 

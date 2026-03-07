@@ -17,6 +17,7 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/worktree"
 )
 
 // loopSetup holds all shared state initialised by setupLoop.
@@ -119,13 +120,20 @@ func setupLoop(noTUI, roam, noColor bool) (*loopSetup, error) {
 }
 
 // executeLoop loads config, builds the loop, and runs it in the given mode.
-func executeLoop(mode loop.Mode, maxOverride int, noTUI bool, roam bool, noColor bool) error {
+func executeLoop(mode loop.Mode, maxOverride int, noTUI bool, roam bool, noColor bool, useWorktree bool) error {
 	setup, err := setupLoop(noTUI, roam, noColor)
 	if err != nil {
 		return err
 	}
 	defer setup.cancel()
 	defer setup.cleanup()
+
+	// Worktree mode: create an isolated worktree and run the loop inside it.
+	if useWorktree {
+		if wtErr := setupWorktree(setup); wtErr != nil {
+			return wtErr
+		}
+	}
 
 	// Pre-flight: verify the prompt file exists before launching TUI or Regent.
 	// Without this check the TUI initialises, then fails on the first iteration
@@ -137,7 +145,7 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool, roam bool, noColor
 	default:
 		promptFile = setup.cfg.Build.PromptFile
 	}
-	if _, statErr := os.Stat(filepath.Join(setup.dir, promptFile)); statErr != nil {
+	if _, statErr := os.Stat(filepath.Join(setup.lp.Dir, promptFile)); statErr != nil {
 		return fmt.Errorf("prompt file %s: %w", promptFile, statErr)
 	}
 
@@ -149,19 +157,66 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool, roam bool, noColor
 
 	if !setup.cfg.Regent.Enabled {
 		if noTUI {
-			return runWithStateTracking(setup.ctx, setup.lp, setup.dir, setup.gitRunner, string(mode), setup.sw, setup.formatter, runFn)
+			return runWithStateTracking(setup.ctx, setup.lp, setup.lp.Dir, setup.gitRunner, string(mode), setup.sw, setup.formatter, runFn)
 		}
-		return runWithTUIAndState(setup.ctx, setup.lp, setup.dir, setup.gitRunner, string(mode), setup.cfg.TUI.AccentColor, setup.cfg.Project.Name, setup.sw, setup.sr, runFn)
+		return runWithTUIAndState(setup.ctx, setup.lp, setup.lp.Dir, setup.gitRunner, string(mode), setup.cfg.TUI.AccentColor, setup.cfg.Project.Name, setup.sw, setup.sr, runFn)
 	}
 
 	if noTUI {
-		return runWithRegent(setup.ctx, setup.lp, setup.cfg, setup.gitRunner, setup.dir, setup.sw, setup.formatter, runFn)
+		return runWithRegent(setup.ctx, setup.lp, setup.cfg, setup.gitRunner, setup.lp.Dir, setup.sw, setup.formatter, runFn)
 	}
-	return runWithRegentTUI(setup.ctx, setup.lp, setup.cfg, setup.gitRunner, setup.dir, setup.sw, setup.sr, runFn)
+	return runWithRegentTUI(setup.ctx, setup.lp, setup.cfg, setup.gitRunner, setup.lp.Dir, setup.sw, setup.sr, runFn)
+}
+
+// setupWorktree detects worktrunk, creates/switches to the worktree for the
+// current branch, and updates setup.lp.Dir and setup.gitRunner to point at the
+// worktree directory. Must be called before any prompt pre-flight checks.
+func setupWorktree(setup *loopSetup) error {
+	wtr := worktree.NewRunner(setup.dir)
+	if err := wtr.Detect(); err != nil {
+		return err
+	}
+
+	branch, err := setup.gitRunner.CurrentBranch()
+	if err != nil {
+		return fmt.Errorf("worktree: get current branch: %w", err)
+	}
+
+	// Try to create a new worktree; if it already exists, switch to it.
+	wtPath, err := wtr.Switch(branch, true)
+	if err != nil {
+		// Retry without -c (reuse existing worktree).
+		wtPath, err = wtr.Switch(branch, false)
+		if err != nil {
+			return fmt.Errorf("worktree: switch to %s: %w", branch, err)
+		}
+		fmt.Fprintf(os.Stderr, "ralph: reusing existing worktree for %s at %s\n", branch, wtPath)
+	} else {
+		fmt.Fprintf(os.Stderr, "ralph: created worktree for %s at %s\n", branch, wtPath)
+	}
+
+	// Update the loop to operate in the worktree directory.
+	setup.lp.Dir = wtPath
+	setup.lp.Git = git.NewRunner(wtPath)
+	setup.gitRunner = git.NewRunner(wtPath)
+
+	// Re-initialise the session log in the worktree.
+	logsDir := filepath.Join(wtPath, ".ralph", "logs")
+	if s, storeErr := store.NewJSONL(logsDir); storeErr != nil {
+		fmt.Fprintf(os.Stderr, "ralph: worktree session log unavailable: %v\n", storeErr)
+	} else {
+		// Close the old store if one was opened.
+		setup.cleanup()
+		setup.sw = s
+		setup.sr = s
+		setup.cleanup = func() { _ = s.Close() }
+	}
+
+	return nil
 }
 
 // executeSmartRun runs plan if CHRONICLE.md doesn't exist, then build.
-func executeSmartRun(maxOverride int, noTUI bool, roam bool, noColor bool) error {
+func executeSmartRun(maxOverride int, noTUI bool, roam bool, noColor bool, useWorktree bool) error {
 	setup, err := setupLoop(noTUI, roam, noColor)
 	if err != nil {
 		return err
@@ -169,10 +224,16 @@ func executeSmartRun(maxOverride int, noTUI bool, roam bool, noColor bool) error
 	defer setup.cancel()
 	defer setup.cleanup()
 
+	if useWorktree {
+		if wtErr := setupWorktree(setup); wtErr != nil {
+			return wtErr
+		}
+	}
+
 	smartRunFn := func(ctx context.Context) error {
 		// Check inside the closure so Regent retries re-evaluate whether
 		// the plan file exists (it may have been created by a prior attempt).
-		planPath := filepath.Join(setup.dir, "CHRONICLE.md")
+		planPath := filepath.Join(setup.lp.Dir, "CHRONICLE.md")
 		info, statErr := os.Stat(planPath)
 		if needsPlanPhase(info, statErr) {
 			if planErr := setup.lp.Run(ctx, loop.ModePlan, 0); planErr != nil {
@@ -185,15 +246,15 @@ func executeSmartRun(maxOverride int, noTUI bool, roam bool, noColor bool) error
 
 	if !setup.cfg.Regent.Enabled {
 		if noTUI {
-			return runWithStateTracking(setup.ctx, setup.lp, setup.dir, setup.gitRunner, "run", setup.sw, setup.formatter, smartRunFn)
+			return runWithStateTracking(setup.ctx, setup.lp, setup.lp.Dir, setup.gitRunner, "run", setup.sw, setup.formatter, smartRunFn)
 		}
-		return runWithTUIAndState(setup.ctx, setup.lp, setup.dir, setup.gitRunner, "run", setup.cfg.TUI.AccentColor, setup.cfg.Project.Name, setup.sw, setup.sr, smartRunFn)
+		return runWithTUIAndState(setup.ctx, setup.lp, setup.lp.Dir, setup.gitRunner, "run", setup.cfg.TUI.AccentColor, setup.cfg.Project.Name, setup.sw, setup.sr, smartRunFn)
 	}
 
 	if noTUI {
-		return runWithRegent(setup.ctx, setup.lp, setup.cfg, setup.gitRunner, setup.dir, setup.sw, setup.formatter, smartRunFn)
+		return runWithRegent(setup.ctx, setup.lp, setup.cfg, setup.gitRunner, setup.lp.Dir, setup.sw, setup.formatter, smartRunFn)
 	}
-	return runWithRegentTUI(setup.ctx, setup.lp, setup.cfg, setup.gitRunner, setup.dir, setup.sw, setup.sr, smartRunFn)
+	return runWithRegentTUI(setup.ctx, setup.lp, setup.cfg, setup.gitRunner, setup.lp.Dir, setup.sw, setup.sr, smartRunFn)
 }
 
 // showStatus reads .ralph/regent-state.json and prints a formatted summary

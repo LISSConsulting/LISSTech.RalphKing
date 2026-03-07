@@ -53,6 +53,7 @@ func TestFocusTarget_String(t *testing.T) {
 		{FocusIterations, "iterations"},
 		{FocusMain, "main"},
 		{FocusSecondary, "secondary"},
+		{FocusWorktrees, "worktrees"},
 		{FocusTarget(99), "unknown"},
 	}
 	for _, tt := range tests {

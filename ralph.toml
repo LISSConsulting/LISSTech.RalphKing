@@ -39,3 +39,10 @@ url = "https://webhook.site/e829beaa-7ac2-4133-ab85-06e928743c5b"  # ntfy.sh top
 on_complete = true  # notify on each iteration complete
 on_error = true  # notify on loop error
 on_stop = true  # notify when loop finishes or is stopped
+
+[worktree]
+enabled = false        # enable git worktree support via worktrunk
+max_parallel = 5       # maximum number of concurrent worktree agents
+auto_merge = false     # automatically merge on spec-complete + tests pass
+merge_target = ""      # branch to merge into (empty = branch worktree was created from)
+path_template = ""     # worktree path template (empty = worktrunk default)

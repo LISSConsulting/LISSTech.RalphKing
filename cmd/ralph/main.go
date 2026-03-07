@@ -64,6 +64,8 @@ func rootCmd() *cobra.Command {
 		// Autonomous loop (build kept at top-level; plan/run moved under loop)
 		buildCmd(),
 		loopCmd(),
+		// Worktree management
+		worktreeCmd(),
 		// Project management
 		statusCmd(),
 		initCmd(),
