@@ -19,20 +19,113 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
 )
 
-// executeLoop loads config, builds the loop, and runs it in the given mode.
-func executeLoop(mode loop.Mode, maxOverride int, noTUI bool, roam bool) error {
+// loopSetup holds all shared state initialised by setupLoop.
+// Callers must defer both cancel() and cleanup() after a successful call.
+type loopSetup struct {
+	cfg           *config.Config
+	dir           string
+	ctx           context.Context
+	cancel        context.CancelFunc
+	gitRunner     *git.Runner
+	lp            *loop.Loop
+	effectiveRoam bool
+	sw            store.Writer
+	sr            store.Reader
+	formatter     lineFormatter
+	cleanup       func() // closes the JSONL store if one was opened
+}
+
+// setupLoop performs the common initialisation shared by executeLoop and
+// executeSmartRun: config load, validation, working dir, signal context, git
+// runner, loop struct init, spec resolution, and store init.
+func setupLoop(noTUI, roam, noColor bool) (*loopSetup, error) {
 	cfg, err := config.Load("")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("config validation: %w", err)
+		return nil, fmt.Errorf("config validation: %w", err)
 	}
 
 	dir, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("get working directory: %w", err)
+		return nil, fmt.Errorf("get working directory: %w", err)
 	}
+
+	var ctx context.Context
+	var cancel context.CancelFunc
+	var stopCh <-chan struct{}
+	if noTUI {
+		ctx, cancel, stopCh = signalContextGraceful()
+	} else {
+		ctx, cancel = signalContext()
+	}
+
+	gitRunner := git.NewRunner(dir)
+	effectiveRoam := roam || cfg.Build.Roam
+
+	lp := &loop.Loop{
+		Agent:  loop.NewClaudeAgent(),
+		Git:    gitRunner,
+		Config: cfg,
+		Dir:    dir,
+	}
+	if stopCh != nil {
+		lp.StopAfter = stopCh
+	}
+	if cfg.Notifications.URL != "" {
+		n := notify.New(cfg.Notifications.URL, cfg.Project.Name,
+			cfg.Notifications.OnComplete, cfg.Notifications.OnError, cfg.Notifications.OnStop)
+		lp.NotificationHook = n.Hook
+	}
+
+	if !effectiveRoam {
+		if branch, branchErr := gitRunner.CurrentBranch(); branchErr == nil {
+			if as, resolveErr := spec.Resolve(dir, "", branch); resolveErr == nil {
+				lp.Spec = as.Name
+				lp.SpecDir = as.Dir
+			}
+		}
+	}
+
+	logsDir := filepath.Join(dir, ".ralph", "logs")
+	var sw store.Writer
+	var sr store.Reader
+	cleanup := func() {}
+	if s, storeErr := store.NewJSONL(logsDir); storeErr != nil {
+		fmt.Fprintf(os.Stderr, "ralph: session log unavailable: %v\n", storeErr)
+	} else {
+		if retErr := store.EnforceRetention(logsDir, cfg.TUI.LogRetention); retErr != nil {
+			fmt.Fprintf(os.Stderr, "ralph: log retention: %v\n", retErr)
+		}
+		sw = s
+		sr = s
+		cleanup = func() { _ = s.Close() }
+	}
+
+	return &loopSetup{
+		cfg:           cfg,
+		dir:           dir,
+		ctx:           ctx,
+		cancel:        cancel,
+		gitRunner:     gitRunner,
+		lp:            lp,
+		effectiveRoam: effectiveRoam,
+		sw:            sw,
+		sr:            sr,
+		formatter:     lineFormatter{color: !noColor},
+		cleanup:       cleanup,
+	}, nil
+}
+
+// executeLoop loads config, builds the loop, and runs it in the given mode.
+func executeLoop(mode loop.Mode, maxOverride int, noTUI bool, roam bool, noColor bool) error {
+	setup, err := setupLoop(noTUI, roam, noColor)
+	if err != nil {
+		return err
+	}
+	defer setup.cancel()
+	defer setup.cleanup()
 
 	// Pre-flight: verify the prompt file exists before launching TUI or Regent.
 	// Without this check the TUI initialises, then fails on the first iteration
@@ -40,176 +133,67 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool, roam bool) error {
 	var promptFile string
 	switch mode {
 	case loop.ModePlan:
-		promptFile = cfg.Plan.PromptFile
+		promptFile = setup.cfg.Plan.PromptFile
 	default:
-		promptFile = cfg.Build.PromptFile
+		promptFile = setup.cfg.Build.PromptFile
 	}
-	if _, statErr := os.Stat(filepath.Join(dir, promptFile)); statErr != nil {
+	if _, statErr := os.Stat(filepath.Join(setup.dir, promptFile)); statErr != nil {
 		return fmt.Errorf("prompt file %s: %w", promptFile, statErr)
 	}
 
-	var ctx context.Context
-	var cancel context.CancelFunc
-	var stopCh <-chan struct{}
-	if noTUI {
-		ctx, cancel, stopCh = signalContextGraceful()
-	} else {
-		ctx, cancel = signalContext()
-	}
-	defer cancel()
-
-	gitRunner := git.NewRunner(dir)
-
-	effectiveRoam := roam || cfg.Build.Roam
-
-	lp := &loop.Loop{
-		Agent:  loop.NewClaudeAgent(),
-		Git:    gitRunner,
-		Config: cfg,
-		Dir:    dir,
-		Roam:   effectiveRoam,
-	}
-	if stopCh != nil {
-		lp.StopAfter = stopCh
-	}
-	if cfg.Notifications.URL != "" {
-		n := notify.New(cfg.Notifications.URL, cfg.Project.Name,
-			cfg.Notifications.OnComplete, cfg.Notifications.OnError, cfg.Notifications.OnStop)
-		lp.NotificationHook = n.Hook
-	}
-
-	if !effectiveRoam {
-		if branch, branchErr := gitRunner.CurrentBranch(); branchErr == nil {
-			if as, resolveErr := spec.Resolve(dir, "", branch); resolveErr == nil {
-				lp.Spec = as.Name
-				lp.SpecDir = as.Dir
-			}
-		}
-	}
-
-	logsDir := filepath.Join(dir, ".ralph", "logs")
-	var sw store.Writer
-	var sr store.Reader
-	if s, err := store.NewJSONL(logsDir); err != nil {
-		fmt.Fprintf(os.Stderr, "ralph: session log unavailable: %v\n", err)
-	} else {
-		if retErr := store.EnforceRetention(logsDir, cfg.TUI.LogRetention); retErr != nil {
-			fmt.Fprintf(os.Stderr, "ralph: log retention: %v\n", retErr)
-		}
-		sw = s
-		sr = s
-		defer func() { _ = s.Close() }()
-	}
+	setup.lp.Roam = setup.effectiveRoam
 
 	runFn := func(ctx context.Context) error {
-		return lp.Run(ctx, mode, maxOverride)
+		return setup.lp.Run(ctx, mode, maxOverride)
 	}
 
-	if !cfg.Regent.Enabled {
+	if !setup.cfg.Regent.Enabled {
 		if noTUI {
-			return runWithStateTracking(ctx, lp, dir, gitRunner, string(mode), sw, runFn)
+			return runWithStateTracking(setup.ctx, setup.lp, setup.dir, setup.gitRunner, string(mode), setup.sw, setup.formatter, runFn)
 		}
-		return runWithTUIAndState(ctx, lp, dir, gitRunner, string(mode), cfg.TUI.AccentColor, cfg.Project.Name, sw, sr, runFn)
+		return runWithTUIAndState(setup.ctx, setup.lp, setup.dir, setup.gitRunner, string(mode), setup.cfg.TUI.AccentColor, setup.cfg.Project.Name, setup.sw, setup.sr, runFn)
 	}
 
 	if noTUI {
-		return runWithRegent(ctx, lp, cfg, gitRunner, dir, sw, runFn)
+		return runWithRegent(setup.ctx, setup.lp, setup.cfg, setup.gitRunner, setup.dir, setup.sw, setup.formatter, runFn)
 	}
-	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, sw, sr, runFn)
+	return runWithRegentTUI(setup.ctx, setup.lp, setup.cfg, setup.gitRunner, setup.dir, setup.sw, setup.sr, runFn)
 }
 
 // executeSmartRun runs plan if CHRONICLE.md doesn't exist, then build.
-func executeSmartRun(maxOverride int, noTUI bool, roam bool) error {
-	cfg, err := config.Load("")
+func executeSmartRun(maxOverride int, noTUI bool, roam bool, noColor bool) error {
+	setup, err := setupLoop(noTUI, roam, noColor)
 	if err != nil {
 		return err
 	}
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("config validation: %w", err)
-	}
-
-	dir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("get working directory: %w", err)
-	}
-
-	var ctx context.Context
-	var cancel context.CancelFunc
-	var stopCh <-chan struct{}
-	if noTUI {
-		ctx, cancel, stopCh = signalContextGraceful()
-	} else {
-		ctx, cancel = signalContext()
-	}
-	defer cancel()
-
-	gitRunner := git.NewRunner(dir)
-
-	effectiveRoam := roam || cfg.Build.Roam
-
-	lp := &loop.Loop{
-		Agent:  loop.NewClaudeAgent(),
-		Git:    gitRunner,
-		Config: cfg,
-		Dir:    dir,
-	}
-	if stopCh != nil {
-		lp.StopAfter = stopCh
-	}
-	if cfg.Notifications.URL != "" {
-		n := notify.New(cfg.Notifications.URL, cfg.Project.Name,
-			cfg.Notifications.OnComplete, cfg.Notifications.OnError, cfg.Notifications.OnStop)
-		lp.NotificationHook = n.Hook
-	}
-
-	if !effectiveRoam {
-		if branch, branchErr := gitRunner.CurrentBranch(); branchErr == nil {
-			if as, resolveErr := spec.Resolve(dir, "", branch); resolveErr == nil {
-				lp.Spec = as.Name
-				lp.SpecDir = as.Dir
-			}
-		}
-	}
-
-	logsDir := filepath.Join(dir, ".ralph", "logs")
-	var sw store.Writer
-	var sr store.Reader
-	if s, err := store.NewJSONL(logsDir); err != nil {
-		fmt.Fprintf(os.Stderr, "ralph: session log unavailable: %v\n", err)
-	} else {
-		if retErr := store.EnforceRetention(logsDir, cfg.TUI.LogRetention); retErr != nil {
-			fmt.Fprintf(os.Stderr, "ralph: log retention: %v\n", retErr)
-		}
-		sw = s
-		sr = s
-		defer func() { _ = s.Close() }()
-	}
+	defer setup.cancel()
+	defer setup.cleanup()
 
 	smartRunFn := func(ctx context.Context) error {
 		// Check inside the closure so Regent retries re-evaluate whether
 		// the plan file exists (it may have been created by a prior attempt).
-		planPath := filepath.Join(dir, "CHRONICLE.md")
+		planPath := filepath.Join(setup.dir, "CHRONICLE.md")
 		info, statErr := os.Stat(planPath)
 		if needsPlanPhase(info, statErr) {
-			if planErr := lp.Run(ctx, loop.ModePlan, 0); planErr != nil {
+			if planErr := setup.lp.Run(ctx, loop.ModePlan, 0); planErr != nil {
 				return fmt.Errorf("plan phase: %w", planErr)
 			}
 		}
-		lp.Roam = effectiveRoam
-		return lp.Run(ctx, loop.ModeBuild, maxOverride)
+		setup.lp.Roam = setup.effectiveRoam
+		return setup.lp.Run(ctx, loop.ModeBuild, maxOverride)
 	}
 
-	if !cfg.Regent.Enabled {
+	if !setup.cfg.Regent.Enabled {
 		if noTUI {
-			return runWithStateTracking(ctx, lp, dir, gitRunner, "run", sw, smartRunFn)
+			return runWithStateTracking(setup.ctx, setup.lp, setup.dir, setup.gitRunner, "run", setup.sw, setup.formatter, smartRunFn)
 		}
-		return runWithTUIAndState(ctx, lp, dir, gitRunner, "run", cfg.TUI.AccentColor, cfg.Project.Name, sw, sr, smartRunFn)
+		return runWithTUIAndState(setup.ctx, setup.lp, setup.dir, setup.gitRunner, "run", setup.cfg.TUI.AccentColor, setup.cfg.Project.Name, setup.sw, setup.sr, smartRunFn)
 	}
 
 	if noTUI {
-		return runWithRegent(ctx, lp, cfg, gitRunner, dir, sw, smartRunFn)
+		return runWithRegent(setup.ctx, setup.lp, setup.cfg, setup.gitRunner, setup.dir, setup.sw, setup.formatter, smartRunFn)
 	}
-	return runWithRegentTUI(ctx, lp, cfg, gitRunner, dir, sw, sr, smartRunFn)
+	return runWithRegentTUI(setup.ctx, setup.lp, setup.cfg, setup.gitRunner, setup.dir, setup.sw, setup.sr, smartRunFn)
 }
 
 // showStatus reads .ralph/regent-state.json and prints a formatted summary
@@ -317,16 +301,6 @@ func classifyResult(state regent.State) statusResult {
 // does not exist or is empty.
 func needsPlanPhase(info fs.FileInfo, statErr error) bool {
 	return statErr != nil || info == nil || info.Size() == 0
-}
-
-// formatLogLine renders a log entry as a timestamped line for plain-text output.
-// Regent entries get a shield prefix; all others display the message directly.
-func formatLogLine(entry loop.LogEntry) string {
-	ts := entry.Timestamp.Format("15:04:05")
-	if entry.Kind == loop.LogRegent {
-		return fmt.Sprintf("[%s]  🛡️  Regent: %s", ts, entry.Message)
-	}
-	return fmt.Sprintf("[%s]  %s", ts, entry.Message)
 }
 
 // executeDashboard launches the TUI in idle/dashboard state.

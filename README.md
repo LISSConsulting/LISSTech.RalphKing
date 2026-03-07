@@ -119,6 +119,38 @@ The four-panel TUI is available for all loop commands and via `ralph` (dashboard
 
 Minimum terminal size: 80×24. Set accent color via `[tui] accent_color = "#7D56F4"` in `ralph.toml`.
 
+## CLI Flags
+
+All loop commands (`ralph build`, `ralph loop build/plan/run`) accept the following flags:
+
+| Flag | Description |
+|------|-------------|
+| `--no-tui` | Disable the interactive TUI; print plain log lines to stdout instead. Useful for CI/headless environments. |
+| `--no-color` | Disable ANSI color output. Applies to both TUI-less mode and the API key warning. |
+| `--max N` | Override the maximum number of loop iterations (0 = use config). |
+| `--roam` | Roam freely across the codebase instead of targeting the active spec. |
+
+Examples:
+
+```bash
+ralph build --no-tui                    # headless build, colored log lines
+ralph build --no-tui --no-color         # headless build, plain text (pipe-safe)
+ralph build --max 5                     # stop after 5 iterations
+ralph build --roam                      # improvement sweep, no spec boundary
+ralph loop run --no-tui --max 10        # smart run, headless, max 10 iterations
+```
+
+## ANTHROPIC_API_KEY Warning
+
+If `ANTHROPIC_API_KEY` is set in your environment, ralph prints a prominent warning on startup:
+
+```
+WARNING: ANTHROPIC_API_KEY is set. Claude may use direct API billing
+instead of your subscription. Unset it to avoid unexpected charges.
+```
+
+This is **warning only** — execution is not blocked. Unset the variable to use your Claude Pro/Max subscription instead of direct API billing.
+
 ## Spec Kit Integration
 
 Ralph natively understands `specs/NNN-name/` directories. The spec kit workflow drives Claude through sequential phases: `ralph specify` creates a new spec, `ralph plan` generates a technical plan, `ralph clarify` resolves ambiguities, `ralph tasks` breaks the plan into actionable tasks, and `ralph run` executes the implementation. Use `ralph loop build` for continuous autonomous iterations once the spec is ready.

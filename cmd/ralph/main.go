@@ -9,6 +9,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
 
@@ -31,12 +32,27 @@ func rootCmd() *cobra.Command {
 			"Loop commands: ralph loop plan/build/run\n" +
 			"Run without a subcommand to enter dashboard mode (TUI idle state).",
 		Version: version,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			if os.Getenv("ANTHROPIC_API_KEY") != "" {
+				noColor, _ := cmd.Root().PersistentFlags().GetBool("no-color")
+				msg := "WARNING: ANTHROPIC_API_KEY is set. Claude may use direct API billing\n" +
+					"instead of your subscription. Unset it to avoid unexpected charges."
+				if noColor {
+					fmt.Fprintln(os.Stderr, msg)
+				} else {
+					style := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD93D")).Bold(true)
+					fmt.Fprintln(os.Stderr, style.Render(msg))
+				}
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return executeDashboard()
 		},
 	}
 
 	root.PersistentFlags().Bool("no-tui", false, "disable TUI, use plain text output")
+	root.PersistentFlags().Bool("no-color", false, "disable color output (plain text only)")
 
 	root.AddCommand(
 		// Spec kit workflow commands

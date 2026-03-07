@@ -21,7 +21,12 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Test
-        run: go test -race -cover ./...
+        run: go test -race -coverprofile=coverage.out ./...
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
 
   lint:
     name: Lint
