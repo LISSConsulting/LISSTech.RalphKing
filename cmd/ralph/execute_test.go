@@ -793,6 +793,43 @@ func TestSignalContextGraceful_CancelCleansUp(t *testing.T) {
 	}
 }
 
+// TestSignalContextGraceful_CancelAfterFirstSignal covers the ctx.Done() branch
+// inside the second select of signalContextGraceful: send one SIGINT (closes
+// stopCh), then cancel the context instead of sending a second signal.
+// Skipped on Windows where SIGINT cannot be sent to self reliably.
+func TestSignalContextGraceful_CancelAfterFirstSignal(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("SIGINT cannot be reliably sent to self on Windows")
+	}
+
+	ctx, cancel, stopCh := signalContextGraceful()
+	defer cancel()
+
+	proc, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatalf("FindProcess: %v", err)
+	}
+
+	// First SIGINT: closes stopCh.
+	if err := proc.Signal(syscall.SIGINT); err != nil {
+		t.Fatalf("Signal(SIGINT): %v", err)
+	}
+	select {
+	case <-stopCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("stopCh not closed after SIGINT")
+	}
+
+	// Cancel instead of a second SIGINT: the goroutine's second select should
+	// hit case <-ctx.Done() and exit, leaving the context cancelled.
+	cancel()
+	select {
+	case <-ctx.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("context not cancelled after cancel()")
+	}
+}
+
 // ---- Roam orchestration tests ----
 
 func TestExecuteLoop_Roam_StaysOnCurrentBranch(t *testing.T) {
