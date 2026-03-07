@@ -50,7 +50,7 @@ No remaining work items. All specs 001–006 fully implemented.
 - **v0.1.02** (2026-03-01): Added `TestClaudeAgentRun/empty_executable_defaults_to_claude_binary_name` — `internal/loop` 98.6%→99.3%.
 - **v0.1.00** (2026-03-01): Marked all 45/34 task checkboxes `[x]` in specs 003/004.
 
-**Sweeps with no findings:** v0.1.39, v0.1.38, v0.1.36, v0.1.35, v0.1.34, v0.1.33, v0.1.32, v0.1.31, v0.1.27, v0.1.25, v0.1.24, v0.1.22, v0.1.20, v0.1.19, v0.1.18, v0.1.17, v0.1.16, v0.1.15, v0.1.14, v0.1.13, v0.1.12, v0.1.11, v0.1.10, v0.1.09, v0.1.08, v0.1.07, v0.1.06, v0.1.05, v0.1.04, v0.1.03, v0.1.01, v0.0.98.
+**Sweeps with no findings:** v0.1.42, v0.1.39, v0.1.38, v0.1.36, v0.1.35, v0.1.34, v0.1.33, v0.1.32, v0.1.31, v0.1.27, v0.1.25, v0.1.24, v0.1.22, v0.1.20, v0.1.19, v0.1.18, v0.1.17, v0.1.16, v0.1.15, v0.1.14, v0.1.13, v0.1.12, v0.1.11, v0.1.10, v0.1.09, v0.1.08, v0.1.07, v0.1.06, v0.1.05, v0.1.04, v0.1.03, v0.1.01, v0.0.98.
 
 **v0.1.39 sweep action:** Trimmed CHRONICLE.md from 592 → 169 lines by consolidating 30+ identical "no findings" sweep records into this summary. All Key Learnings preserved intact.
 
