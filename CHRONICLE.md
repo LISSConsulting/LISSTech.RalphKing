@@ -28,6 +28,17 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 ## Remaining Work
 
+### Improvement Sweep (v0.1.36, 2026-03-06)
+
+Full sweep completed — no findings:
+- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.6% (confirmed ceiling). `go vet ./...` clean. Total: 92.1%.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
+- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, and config fields match implementation.
+- **CI health**: Both workflows clean — `golangci-lint-action@v7` with `v2.1.6` pinned.
+- **Spec consistency**: All 4 specs (003–006) fully checked — 0 drift. All task checkboxes `[x]`.
+- **Dead code**: None found.
+- **`golangci-lint`**: 0 issues.
+
 ### Improvement Sweep (v0.1.35, 2026-03-06)
 
 Full sweep completed — no findings:
