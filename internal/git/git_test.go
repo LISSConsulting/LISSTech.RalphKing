@@ -552,4 +552,3 @@ func TestDiffFromRemote(t *testing.T) {
 		}
 	})
 }
-

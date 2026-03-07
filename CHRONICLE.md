@@ -28,6 +28,16 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 ## Remaining Work
 
+### Improvement Sweep (v0.1.30, 2026-03-06)
+
+Full sweep completed — two lint findings fixed:
+- **CI health / lint**: `golangci-lint run ./...` found 2 issues not caught by previous sweeps: (1) `w.Close()` return unchecked in `captureStderr()` (`cmd/ralph/commands_test.go:146`) — fixed with `_ = w.Close()`; (2) trailing double blank line at EOF in `internal/git/git_test.go:555` — fixed with `gofmt -w`. Lint now reports 0 issues.
+- **Test coverage**: All packages confirmed at established floors (same as v0.1.29). `go vet ./...` clean.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
+- **Stale references**: None found. README.md, CLAUDE.md all current.
+- **Spec consistency**: All specs 001–006 fully implemented and task checkboxes up to date.
+- **Dead code**: None found. All unexported helper functions verified in active use.
+
 ### Improvement Sweep (v0.1.29, 2026-03-06)
 
 Full sweep completed — one doc-only finding resolved:

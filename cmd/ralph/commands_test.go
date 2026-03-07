@@ -143,7 +143,7 @@ func captureStderr(fn func()) string {
 	old := os.Stderr
 	os.Stderr = w
 	fn()
-	w.Close()
+	_ = w.Close()
 	os.Stderr = old
 	var buf bytes.Buffer
 	_, _ = io.Copy(&buf, r)
