@@ -498,6 +498,33 @@ func TestErrorPaths(t *testing.T) {
 	})
 }
 
+func TestStashPopNoEntries(t *testing.T) {
+	dir := initTestRepo(t)
+	r := NewRunner(dir)
+	// No stash entries exist — StashPop should return nil (not an error).
+	if err := r.StashPop(); err != nil {
+		t.Fatalf("StashPop() on empty stash returned unexpected error: %v", err)
+	}
+}
+
+func TestHasRemoteBranch(t *testing.T) {
+	t.Run("branch exists on remote", func(t *testing.T) {
+		workDir, _ := initTestRepoWithRemote(t)
+		r := NewRunner(workDir)
+		if !r.HasRemoteBranch("main") {
+			t.Error("expected HasRemoteBranch to return true for main")
+		}
+	})
+
+	t.Run("branch does not exist on remote", func(t *testing.T) {
+		workDir, _ := initTestRepoWithRemote(t)
+		r := NewRunner(workDir)
+		if r.HasRemoteBranch("nonexistent-branch") {
+			t.Error("expected HasRemoteBranch to return false for nonexistent branch")
+		}
+	})
+}
+
 func TestDiffFromRemote(t *testing.T) {
 	t.Run("no diff when in sync", func(t *testing.T) {
 		workDir, _ := initTestRepoWithRemote(t)
