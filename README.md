@@ -397,6 +397,7 @@ path_template = ""            # worktree directory template (uses worktrunk defa
 | `--no-color` | Disable ANSI color output (pipe-safe) |
 | `--max N` | Override max iterations (0 = use config) |
 | `--roam` | Roam freely across the codebase (no spec boundary) |
+| `--focus "<topic>"` | Constrain roam to a specific topic (e.g. `"UI/UX"`, `"tests"`) |
 | `--worktree` / `-w` | Run loop in an isolated git worktree via worktrunk |
 
 ### Examples
@@ -452,7 +453,9 @@ ralph build -w --no-tui --max 5
 │   ├── 📂 003-tui-redesign/
 │   ├── 📂 004-speckit-alignment/
 │   ├── 📂 005-spec-bounded-roam/
-│   └── 📂 006-polish-and-hardening/
+│   ├── 📂 006-polish-and-hardening/
+│   ├── 📂 007-worktree-support/
+│   └── 📂 008-tui-overhaul/
 ├── 📄 ralph.toml                    # Project configuration
 ├── 📄 CLAUDE.md                     # AI coding instructions
 ├── 📄 PLAN.md                       # Plan mode prompt template
