@@ -1,5 +1,5 @@
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> **Specs 001-008 in progress. Spec 008 (TUI overhaul) phases 1-12 complete (T001-T077).** ~90% coverage.
+> **Specs 001-008 ALL COMPLETE. Tagged v0.1.57. tui/components at 100% coverage.**
 
 ## Completed Work
 
@@ -22,9 +22,9 @@
 
 Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
 
-## Improvement Sweep (2026-03-07) — v0.1.57
+## Improvement Sweep (2026-03-07, updated 2026-03-07) — v0.1.57+
 
-- **Test coverage**: panels 97.9%→98.7% (SelectedSpec nil, moveCursor scroll branches); total 89.6%
+- **Test coverage**: panels 97.9%→98.7% (SelectedSpec nil, moveCursor scroll branches); tui/components 98.5%→100% (TabBar.View width>0 branch); total 89.8%
 - **Code hygiene**: no TODO/FIXME/HACK/XXX found
 - **Stale references**: README updated — added specs 007/008 to project structure, added `--focus` to CLI reference
 - **CI health**: all actions current (checkout@v4, setup-go@v5, golangci-lint-action@v7 v2.1.6, upload-artifact@v4)
