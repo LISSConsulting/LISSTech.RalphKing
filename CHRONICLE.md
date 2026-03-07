@@ -24,13 +24,13 @@ Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY ve
 
 ## Improvement Sweep (2026-03-07, updated 2026-03-07) — v0.1.57+
 
-- **Test coverage**: panels 97.9%→98.7% (SelectedSpec nil, moveCursor scroll branches); tui/components 98.5%→100% (TabBar.View width>0 branch); total 89.8%
+- **Test coverage**: panels 97.9%→98.7% (SelectedSpec nil, moveCursor scroll branches); tui/components 98.5%→100% (TabBar.View width>0 branch); total 89.8%→90.3% (2026-03-07 second sweep: tui 95.3%→98.5% via Cmd-closure direct tests; tui/panels 98.7%→98.9% via worktreeDelegate non-item guard; orchestrator correctness test for TestCommand+pass→merge)
 - **Code hygiene**: no TODO/FIXME/HACK/XXX found
 - **Stale references**: README updated — added specs 007/008 to project structure, added `--focus` to CLI reference
 - **CI health**: all actions current (checkout@v4, setup-go@v5, golangci-lint-action@v7 v2.1.6, upload-artifact@v4)
 - **Dead code**: none found
 - **Spec consistency**: spec 008 all ACs implemented; `--focus` flag registered on build/loop-build/loop-run
-- Remaining Windows coverage ceilings: store.NewJSONL OpenFile/Seek errors, wtExecutables non-Windows path, regent.SaveState chmod paths — all require platform injection not feasible on Windows
+- Remaining Windows coverage ceilings: store.NewJSONL OpenFile/Seek errors, wtExecutables non-Windows path, regent.SaveState chmod paths, orchestrator autoMergeIfNeeded RunTests error path (PATH clearing doesn't affect cmd.exe on Windows), orchestrator Launch StateCompleted path (requires real Claude binary), tui renderMarkdown glamour error paths (glamour rarely fails), tui tickCmd inner closure (fires after 1s in bubbletea runtime), tui handleEditSpecRequest ExecProcess callback (fires after editor exits)
 
 ## Key Learnings
 
