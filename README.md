@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/Claude_Code-CLI-A78BFA?style=for-the-badge&logoColor=000&labelColor=000" alt="Claude Code CLI">
   <img src="https://img.shields.io/badge/TUI-Bubbletea-FF6B9D?style=for-the-badge&labelColor=000" alt="Bubbletea TUI">
   <img src="https://img.shields.io/badge/Platforms-macOS_·_Linux_·_Windows-FFE66D?style=for-the-badge&labelColor=000" alt="Cross-platform">
-  <img src="https://img.shields.io/badge/Coverage-92%25-C7F464?style=for-the-badge&labelColor=000" alt="92% Coverage">
+  <img src="https://img.shields.io/badge/Coverage-90%25-C7F464?style=for-the-badge&labelColor=000" alt="90% Coverage">
   <img src="https://img.shields.io/badge/Spec--Driven-Development-FF6B35?style=for-the-badge&labelColor=000" alt="Spec-Driven">
 </p>
 
