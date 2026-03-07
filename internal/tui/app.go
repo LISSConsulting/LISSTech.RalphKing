@@ -308,7 +308,7 @@ func (m Model) nextFocus() FocusTarget {
 			return cycle[(i+1)%len(cycle)]
 		}
 	}
-	return m.focus.Next()
+	return m.focus // should be unreachable: all valid focus values are in the cycle
 }
 
 // prevFocus returns the previous panel in reverse tab order.
@@ -322,7 +322,7 @@ func (m Model) prevFocus() FocusTarget {
 			return cycle[(i+len(cycle)-1)%len(cycle)]
 		}
 	}
-	return m.focus.Prev()
+	return m.focus // should be unreachable: all valid focus values are in the cycle
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
