@@ -30,10 +30,12 @@ func loopPlanCmd() *cobra.Command {
 			max, _ := cmd.Flags().GetInt("max")
 			noTUI, _ := cmd.Root().PersistentFlags().GetBool("no-tui")
 			noColor, _ := cmd.Root().PersistentFlags().GetBool("no-color")
-			return executeLoop(loop.ModePlan, max, noTUI, false, noColor)
+			worktreeFlag, _ := cmd.Flags().GetBool("worktree")
+			return executeLoop(loop.ModePlan, max, noTUI, false, noColor, worktreeFlag)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
+	cmd.Flags().BoolP("worktree", "w", false, "run loop in an isolated git worktree via worktrunk")
 	return cmd
 }
 
@@ -46,11 +48,13 @@ func loopBuildCmd() *cobra.Command {
 			noTUI, _ := cmd.Root().PersistentFlags().GetBool("no-tui")
 			noColor, _ := cmd.Root().PersistentFlags().GetBool("no-color")
 			roam, _ := cmd.Flags().GetBool("roam")
-			return executeLoop(loop.ModeBuild, max, noTUI, roam, noColor)
+			worktreeFlag, _ := cmd.Flags().GetBool("worktree")
+			return executeLoop(loop.ModeBuild, max, noTUI, roam, noColor, worktreeFlag)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
 	cmd.Flags().Bool("roam", false, "roam freely across the codebase instead of targeting the active spec")
+	cmd.Flags().BoolP("worktree", "w", false, "run loop in an isolated git worktree via worktrunk")
 	return cmd
 }
 
@@ -63,11 +67,13 @@ func loopRunCmd() *cobra.Command {
 			noTUI, _ := cmd.Root().PersistentFlags().GetBool("no-tui")
 			noColor, _ := cmd.Root().PersistentFlags().GetBool("no-color")
 			roam, _ := cmd.Flags().GetBool("roam")
-			return executeSmartRun(max, noTUI, roam, noColor)
+			worktreeFlag, _ := cmd.Flags().GetBool("worktree")
+			return executeSmartRun(max, noTUI, roam, noColor, worktreeFlag)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
 	cmd.Flags().Bool("roam", false, "roam freely across the codebase instead of targeting the active spec")
+	cmd.Flags().BoolP("worktree", "w", false, "run loop in an isolated git worktree via worktrunk")
 	return cmd
 }
 
@@ -81,11 +87,13 @@ func buildCmd() *cobra.Command {
 			noTUI, _ := cmd.Root().PersistentFlags().GetBool("no-tui")
 			noColor, _ := cmd.Root().PersistentFlags().GetBool("no-color")
 			roam, _ := cmd.Flags().GetBool("roam")
-			return executeLoop(loop.ModeBuild, max, noTUI, roam, noColor)
+			worktreeFlag, _ := cmd.Flags().GetBool("worktree")
+			return executeLoop(loop.ModeBuild, max, noTUI, roam, noColor, worktreeFlag)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
 	cmd.Flags().Bool("roam", false, "roam freely across the codebase instead of targeting the active spec")
+	cmd.Flags().BoolP("worktree", "w", false, "run loop in an isolated git worktree via worktrunk")
 	return cmd
 }
 
