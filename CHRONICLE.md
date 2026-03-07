@@ -28,6 +28,17 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 ## Remaining Work
 
+### Improvement Sweep (v0.1.37, 2026-03-06)
+
+Full sweep completed — one spec-consistency finding documented (intentional drift):
+- **Spec consistency**: Spec 005 FR-005 says `--roam` MUST create a `sweep/YYYY-MM-DD` branch from the current branch before starting the loop. The implementation intentionally diverges: refactor commit `b872e6b` removed `createSweepBranch()` and `git.CreateAndCheckout()` — roam mode now operates on the current branch without switching. This is a deliberate design simplification (user stays in control of branching). Previous sweeps incorrectly reported "0 drift" by checking task checkboxes only, not FR criteria. Documented here for human review. **No code change needed** — this is intentional product behaviour.
+- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.6% (confirmed ceiling). Additional ceilings confirmed: `git.Pull`/`git.Push`/`git.Stash` gaps are old-git fallbacks (modern git exits 0 on no-changes stash, push-u is never triggered separately). `go vet ./...` clean. Total: 92.1%.
+- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
+- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, and config fields match implementation.
+- **CI health**: Both workflows clean — `golangci-lint-action@v7` with `v2.1.6` pinned.
+- **Dead code**: None found.
+- **`golangci-lint`**: 0 issues.
+
 ### Improvement Sweep (v0.1.36, 2026-03-06)
 
 Full sweep completed — no findings:
