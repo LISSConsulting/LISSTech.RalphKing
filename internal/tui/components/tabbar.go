@@ -75,5 +75,8 @@ func (t TabBar) View() string {
 	}
 
 	line := strings.Join(parts, "  │  ")
+	if t.width > 0 {
+		return lipgloss.NewStyle().MaxWidth(t.width).Render(line)
+	}
 	return line
 }

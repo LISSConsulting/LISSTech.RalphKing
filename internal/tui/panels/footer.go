@@ -43,8 +43,19 @@ func RenderFooter(props FooterProps, width int) string {
 		right = panelHints + scrollHints + "  ?:help  q:quit  1-4:panel  s:stop"
 	}
 
-	gap := width - len(left) - len(right)
+	leftW := len([]rune(left))
+	rightW := len([]rune(right))
+	gap := width - leftW - rightW
 	if gap < 2 {
+		// Truncate the right side (hints) to fit, preserving left and gap.
+		maxRight := width - leftW - 2
+		if maxRight < 0 {
+			maxRight = 0
+		}
+		runes := []rune(right)
+		if len(runes) > maxRight {
+			right = string(runes[:maxRight])
+		}
 		gap = 2
 	}
 

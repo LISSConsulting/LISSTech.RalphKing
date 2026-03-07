@@ -170,3 +170,72 @@ func TestCalculate_SidebarClamp(t *testing.T) {
 		}
 	})
 }
+
+func TestTitleContentDims(t *testing.T) {
+	tests := []struct {
+		name  string
+		rect  Rect
+		wantW int
+		wantH int
+	}{
+		{
+			// innerDims: 28x8; titleContentDims: 28x7
+			name:  "normal rect subtracts 1 row for title",
+			rect:  Rect{Width: 30, Height: 10},
+			wantW: 28,
+			wantH: 7,
+		},
+		{
+			// innerDims: 8x2; titleContentDims: 8x1 (clamped)
+			name:  "small height clamps to 1",
+			rect:  Rect{Width: 10, Height: 4},
+			wantW: 8,
+			wantH: 1,
+		},
+		{
+			// innerDims: 1x1; titleContentDims: 1x1 (clamped, not 0)
+			name:  "minimum dims stay at 1",
+			rect:  Rect{Width: 2, Height: 3},
+			wantW: 1,
+			wantH: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w, h := titleContentDims(tt.rect)
+			if w != tt.wantW {
+				t.Errorf("titleContentDims(%+v) width = %d, want %d", tt.rect, w, tt.wantW)
+			}
+			if h != tt.wantH {
+				t.Errorf("titleContentDims(%+v) height = %d, want %d", tt.rect, h, tt.wantH)
+			}
+		})
+	}
+}
+
+// TestCalculate_LayoutSumInvariant verifies that sidebar and right-column
+// panel heights always sum to bodyH for the three canonical terminal sizes.
+func TestCalculate_LayoutSumInvariant(t *testing.T) {
+	for _, size := range [][2]int{{80, 24}, {120, 40}, {200, 60}} {
+		w, h := size[0], size[1]
+		l := Calculate(w, h)
+		if l.TooSmall {
+			t.Errorf("Calculate(%d,%d) unexpectedly TooSmall", w, h)
+			continue
+		}
+		bodyH := h - 2
+		if got := l.Specs.Height + l.Iterations.Height; got != bodyH {
+			t.Errorf("Calculate(%d,%d): sidebar heights %d+%d=%d, want %d",
+				w, h, l.Specs.Height, l.Iterations.Height, got, bodyH)
+		}
+		if got := l.Main.Height + l.Secondary.Height; got != bodyH {
+			t.Errorf("Calculate(%d,%d): right heights %d+%d=%d, want %d",
+				w, h, l.Main.Height, l.Secondary.Height, got, bodyH)
+		}
+		if got := l.Specs.Width + l.Main.Width; got != w {
+			t.Errorf("Calculate(%d,%d): total width %d+%d=%d, want %d",
+				w, h, l.Specs.Width, l.Main.Width, got, w)
+		}
+	}
+}

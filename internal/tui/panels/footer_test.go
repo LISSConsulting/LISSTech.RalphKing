@@ -67,8 +67,46 @@ func TestRenderFooter_EmptyCommitFallback(t *testing.T) {
 
 func TestRenderFooter_NarrowWidth(t *testing.T) {
 	props := FooterProps{Focus: "main", LastCommit: "abc"}
-	// Should not panic even at very narrow widths
+	// Should not panic even at very narrow widths.
 	_ = RenderFooter(props, 30)
+	_ = RenderFooter(props, 10)
+	_ = RenderFooter(props, 1)
+}
+
+func TestRenderFooter_RightTruncation(t *testing.T) {
+	// At narrow width the right side (hints) must be truncated so the footer
+	// does not overflow. We measure with lipgloss.Width which strips ANSI.
+	props := FooterProps{Focus: "main", LastCommit: "abc1234"}
+	for _, width := range []int{40, 60, 80} {
+		rendered := RenderFooter(props, width)
+		// Strip ANSI and measure visible width.
+		visible := stripANSI(rendered)
+		// The visible content must be ≤ width (gap=2 minimum is always added,
+		// so the rendered string may be width chars wide due to lipgloss padding).
+		if len([]rune(visible)) > width {
+			t.Errorf("width=%d: RenderFooter produced %d visible chars:\n%q",
+				width, len([]rune(visible)), visible)
+		}
+	}
+}
+
+// stripANSI removes ANSI escape sequences for test measurement.
+func stripANSI(s string) string {
+	var out []byte
+	inEsc := false
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\x1b' {
+			inEsc = true
+		}
+		if inEsc {
+			if (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z') {
+				inEsc = false
+			}
+			continue
+		}
+		out = append(out, s[i])
+	}
+	return string(out)
 }
 
 func TestRenderFooter_ScrollInfo(t *testing.T) {

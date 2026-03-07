@@ -104,5 +104,12 @@ func RenderHeader(props HeaderProps, width int, accentStyle lipgloss.Style) stri
 	}
 
 	content := strings.Join(parts, "  │  ")
+	// Truncate to fit within width before lipgloss applies padding/styling.
+	if width > 0 {
+		runes := []rune(content)
+		if len(runes) > width {
+			content = string(runes[:width-1]) + "…"
+		}
+	}
 	return accentStyle.Width(width).Render(content)
 }
