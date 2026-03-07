@@ -34,7 +34,7 @@ No remaining work items. All specs 001–006 fully implemented.
 
 ### Improvement Sweep History
 
-**Established floors (as of v0.1.41, 2026-03-06):** `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 99.0% (Windows; ~99.5%+ Linux CI), `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 92.0% (`IterationLog` 95.2% — ReadAt error covered; `EnforceRetention` ReadDir non-IsNotExist branch is Windows ceiling since `os.ReadDir` on a regular file returns IsNotExist on Windows), `cmd/ralph` 76.6% (TTY ceiling). Total: 92.1% (Windows). `go vet ./...` clean. `golangci-lint` 0 issues.
+**Established floors (as of v0.1.44, 2026-03-07):** `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 99.0% (Windows; ~99.5%+ Linux CI), `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 92.0% (`IterationLog` 95.2% — ReadAt error covered; `EnforceRetention` ReadDir non-IsNotExist branch is Windows ceiling since `os.ReadDir` on a regular file returns IsNotExist on Windows), `cmd/ralph` 76.7% (TTY ceiling). `specifyCmd` 95% (remaining 5% = `os.Getwd()` error, impossible). Total: 92.2% (Windows). `go vet ./...` clean. `golangci-lint` 0 issues.
 
 **Sweeps with findings (most recent first):**
 
@@ -49,6 +49,8 @@ No remaining work items. All specs 001–006 fully implemented.
 - **v0.1.26** (2026-03-02): Added `[notifications]` section to README.md config example (was missing despite being fully implemented).
 - **v0.1.02** (2026-03-01): Added `TestClaudeAgentRun/empty_executable_defaults_to_claude_binary_name` — `internal/loop` 98.6%→99.3%.
 - **v0.1.00** (2026-03-01): Marked all 45/34 task checkboxes `[x]` in specs 003/004.
+
+- **v0.1.44** (2026-03-07): +1 test in `cmd/ralph` — `TestSpecifyCmd_MkdirAllError` (create file named `specs` in temp dir so `os.MkdirAll("specs/004-my-feature")` fails; covers `return fmt.Errorf("create spec directory: %w", mkErr)` branch in `specifyCmd`). `specifyCmd` 90%→95%. `cmd/ralph` 76.6%→76.7%.
 
 **Sweeps with no findings:** v0.1.43, v0.1.42, v0.1.39, v0.1.38, v0.1.36, v0.1.35, v0.1.34, v0.1.33, v0.1.32, v0.1.31, v0.1.27, v0.1.25, v0.1.24, v0.1.22, v0.1.20, v0.1.19, v0.1.18, v0.1.17, v0.1.16, v0.1.15, v0.1.14, v0.1.13, v0.1.12, v0.1.11, v0.1.10, v0.1.09, v0.1.08, v0.1.07, v0.1.06, v0.1.05, v0.1.04, v0.1.03, v0.1.01, v0.0.98.
 
