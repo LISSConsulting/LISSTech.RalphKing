@@ -32,17 +32,17 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 ### Queue
 
-**Spec 007 in progress — Phases 4-8 remaining:**
+**Spec 007 in progress — Phases 5-8 remaining:**
 
 - [x] T029-T037: Phase 4 (US2) — WorktreesPanel TUI component + Orchestrator wiring into dashboard; `W` keybind to launch from Specs panel; `x`/`M`/`D` keybinds for stop/merge/clean in WorktreesPanel; Main panel shows selected worktree log
-- [ ] T038-T041: Phase 5 (US3) — Auto-merge trigger in Orchestrator with test-gating; notification on merge/failure (T038-T039 largely done via existing auto-merge in orchestrator.go; need T040-T041 tests and notification)
-- [ ] T042-T045: Phase 6 (US4) — Enhanced WorktreesPanel rendering with status icons; real-time status updates via TaggedLogEntry; WorktreePaths() log aggregation
+- [x] T038-T041: Phase 5 (US3) — Auto-merge test-gating via `regent.RunTests`; `NotificationHook` field on Orchestrator; `emitToMerged()` sends to MergedEvents + hook; fan-in `onEntry` callback updates agent `Iterations`/`TotalCost` under lock; 8 new tests
+- [ ] T042-T045: Phase 6 (US4) — Enhanced WorktreesPanel rendering with status icons (T042 done); real-time status updates via TaggedLogEntry (T043 done via fan-in callback); WorktreePaths() log aggregation (T044 done); tests (T045 done)
 - [ ] T046-T049: Phase 7 (US5) — Multi-worktree Regent; per-agent hang/crash detection; per-worktree rollback
 - [ ] T050-T055: Phase 8 — README worktree section; TUI keyboard reference; quickstart validation; lint + tests
 
 ### Improvement Sweep History
 
-**Established floors (as of v0.1.44, 2026-03-07):** `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 99.0% (Windows; ~99.5%+ Linux CI), `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 92.0% (`IterationLog` 95.2% — ReadAt error covered; `EnforceRetention` ReadDir non-IsNotExist branch is Windows ceiling since `os.ReadDir` on a regular file returns IsNotExist on Windows), `cmd/ralph` 76.7% (TTY ceiling). `specifyCmd` 95% (remaining 5% = `os.Getwd()` error, impossible). Total: 92.2% (Windows). `go vet ./...` clean. `golangci-lint` 0 issues.
+**Established floors (as of 007 Phase 5, 2026-03-07):** `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 99.6% (worktrees.go Description/FilterValue covered; remaining 0.4% = worktreeDelegate.Render non-worktreeItem branch — impossible from typed list), `internal/tui` 97.6% (tickCmd tea.Tick callback unreachable; waitForTaggedEvent !ok branch requires closed MergedEvents which never happens), `internal/loop` 99.4%, `internal/spec` 99.0% (Windows; ~99.5%+ Linux CI), `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 92.0%, `internal/orchestrator` ~85% (autoMergeIfNeeded RunTests shell-not-found path impossible without OS manipulation), `cmd/ralph` 76.7% (TTY ceiling). Total: 86.5% (Windows; worktree/cmd packages have CLI-path gaps). `go vet ./...` clean.
 
 **Sweeps with findings (most recent first):**
 
