@@ -1,165 +1,419 @@
-# 👑 RalphKing
+<p align="center">
+  <img src="https://img.shields.io/badge/LISS_TECH-RalphKing-7D56F4?style=for-the-badge&labelColor=000" alt="LISSTech RalphKing">
+</p>
 
-**Spec-driven AI coding loop CLI — with a supervisor that keeps the King honest.**
+<h1 align="center">👑 RalphKing</h1>
+<p align="center">
+  <strong>Spec-driven AI coding loop CLI — with a supervisor that keeps the King honest</strong>
+</p>
 
-Ralph runs Claude Code against your specs in a continuous loop: plan → build → commit → push → repeat. The Regent watches Ralph, detects failures, rolls back bad commits, and resurrects him if he crashes.
+<p align="center">
+  <img src="https://img.shields.io/badge/Go-1.24-4ECDC4?style=for-the-badge&logo=go&logoColor=000&labelColor=000" alt="Go 1.24">
+  <img src="https://img.shields.io/badge/Claude_Code-CLI-A78BFA?style=for-the-badge&logoColor=000&labelColor=000" alt="Claude Code CLI">
+  <img src="https://img.shields.io/badge/TUI-Bubbletea-FF6B9D?style=for-the-badge&labelColor=000" alt="Bubbletea TUI">
+  <img src="https://img.shields.io/badge/Platforms-macOS_·_Linux_·_Windows-FFE66D?style=for-the-badge&labelColor=000" alt="Cross-platform">
+  <img src="https://img.shields.io/badge/Coverage-92%25-C7F464?style=for-the-badge&labelColor=000" alt="92% Coverage">
+  <img src="https://img.shields.io/badge/Spec--Driven-Development-FF6B35?style=for-the-badge&labelColor=000" alt="Spec-Driven">
+</p>
 
-```
-ralph               # Dashboard mode — interactive TUI with loop control
+<p align="center">
+  <a href="#-quick-start"><b>Quick Start</b></a> · <a href="#-architecture"><b>Architecture</b></a> · <a href="#-spec-kit-workflow"><b>Spec Kit</b></a> · <a href="#-tui-dashboard"><b>TUI Dashboard</b></a> · <a href="#-the-regent"><b>Regent</b></a> · <a href="#-configuration"><b>Config</b></a> · <a href="#-cli-reference"><b>CLI Reference</b></a>
+</p>
 
-# Spec kit workflow (drives Claude through spec kit skills)
-ralph specify       # Create a new spec from a description
-ralph plan          # Generate implementation plan for active spec
-ralph clarify       # Resolve ambiguities in active spec
-ralph tasks         # Break plan into actionable task list
-ralph run           # Execute spec kit run against active spec
+---
 
-# Autonomous loop (continuous Claude iterations)
-ralph build         # Run Claude in build mode (alias for ralph loop build)
-ralph build --roam  # Roam freely across the codebase (no spec boundary)
-ralph loop plan     # Run Claude in plan mode
-ralph loop build    # Run Claude in build mode
-ralph loop run      # Smart mode: plan if needed, then build
+## 📑 Table of Contents
 
-# Project management
-ralph status        # Show last run, cost, iteration, branch
-ralph init          # Scaffold ralph project (config, prompts, specs dir)
-ralph spec list     # List specs and their status
-```
+- [⚡ Quick Start](#-quick-start)
+- [🏗️ Architecture](#️-architecture)
+- [📜 Spec Kit Workflow](#-spec-kit-workflow)
+- [🖥️ TUI Dashboard](#️-tui-dashboard)
+- [🏰 The Regent](#-the-regent)
+- [⚙️ Configuration](#️-configuration)
+- [🎯 CLI Reference](#-cli-reference)
+- [📁 Project Structure](#-project-structure)
+- [🔒 Safety & Guardrails](#-safety--guardrails)
+- [🤝 Supported Agents](#-supported-agents)
 
-## Architecture
+---
 
-```
-┌─────────────┐     watches      ┌─────────────┐     runs      ┌─────────────┐
-│   Regent    │ ───────────────> │    Ralph    │ ────────────> │   Claude    │
-│ (supervisor)│ <─── reports ─── │   (loop)    │ <── output ── │  (worker)   │
-└─────────────┘                  └─────────────┘               └─────────────┘
-       │
-       ├── detects crash → restarts Ralph
-       ├── detects test regression → rolls back commit
-       └── detects hang → kills and retries with backoff
-```
+## ⚡ Quick Start
 
-## Installation
-
-```bash
+```sh
+# 📥 Install
 go install github.com/LISSConsulting/LISSTech.RalphKing/cmd/ralph@latest
+
+# 🎬 Initialize a new project
+ralph init
+
+# 📋 Create a spec from a description
+ralph specify "Add user authentication with JWT tokens"
+
+# 📐 Generate implementation plan
+ralph plan
+
+# 🔨 Build it — autonomous loop with TUI dashboard
+ralph build
+
+# 👑 Or just launch the dashboard and control everything from there
+ralph
 ```
 
-Or download a pre-built binary from [Releases](https://github.com/LISSConsulting/LISSTech.RalphKing/releases).
+That's it. Ralph reads your spec, drives Claude through iterations, commits results, and the Regent supervises the whole thing.
 
-## Configuration
+---
 
-Place `ralph.toml` in your project root:
+## 🏗️ Architecture
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'monospace', 'fontSize': '13px', 'primaryColor': '#7D56F4', 'primaryBorderColor': '#000', 'primaryTextColor': '#000', 'lineColor': '#000'}}}%%
+graph LR
+    A["🏰 Regent<br/>supervisor"] --> B["👑 Ralph<br/>loop engine"]
+    B --> C["🤖 Claude<br/>worker"]
+    C --> D["📝 Code Changes<br/>commit · push"]
+
+    classDef lavender fill:#A78BFA,stroke:#000,stroke-width:3px,color:#000,font-weight:bold
+    classDef yellow fill:#FFE66D,stroke:#000,stroke-width:3px,color:#000,font-weight:bold
+    classDef mint fill:#4ECDC4,stroke:#000,stroke-width:3px,color:#000,font-weight:bold
+    classDef pink fill:#FF6B9D,stroke:#000,stroke-width:3px,color:#000,font-weight:bold
+
+    class A lavender
+    class B yellow
+    class C mint
+    class D pink
+```
+
+| Layer | Role | Details |
+|-------|------|---------|
+| 🏰 **Regent** | Supervisor | Watches Ralph for crashes, hangs, and test regressions. Rolls back bad commits, restarts with backoff. |
+| 👑 **Ralph** | Loop engine | Reads specs, builds prompts, invokes Claude, parses streaming JSON output, commits and pushes results. |
+| 🤖 **Claude** | Worker | Claude Code CLI — executes the actual coding work within spec boundaries. |
+
+> [!TIP]
+> Ralph targets your **active spec** by default. Use `--roam` to let Claude sweep freely across the entire codebase for polish and improvement work.
+
+---
+
+## 📜 Spec Kit Workflow
+
+Specs live in `specs/NNN-name/` directories. Ralph drives Claude through a sequential, spec-driven development lifecycle:
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'monospace', 'fontSize': '13px', 'primaryBorderColor': '#000', 'primaryTextColor': '#000', 'lineColor': '#000'}}}%%
+graph LR
+    A["📋 specify<br/>spec.md"] --> B["❓ clarify<br/>resolve gaps"]
+    B --> C["📐 plan<br/>plan.md"]
+    C --> D["✅ tasks<br/>tasks.md"]
+    D --> E["🔨 build<br/>autonomous loop"]
+
+    classDef yellow fill:#FFE66D,stroke:#000,stroke-width:3px,color:#000,font-weight:bold
+    classDef pink fill:#FF6B9D,stroke:#000,stroke-width:3px,color:#000,font-weight:bold
+    classDef mint fill:#4ECDC4,stroke:#000,stroke-width:3px,color:#000,font-weight:bold
+    classDef lavender fill:#A78BFA,stroke:#000,stroke-width:3px,color:#000,font-weight:bold
+    classDef lime fill:#C7F464,stroke:#000,stroke-width:3px,color:#000,font-weight:bold
+
+    class A yellow
+    class B pink
+    class C lavender
+    class D mint
+    class E lime
+```
+
+| Command | Artifact | Description |
+|---------|----------|-------------|
+| `ralph specify` | `spec.md` | Create a feature spec from a natural language description |
+| `ralph clarify` | updates `spec.md` | Resolve ambiguities through targeted clarification questions |
+| `ralph plan` | `plan.md` | Generate architecture, tech stack, and implementation phases |
+| `ralph tasks` | `tasks.md` | Break the plan into ordered, dependency-aware tasks |
+| `ralph run` | — | Execute the spec kit run skill against the active spec |
+| `ralph build` | code | Autonomous loop — Claude implements tasks, commits, pushes |
+
+```sh
+# 📋 List all specs and their status
+ralph spec list
+
+#   📋 003-tui-redesign         ✅ Tasked
+#   📐 004-speckit-alignment    ✅ Tasked
+#   📋 005-spec-bounded-roam    ✅ Tasked
+#   📋 006-polish-and-hardening ✅ Tasked
+```
+
+> [!NOTE]
+> Ralph auto-detects the active spec from your branch name. Branch `005-spec-bounded-roam` maps to `specs/005-spec-bounded-roam/`. Override with the `--spec` flag.
+
+---
+
+## 🖥️ TUI Dashboard
+
+Launch with `ralph` (no arguments) for the full four-panel interactive dashboard:
+
+```
+┌─ Specs ──────────┐┌─ Main ─────────────────────────────────────────┐
+│ 📋 003-tui-red…  ││ [Live Log] [Summary]                          │
+│ 📐 004-speckit…  ││                                                │
+│ ✅ 005-spec-bo…  ││ ▶ Iteration 3 — building spec 005              │
+│ ✅ 006-polish-…  ││   Reading spec.md... done                      │
+│                   ││   Running Claude... streaming                  │
+│                   ││   ██████████░░░░░░ 64%                        │
+├─ Iterations ─────┤├─ Secondary ───────────────────────────────────┤
+│ #1  $0.12  2m    ││ [Regent] [Git] [Tests] [Cost]                 │
+│ #2  $0.08  1m    ││                                                │
+│ #3  running…     ││ 🏰 Regent: watching · 0 rollbacks              │
+│                   ││ 💰 Session: $0.20 · 3 iterations              │
+└───────────────────┘└───────────────────────────────────────────────┘
+```
+
+### ⌨️ Keyboard Reference
+
+| Key | Action |
+|-----|--------|
+| `tab` / `shift+tab` | Cycle panel focus |
+| `1` `2` `3` `4` | Jump to Specs / Iterations / Main / Secondary |
+| `b` | Start build loop |
+| `p` | Start plan loop |
+| `R` | Smart run (plan if needed, then build) |
+| `x` | Cancel running loop immediately |
+| `s` | Graceful stop after current iteration |
+| `?` | Toggle help overlay |
+| `q` / `ctrl+c` | Quit |
+
+**Panel shortcuts:**
+
+| Panel | Keys |
+|-------|------|
+| 📋 Specs | `j`/`k` navigate · `enter` view · `e` edit in `$EDITOR` · `n` create new |
+| 📊 Iterations | `j`/`k` navigate · `enter` view log · `]` switch to summary |
+| 📝 Main | `[`/`]` switch tabs · `f` toggle follow · `ctrl+u`/`ctrl+d` page |
+| 📡 Secondary | `[`/`]` switch tabs (Regent / Git / Tests / Cost) · `j`/`k` scroll |
+
+> [!TIP]
+> Minimum terminal size: **80×24**. Set your accent color via `[tui] accent_color` in `ralph.toml`.
+
+---
+
+## 🏰 The Regent
+
+The Regent is Ralph's supervisor — it watches the loop and intervenes when things go wrong:
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'monospace', 'fontSize': '13px', 'primaryBorderColor': '#000', 'primaryTextColor': '#000', 'lineColor': '#000'}}}%%
+graph TD
+    A["👑 Ralph iterating"] --> B{"🧪 Tests pass?"}
+    B -- Yes --> C["✅ Keep commit<br/>continue loop"]
+    B -- No --> D["⏪ Rollback commit<br/>retry iteration"]
+    A --> E{"💀 Crash?"}
+    E -- Yes --> F["♻️ Restart Ralph<br/>exponential backoff"]
+    A --> G{"⏱️ Hung?"}
+    G -- Yes --> H["🔪 Kill process<br/>restart with backoff"]
+
+    classDef yellow fill:#FFE66D,stroke:#000,stroke-width:3px,color:#000,font-weight:bold
+    classDef mint fill:#4ECDC4,stroke:#000,stroke-width:3px,color:#000,font-weight:bold
+    classDef pink fill:#FF6B9D,stroke:#000,stroke-width:3px,color:#000,font-weight:bold
+    classDef orange fill:#FF6B35,stroke:#000,stroke-width:3px,color:#fff,font-weight:bold
+    classDef decision fill:#FF8A80,stroke:#000,stroke-width:3px,color:#000,font-weight:bold
+    classDef lavender fill:#A78BFA,stroke:#000,stroke-width:3px,color:#000,font-weight:bold
+
+    class A yellow
+    class B,E,G decision
+    class C mint
+    class D pink
+    class F orange
+    class H lavender
+```
+
+| Feature | Description |
+|---------|-------------|
+| 🧪 **Test-gated commits** | Runs your test command after each iteration; rolls back on failure |
+| 💀 **Crash recovery** | Detects process exit, restarts Ralph with exponential backoff |
+| ⏱️ **Hang detection** | Kills Ralph if no output for `hang_timeout_seconds` (default: 5 min) |
+| 🔄 **Retry with backoff** | Up to `max_retries` restarts with configurable backoff |
+| 📡 **Observable** | All Regent actions stream to the TUI Secondary panel |
+
+---
+
+## ⚙️ Configuration
+
+Place `ralph.toml` in your project root. All fields are optional with sensible defaults:
 
 ```toml
 [project]
 name = "MyProject"
 
 [claude]
-model = "sonnet"
-max_turns = 0  # 0 = unlimited agentic turns per iteration
+model = "sonnet"              # Claude model to use
+max_turns = 0                 # 0 = unlimited agentic turns per iteration
 danger_skip_permissions = true
 
 [plan]
-prompt_file = "PLAN.md"
+prompt_file = "PLAN.md"       # prompt template for plan iterations
 max_iterations = 3
 
 [build]
-prompt_file = "BUILD.md"
-max_iterations = 0  # 0 = unlimited
-roam = false        # roam freely across the codebase (--roam flag overrides)
+prompt_file = "BUILD.md"      # prompt template for build iterations
+max_iterations = 0            # 0 = unlimited
+roam = false                  # --roam flag overrides this
 
 [git]
-auto_pull_rebase = true
-auto_push = true
+auto_pull_rebase = true       # pull --rebase before each iteration
+auto_push = true              # push after each commit
 
 [regent]
 enabled = true
-rollback_on_test_failure = false  # set true once test command configured
-test_command = "go test ./..."    # command run by Regent after each iteration
+rollback_on_test_failure = false
+test_command = "go test ./..."
 max_retries = 3
 retry_backoff_seconds = 30
-hang_timeout_seconds = 300        # kill Ralph if no output for 5 min
+hang_timeout_seconds = 300    # kill if no output for 5 min
 
 [tui]
-accent_color = "#7D56F4"  # hex color for header/accent elements
-log_retention = 20        # number of session logs to keep; 0 = unlimited
+accent_color = "#7D56F4"      # hex color for header/accent elements
+log_retention = 20            # session logs to keep; 0 = unlimited
 
 [notifications]
-url = ""           # ntfy.sh topic URL or any HTTP webhook (empty = disabled)
-on_complete = true # notify on each iteration complete
-on_error = true    # notify on loop error
-on_stop = true     # notify when loop finishes or is stopped
+url = ""                      # ntfy.sh topic URL or HTTP webhook
+on_complete = true            # notify on iteration complete
+on_error = true               # notify on loop error
+on_stop = true                # notify when loop finishes
 ```
 
-## TUI Keyboard Reference
+### 🔑 Environment Variables
 
-The four-panel TUI is available for all loop commands and via `ralph` (dashboard mode).
+| Variable | Required | Description |
+|----------|:--------:|-------------|
+| `ANTHROPIC_API_KEY` | ⬜ | Direct API key — Ralph warns if set (prefer Claude Pro/Max subscription) |
+| `EDITOR` | ⬜ | Editor for `e` keybind in Specs panel (defaults to system editor) |
 
-| Key | Action |
-|-----|--------|
-| `tab` / `shift+tab` | Cycle panel focus |
-| `1` `2` `3` `4` | Jump to Specs / Iterations / Main / Secondary panel |
-| `b` | Start build loop |
-| `p` | Start plan loop |
-| `R` | Smart run (plan if needed, then build) |
-| `x` | Cancel running loop immediately (dashboard mode) |
-| `s` | Graceful stop after current iteration |
-| `?` | Toggle help overlay |
-| `q` / `ctrl+c` | Quit |
-
-**Specs panel (`1`):** `j`/`k` navigate · `enter` view · `e` open in `$EDITOR` · `n` create new
-
-**Iterations panel (`2`):** `j`/`k` navigate · `enter` view log (loads in Main panel; use `]` there for summary)
-
-**Main panel (`3`):** `[`/`]` switch tabs · `f` toggle follow · `j`/`k` scroll · `ctrl+u`/`ctrl+d` page
-
-**Secondary panel (`4`):** `[`/`]` switch tabs (Regent / Git / Tests / Cost) · `j`/`k` scroll
-
-Minimum terminal size: 80×24. Set accent color via `[tui] accent_color = "#7D56F4"` in `ralph.toml`.
-
-## CLI Flags
-
-All loop commands (`ralph build`, `ralph loop build/plan/run`) accept the following flags:
-
-| Flag | Description |
-|------|-------------|
-| `--no-tui` | Disable the interactive TUI; print plain log lines to stdout instead. Useful for CI/headless environments. |
-| `--no-color` | Disable ANSI color output. Applies to both TUI-less mode and the API key warning. |
-| `--max N` | Override the maximum number of loop iterations (0 = use config). |
-| `--roam` | Roam freely across the codebase instead of targeting the active spec. |
-
-Examples:
-
-```bash
-ralph build --no-tui                    # headless build, colored log lines
-ralph build --no-tui --no-color         # headless build, plain text (pipe-safe)
-ralph build --max 5                     # stop after 5 iterations
-ralph build --roam                      # improvement sweep, no spec boundary
-ralph loop run --no-tui --max 10        # smart run, headless, max 10 iterations
-```
-
-## ANTHROPIC_API_KEY Warning
-
-If `ANTHROPIC_API_KEY` is set in your environment, ralph prints a prominent warning on startup:
-
-```
-WARNING: ANTHROPIC_API_KEY is set. Claude may use direct API billing
-instead of your subscription. Unset it to avoid unexpected charges.
-```
-
-This is **warning only** — execution is not blocked. Unset the variable to use your Claude Pro/Max subscription instead of direct API billing.
-
-## Spec Kit Integration
-
-Ralph natively understands `specs/NNN-name/` directories. The spec kit workflow drives Claude through sequential phases: `ralph specify` creates a new spec, `ralph plan` generates a technical plan, `ralph clarify` resolves ambiguities, `ralph tasks` breaks the plan into actionable tasks, and `ralph run` executes the implementation. Use `ralph loop build` for continuous autonomous iterations once the spec is ready.
-
-## Supported Agents
-
-- `claude` — Claude Code CLI (default)
-- More coming: OpenAI Codex, Gemini, custom
+> [!WARNING]
+> If `ANTHROPIC_API_KEY` is set, Ralph prints a prominent warning on startup. Claude may use direct API billing instead of your subscription. Unset it to avoid unexpected charges.
 
 ---
 
-*Ralph is King. The Regent keeps him honest.*
+## 🎯 CLI Reference
+
+### Top-level Commands
+
+| Command | Description |
+|---------|-------------|
+| `ralph` | 👑 Launch the interactive TUI dashboard |
+| `ralph init` | 🎬 Scaffold a new ralph project (config, prompts, specs dir) |
+| `ralph status` | 📊 Show last run, cost, iteration count, branch |
+| `ralph spec list` | 📋 List all specs and their status |
+
+### Spec Kit Commands
+
+| Command | Description |
+|---------|-------------|
+| `ralph specify "<description>"` | 📋 Create a new spec from a description |
+| `ralph plan` | 📐 Generate implementation plan for active spec |
+| `ralph clarify` | ❓ Resolve ambiguities in active spec |
+| `ralph tasks` | ✅ Break plan into actionable task list |
+| `ralph run` | 🚀 Execute spec kit run against active spec |
+
+### Loop Commands
+
+| Command | Description |
+|---------|-------------|
+| `ralph build` | 🔨 Build mode — autonomous coding loop (alias for `ralph loop build`) |
+| `ralph build --roam` | 🌍 Roam freely across codebase, no spec boundary |
+| `ralph loop plan` | 📐 Plan mode loop |
+| `ralph loop build` | 🔨 Build mode loop |
+| `ralph loop run` | 🧠 Smart mode — plan if needed, then build |
+
+### Flags (all loop commands)
+
+| Flag | Description |
+|------|-------------|
+| `--no-tui` | Disable TUI; print plain log lines to stdout (CI/headless) |
+| `--no-color` | Disable ANSI color output (pipe-safe) |
+| `--max N` | Override max iterations (0 = use config) |
+| `--roam` | Roam freely across the codebase (no spec boundary) |
+
+### Examples
+
+```sh
+# 🔨 Standard build with TUI
+ralph build
+
+# 🌍 Improvement sweep — roam across the whole codebase
+ralph build --roam
+
+# 🤖 Headless build for CI (no TUI, no color, max 10 iterations)
+ralph build --no-tui --no-color --max 10
+
+# 🧠 Smart run — plan first if no plan exists, then build
+ralph loop run
+
+# 📐 Run 3 planning iterations only
+ralph loop plan --max 3
+```
+
+---
+
+## 📁 Project Structure
+
+```
+📦 LISSTech.RalphKing
+├── 📂 cmd/ralph/                   # CLI entry point (cobra)
+│   ├── 🎯 main.go                  #   └─ Root command, signal handling
+│   ├── 🔧 commands.go              #   └─ Subcommand definitions
+│   ├── ⚡ execute.go               #   └─ Loop execution & TUI wiring
+│   ├── 🔌 wiring.go                #   └─ LoopController, store, TUI plumbing
+│   └── 🛠️ speckit_cmds.go          #   └─ specify/plan/clarify/tasks/run
+├── 📂 internal/
+│   ├── 📂 claude/                   # Claude CLI adapter & stream-JSON parser
+│   ├── 📂 config/                   # TOML config parsing (ralph.toml)
+│   ├── 📂 git/                      # Pull, push, branch, stash helpers
+│   ├── 📂 loop/                     # Core iteration: prompt → claude → parse → git
+│   ├── 📂 notify/                   # Desktop notifications on loop events
+│   ├── 📂 regent/                   # Supervisor: crash/hang detection, rollback
+│   ├── 📂 spec/                     # Spec file discovery & active spec resolution
+│   ├── 📂 store/                    # JSONL session log storage & querying
+│   └── 📂 tui/                      # Bubbletea + lipgloss multi-panel TUI
+│       ├── 📂 components/           #   └─ Reusable TUI components
+│       └── 📂 panels/              #   └─ Specs, Iterations, Main, Secondary
+├── 📂 specs/                        # Feature specifications (spec kit layout)
+│   ├── 📂 003-tui-redesign/
+│   ├── 📂 004-speckit-alignment/
+│   ├── 📂 005-spec-bounded-roam/
+│   └── 📂 006-polish-and-hardening/
+├── 📄 ralph.toml                    # Project configuration
+├── 📄 CLAUDE.md                     # AI coding instructions
+├── 📄 PLAN.md                       # Plan mode prompt template
+├── 📄 BUILD.md                      # Build mode prompt template
+└── 📄 CHRONICLE.md                  # Development history & sweep log
+```
+
+---
+
+## 🔒 Safety & Guardrails
+
+| Measure | Details |
+|---------|---------|
+| 📋 **Spec boundaries** | Claude is constrained to the active spec directory by default |
+| 🧪 **Test-gated commits** | Regent runs tests after every iteration; bad commits get rolled back |
+| ⏪ **Automatic rollback** | Failed test suite → `git revert` → retry with error context |
+| ⏱️ **Hang protection** | No output for 5 min → process killed and restarted |
+| 💀 **Crash recovery** | Process exit → restart with exponential backoff (up to 3 retries) |
+| 🚫 **No global state** | Dependencies passed explicitly; structs hold state, functions transform it |
+| 📡 **Full observability** | Every event streams to TUI, JSONL session logs, and optional webhooks |
+
+---
+
+## 🤝 Supported Agents
+
+| Agent | Status | Description |
+|-------|:------:|-------------|
+| 🤖 Claude Code CLI | ✅ | Default — streaming JSON event parser, full integration |
+| 🔮 OpenAI Codex | 🔜 | Planned |
+| 💎 Gemini | 🔜 | Planned |
+| 🔧 Custom | 🔜 | Bring your own agent via adapter interface |
+
+---
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Built_with-Go_1.24-4ECDC4?style=for-the-badge&labelColor=000" alt="Go 1.24">
+  <img src="https://img.shields.io/badge/TUI_by-Bubbletea-FF6B9D?style=for-the-badge&labelColor=000" alt="Bubbletea">
+  <img src="https://img.shields.io/badge/Spec--Driven-Development-FFE66D?style=for-the-badge&labelColor=000" alt="Spec-Driven">
+  <br/>
+  <sub><strong>LISS Consulting, Corp.</strong> · <em>Ralph is King. The Regent keeps him honest.</em></sub>
+</p>
