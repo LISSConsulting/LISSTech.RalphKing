@@ -316,9 +316,9 @@ func (p SpecsPanel) View() string {
 			icon := childFileIcon(name)
 			text := fmt.Sprintf("  %s %s", icon, name)
 			if selected {
-				line = accentStyle.Render("> " + strings.TrimLeft(text, " "))
+				line = accentStyle.Render(truncateToWidth("> "+strings.TrimLeft(text, " "), p.width))
 			} else {
-				line = dimStyle.Render(text)
+				line = dimStyle.Render(truncateToWidth(text, p.width))
 			}
 		} else {
 			expand := "▶"
@@ -330,9 +330,9 @@ func (p SpecsPanel) View() string {
 			}
 			text := fmt.Sprintf("%s %s  %s", expand, node.sf.Status.Symbol(), node.sf.Name)
 			if selected {
-				line = accentStyle.Render("> " + text)
+				line = accentStyle.Render(truncateToWidth("> "+text, p.width))
 			} else {
-				line = "  " + text
+				line = truncateToWidth("  "+text, p.width)
 			}
 		}
 		lines = append(lines, line)

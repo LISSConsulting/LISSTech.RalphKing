@@ -53,6 +53,20 @@ func FormatElapsed(d time.Duration) string {
 	return fmt.Sprintf("%ds", s)
 }
 
+// truncateToWidth truncates a plain-text string to fit within maxWidth visual
+// cells, appending "…" if truncated.  Uses lipgloss.Width for correct handling
+// of wide characters (emoji, CJK, etc.).
+func truncateToWidth(s string, maxWidth int) string {
+	if maxWidth <= 0 || lipgloss.Width(s) <= maxWidth {
+		return s
+	}
+	runes := []rune(s)
+	for len(runes) > 0 && lipgloss.Width(string(runes)) > maxWidth-1 {
+		runes = runes[:len(runes)-1]
+	}
+	return string(runes) + "…"
+}
+
 // RenderHeader renders the header bar for the multi-panel TUI.
 // accentStyle is applied to the full header bar width.
 func RenderHeader(props HeaderProps, width int, accentStyle lipgloss.Style) string {
@@ -104,12 +118,6 @@ func RenderHeader(props HeaderProps, width int, accentStyle lipgloss.Style) stri
 	}
 
 	content := strings.Join(parts, "  │  ")
-	// Truncate to fit within width before lipgloss applies padding/styling.
-	if width > 0 {
-		runes := []rune(content)
-		if len(runes) > width {
-			content = string(runes[:width-1]) + "…"
-		}
-	}
-	return accentStyle.Width(width).Render(content)
+	content = truncateToWidth(content, width)
+	return accentStyle.Width(width).MaxWidth(width).Render(content)
 }

@@ -190,7 +190,7 @@ func TestRenderLogLine_LogIterComplete_NoSubtype(t *testing.T) {
 	}
 }
 
-func TestRenderPanelTitle(t *testing.T) {
+func TestRenderPanelBox(t *testing.T) {
 	th := NewTheme("")
 	tests := []struct {
 		name     string
@@ -200,14 +200,14 @@ func TestRenderPanelTitle(t *testing.T) {
 		contains string
 	}{
 		{
-			name:     "unfocused shows number and title",
+			name:     "unfocused shows number and title in border",
 			number:   1,
 			title:    "Specs",
 			focused:  false,
 			contains: "[1] Specs",
 		},
 		{
-			name:     "focused shows number and title",
+			name:     "focused shows number and title in border",
 			number:   3,
 			title:    "Output",
 			focused:  true,
@@ -224,17 +224,22 @@ func TestRenderPanelTitle(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rendered := renderPanelTitle(tt.number, tt.title, tt.focused, th)
+			rendered := th.RenderPanelBox("content", tt.number, tt.title, tt.focused, 30, 5)
 			if !strings.Contains(rendered, tt.contains) {
-				t.Errorf("renderPanelTitle(%d, %q, %v) = %q, want it to contain %q",
-					tt.number, tt.title, tt.focused, rendered, tt.contains)
+				t.Errorf("RenderPanelBox(%d, %q, %v) missing %q in output",
+					tt.number, tt.title, tt.focused, tt.contains)
+			}
+			// Title should appear on the first line (top border).
+			firstLine := strings.SplitN(rendered, "\n", 2)[0]
+			if !strings.Contains(firstLine, tt.contains) {
+				t.Errorf("RenderPanelBox title not in top border; first line: %q", firstLine)
 			}
 		})
 	}
 
 	// Focused and unfocused renders should differ (different styling).
-	focused := renderPanelTitle(1, "Specs", true, th)
-	unfocused := renderPanelTitle(1, "Specs", false, th)
+	focused := th.RenderPanelBox("x", 1, "Specs", true, 30, 5)
+	unfocused := th.RenderPanelBox("x", 1, "Specs", false, 30, 5)
 	if focused == unfocused {
 		t.Skip("lipgloss ANSI styling unavailable — focused/unfocused renders are identical")
 	}

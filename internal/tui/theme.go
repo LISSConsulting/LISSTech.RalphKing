@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -12,10 +13,12 @@ import (
 // Non-accent styles (toolIcon, toolStyle, color vars) are package-level
 // and shared with the existing single-panel TUI via styles.go.
 type Theme struct {
-	accentStyle     lipgloss.Style // for header background / focused elements
-	gitStyle        lipgloss.Style // for git operation messages
-	borderFocused   lipgloss.Style // focused panel border
-	borderUnfocused lipgloss.Style // unfocused panel border
+	accentStyle     lipgloss.Style         // for header background / focused elements
+	gitStyle        lipgloss.Style         // for git operation messages
+	borderFocused   lipgloss.Style         // focused panel border
+	borderUnfocused lipgloss.Style         // unfocused panel border
+	focusedColor    lipgloss.TerminalColor // raw accent color for border chars
+	unfocusedColor  lipgloss.TerminalColor // raw gray color for border chars
 }
 
 // NewTheme creates a Theme from a hex accent color string (e.g. "#7D56F4").
@@ -39,6 +42,8 @@ func NewTheme(accentColor string) Theme {
 		borderUnfocused: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(colorGray),
+		focusedColor:   c,
+		unfocusedColor: colorGray,
 	}
 }
 
@@ -142,13 +147,42 @@ func RenderLogLine(entry loop.LogEntry, width int, theme Theme) string {
 	return theme.RenderLogLine(entry, width)
 }
 
-// renderPanelTitle returns a styled "[N] Title" label for use inside panel
-// borders.  When focused, the label is rendered in the accent color; otherwise
-// it falls back to the gray timestamp style.
-func renderPanelTitle(number int, title string, focused bool, th Theme) string {
-	label := fmt.Sprintf("[%d] %s", number, title)
+// RenderPanelBox renders content inside a bordered panel with the title
+// embedded in the top border line (lazygit style).  w and h are the inner
+// content dimensions (from innerDims).
+func (t Theme) RenderPanelBox(content string, number int, title string, focused bool, w, h int) string {
+	border := lipgloss.RoundedBorder()
+	bc := t.unfocusedColor
 	if focused {
-		return th.gitStyle.Bold(true).Render(label)
+		bc = t.focusedColor
 	}
-	return timestampStyle.Render(label)
+	bStyle := lipgloss.NewStyle().Foreground(bc)
+
+	// Build title label with color.
+	label := fmt.Sprintf("[%d] %s", number, title)
+	var styledLabel string
+	if focused {
+		styledLabel = t.gitStyle.Bold(true).Render(label)
+	} else {
+		styledLabel = timestampStyle.Render(label)
+	}
+
+	// Top line: ╭─[N] Title──────╮
+	// Inner width w means the total top line is w + 2 chars (corners).
+	labelVis := lipgloss.Width(label)
+	dashes := w - labelVis - 1 // 1 leading dash before label
+	if dashes < 0 {
+		dashes = 0
+	}
+	topLine := bStyle.Render(border.TopLeft+border.Top) +
+		styledLabel +
+		bStyle.Render(strings.Repeat(border.Top, dashes)+border.TopRight)
+
+	// Render body with border on 3 sides (no top).
+	body := t.PanelBorderStyle(focused).
+		BorderTop(false).
+		Width(w).Height(h).
+		Render(content)
+
+	return topLine + "\n" + body
 }
