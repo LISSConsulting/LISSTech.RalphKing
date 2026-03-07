@@ -335,6 +335,65 @@ func TestParseWorktreePath(t *testing.T) {
 	}
 }
 
+// ─── listPorcelain tests ──────────────────────────────────────────────────────
+
+// initGitRepo sets up a minimal git repo in dir so that git commands work.
+func initGitRepo(t *testing.T, dir string) {
+	t.Helper()
+	cmds := [][]string{
+		{"git", "init"},
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test"},
+		{"git", "commit", "--allow-empty", "-m", "init"},
+	}
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git setup %v: %v\n%s", args, err, out)
+		}
+	}
+}
+
+func TestListPorcelain_Success(t *testing.T) {
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+	r := NewRunner(dir)
+	infos, err := r.listPorcelain()
+	if err != nil {
+		t.Fatalf("listPorcelain: %v", err)
+	}
+	if len(infos) == 0 {
+		t.Fatal("expected at least one worktree from porcelain output")
+	}
+}
+
+func TestListPorcelain_Error(t *testing.T) {
+	// Not a git repo — git worktree list should fail.
+	dir := t.TempDir()
+	r := NewRunner(dir)
+	_, err := r.listPorcelain()
+	if err == nil {
+		t.Fatal("expected error for non-git directory")
+	}
+}
+
+func TestList_FallbackToPorcelain(t *testing.T) {
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+	// Make wt list --json fail (exit 1) so List() falls back to git porcelain.
+	withEnv(t, "_FAKE_WT", "1", "_FAKE_WT_EXIT", "1")
+
+	r := fakeRunner(t, dir)
+	infos, err := r.List()
+	if err != nil {
+		t.Fatalf("List fallback: %v", err)
+	}
+	if len(infos) == 0 {
+		t.Error("expected at least one worktree via porcelain fallback")
+	}
+}
+
 // ─── exe() fallback test ──────────────────────────────────────────────────────
 
 func TestExeFallback(t *testing.T) {

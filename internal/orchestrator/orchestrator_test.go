@@ -537,3 +537,53 @@ func TestWorktreePaths(t *testing.T) {
 		}
 	}
 }
+
+// ─── StopAll ──────────────────────────────────────────────────────────────────
+
+func TestStopAll_StopsRunningAgents(t *testing.T) {
+	o := newTestOrchestrator(&fakeWorktreeOps{switchPath: "/tmp/wt"})
+
+	stopA := make(chan struct{})
+	stopB := make(chan struct{})
+	o.agents["a"] = &WorktreeAgent{Branch: "a", State: StateRunning, StopCh: stopA}
+	o.agents["b"] = &WorktreeAgent{Branch: "b", State: StateRunning, StopCh: stopB}
+	o.agents["c"] = &WorktreeAgent{Branch: "c", State: StateCompleted}
+
+	o.StopAll()
+
+	if o.agents["a"].State != StateStopped {
+		t.Errorf("agent a: expected StateStopped, got %v", o.agents["a"].State)
+	}
+	if o.agents["b"].State != StateStopped {
+		t.Errorf("agent b: expected StateStopped, got %v", o.agents["b"].State)
+	}
+	// Non-running agent should be unaffected.
+	if o.agents["c"].State != StateCompleted {
+		t.Errorf("agent c: expected StateCompleted, got %v", o.agents["c"].State)
+	}
+}
+
+// ─── AgentState.String ────────────────────────────────────────────────────────
+
+func TestAgentState_String(t *testing.T) {
+	tests := []struct {
+		state AgentState
+		want  string
+	}{
+		{StateCreating, "creating"},
+		{StateRunning, "running"},
+		{StateCompleted, "completed"},
+		{StateFailed, "failed"},
+		{StateStopped, "stopped"},
+		{StateMerging, "merging"},
+		{StateMerged, "merged"},
+		{StateMergeFailed, "merge_failed"},
+		{StateRemoved, "removed"},
+		{AgentState(999), "unknown"},
+	}
+	for _, tt := range tests {
+		if got := tt.state.String(); got != tt.want {
+			t.Errorf("AgentState(%d).String() = %q, want %q", tt.state, got, tt.want)
+		}
+	}
+}
