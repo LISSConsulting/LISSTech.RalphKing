@@ -14,6 +14,8 @@ func TestRenderFooter_EachFocusTarget(t *testing.T) {
 		{"iterations", []string{"j/k:navigate", "enter:view"}},
 		{"main", []string{"f:follow", "[/]:tab", "ctrl+u/d:scroll"}},
 		{"secondary", []string{"[/]:tab", "j/k:scroll"}},
+		{"worktrees", []string{"j/k:navigate", "x:stop", "M:merge", "D:clean"}},
+		{"unknown-focus", []string{"tab:next panel"}},
 	}
 
 	for _, tt := range tests {
