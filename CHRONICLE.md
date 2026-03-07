@@ -72,6 +72,8 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 
 - **v0.1.44** (2026-03-07): +1 test in `cmd/ralph` — `TestSpecifyCmd_MkdirAllError` (create file named `specs` in temp dir so `os.MkdirAll("specs/004-my-feature")` fails; covers `return fmt.Errorf("create spec directory: %w", mkErr)` branch in `specifyCmd`). `specifyCmd` 90%→95%. `cmd/ralph` 76.6%→76.7%.
 
+- **v0.1.56** (2026-03-07): 3 fixes — (1) gofmt: applied `gofmt -w` to 8 files with CRLF→LF, const alignment, and trailing-newline issues (`orchestrator/types.go`, `orchestrator/orchestrator.go`, `orchestrator/orchestrator_test.go`, `tui/app.go`, `tui/app_test.go`, `worktree_cmds_test.go`, `panels/worktrees.go`, `panels/worktrees_test.go`); golangci-lint 0 issues. (2) CI: added `"[0-9][0-9][0-9]-**"` push branch pattern to `ci.yml` — spec branches like `007-worktree-support` never triggered CI before. (3) Docs: marked all 55 tasks `[x]` in `specs/007-worktree-support/tasks.md`; updated README coverage badge 92%→90%.
+
 **Sweeps with no findings:** v0.1.48, v0.1.47, v0.1.46, v0.1.43, v0.1.42, v0.1.39, v0.1.38, v0.1.36, v0.1.35, v0.1.34, v0.1.33, v0.1.32, v0.1.31, v0.1.27, v0.1.25, v0.1.24, v0.1.22, v0.1.20, v0.1.19, v0.1.18, v0.1.17, v0.1.16, v0.1.15, v0.1.14, v0.1.13, v0.1.12, v0.1.11, v0.1.10, v0.1.09, v0.1.08, v0.1.07, v0.1.06, v0.1.05, v0.1.04, v0.1.03, v0.1.01, v0.0.98.
 
 **v0.1.39 sweep action:** Trimmed CHRONICLE.md from 592 → 169 lines by consolidating 30+ identical "no findings" sweep records into this summary. All Key Learnings preserved intact.
