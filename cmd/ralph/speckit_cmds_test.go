@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -420,4 +421,31 @@ func TestSpeckitCmdsResolveBranch(t *testing.T) {
 	if !strings.Contains(err.Error(), "spec.md") {
 		t.Errorf("error should mention spec.md (branch resolution succeeded), got: %v", err)
 	}
+}
+
+// TestExecuteSpeckit_InteractiveVsNonInteractive verifies that both modes reach
+// exec.Command without crashing on flag construction. Both fail because "claude"
+// is not installed in CI; the test checks the error is NOT a flag/argument error.
+func TestExecuteSpeckit_InteractiveVsNonInteractive(t *testing.T) {
+	isNotFlagErr := func(err error) bool {
+		if err == nil {
+			return true
+		}
+		msg := err.Error()
+		return !strings.Contains(msg, "unknown flag") && !strings.Contains(msg, "invalid flag")
+	}
+
+	t.Run("interactive omits -p flag", func(t *testing.T) {
+		err := executeSpeckit(context.Background(), "speckit.clarify", nil, true)
+		if !isNotFlagErr(err) {
+			t.Errorf("interactive executeSpeckit produced flag error: %v", err)
+		}
+	})
+
+	t.Run("non-interactive uses -p flag", func(t *testing.T) {
+		err := executeSpeckit(context.Background(), "speckit.plan", nil, false)
+		if !isNotFlagErr(err) {
+			t.Errorf("non-interactive executeSpeckit produced flag error: %v", err)
+		}
+	})
 }

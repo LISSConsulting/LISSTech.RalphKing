@@ -120,7 +120,7 @@ func setupLoop(noTUI, roam, noColor bool) (*loopSetup, error) {
 }
 
 // executeLoop loads config, builds the loop, and runs it in the given mode.
-func executeLoop(mode loop.Mode, maxOverride int, noTUI bool, roam bool, noColor bool, useWorktree bool) error {
+func executeLoop(mode loop.Mode, maxOverride int, noTUI bool, roam bool, focus string, noColor bool, useWorktree bool) error {
 	setup, err := setupLoop(noTUI, roam, noColor)
 	if err != nil {
 		return err
@@ -150,6 +150,11 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool, roam bool, noColor
 	}
 
 	setup.lp.Roam = setup.effectiveRoam
+	if focus != "" {
+		setup.lp.Focus = focus
+	} else {
+		setup.lp.Focus = setup.cfg.Build.Focus
+	}
 
 	runFn := func(ctx context.Context) error {
 		return setup.lp.Run(ctx, mode, maxOverride)
@@ -216,7 +221,7 @@ func setupWorktree(setup *loopSetup) error {
 }
 
 // executeSmartRun runs plan if CHRONICLE.md doesn't exist, then build.
-func executeSmartRun(maxOverride int, noTUI bool, roam bool, noColor bool, useWorktree bool) error {
+func executeSmartRun(maxOverride int, noTUI bool, roam bool, focus string, noColor bool, useWorktree bool) error {
 	setup, err := setupLoop(noTUI, roam, noColor)
 	if err != nil {
 		return err
@@ -230,6 +235,11 @@ func executeSmartRun(maxOverride int, noTUI bool, roam bool, noColor bool, useWo
 		}
 	}
 
+	effectiveFocus := focus
+	if effectiveFocus == "" {
+		effectiveFocus = setup.cfg.Build.Focus
+	}
+
 	smartRunFn := func(ctx context.Context) error {
 		// Check inside the closure so Regent retries re-evaluate whether
 		// the plan file exists (it may have been created by a prior attempt).
@@ -241,6 +251,7 @@ func executeSmartRun(maxOverride int, noTUI bool, roam bool, noColor bool, useWo
 			}
 		}
 		setup.lp.Roam = setup.effectiveRoam
+		setup.lp.Focus = effectiveFocus
 		return setup.lp.Run(ctx, loop.ModeBuild, maxOverride)
 	}
 
@@ -400,15 +411,28 @@ func executeDashboard() error {
 	return runDashboard(ctx, cfg, dir, sw, sr)
 }
 
-// executeSpeckit spawns `claude -p "/<skill> <args>" --verbose` with inherited
-// stdio, enabling interactive Claude Code speckit skill execution. Returns
-// Claude's exit code as an error when non-zero.
-func executeSpeckit(ctx context.Context, skill string, args []string) error {
-	prompt := "/" + skill
-	if len(args) > 0 {
-		prompt += " " + strings.Join(args, " ")
+// executeSpeckit spawns claude with the given skill. When interactive is true,
+// claude runs without -p flag so the user can answer questions inline.
+// When interactive is false, uses -p prompt mode for non-interactive execution.
+// Returns Claude's exit code as an error when non-zero.
+func executeSpeckit(ctx context.Context, skill string, args []string, interactive bool) error {
+	var cmdArgs []string
+	if interactive {
+		// Interactive mode: pass the skill as a slash command without -p so
+		// Claude stays open and can ask follow-up questions.
+		slashCmd := "/" + skill
+		if len(args) > 0 {
+			slashCmd += " " + strings.Join(args, " ")
+		}
+		cmdArgs = []string{slashCmd, "--verbose"}
+	} else {
+		prompt := "/" + skill
+		if len(args) > 0 {
+			prompt += " " + strings.Join(args, " ")
+		}
+		cmdArgs = []string{"-p", prompt, "--verbose"}
 	}
-	cmd := exec.CommandContext(ctx, "claude", "-p", prompt, "--verbose")
+	cmd := exec.CommandContext(ctx, "claude", cmdArgs...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

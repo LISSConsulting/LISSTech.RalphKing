@@ -99,7 +99,7 @@ func New(events <-chan loop.LogEntry, storeReader store.Reader, accentColor, pro
 		secondary:       panels.NewSecondaryPanel(secW, secH),
 		worktreesPanel:  panels.NewWorktreesPanel(nil, itersW, itersH),
 		layout:          layout,
-		focus:           FocusMain,
+		focus:           FocusSpecs,
 		theme:           th,
 		width:           80,
 		height:          24,
@@ -135,13 +135,42 @@ func (m Model) WithOrchestrator(orch *orchestrator.Orchestrator) Model {
 func (m Model) Err() error { return m.err }
 
 // Init returns the initial commands: event listener + clock ticker + optional
-// worktree tagged-event listener.
+// worktree tagged-event listener + startup data loading.
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{waitForEvent(m.events), tickCmd()}
+	cmds := []tea.Cmd{waitForEvent(m.events), tickCmd(), initGitInfoCmd(), initIterationsCmd(m.storeReader)}
 	if m.orch != nil {
 		cmds = append(cmds, waitForTaggedEvent(m.orch.MergedEvents))
 	}
 	return tea.Batch(cmds...)
+}
+
+// initGitInfoCmd reads the current git branch and last commit asynchronously.
+func initGitInfoCmd() tea.Cmd {
+	return func() tea.Msg {
+		branch := runGitOutput("branch", "--show-current")
+		commit := runGitOutput("log", "-1", "--format=%h")
+		return gitInfoMsg{Branch: strings.TrimSpace(branch), LastCommit: strings.TrimSpace(commit)}
+	}
+}
+
+// runGitOutput runs a git subcommand and returns its stdout, or "" on error.
+func runGitOutput(args ...string) string {
+	out, err := exec.Command("git", args...).Output()
+	if err != nil {
+		return ""
+	}
+	return string(out)
+}
+
+// initIterationsCmd pre-loads past iteration summaries from the store.
+func initIterationsCmd(sr store.Reader) tea.Cmd {
+	return func() tea.Msg {
+		if sr == nil {
+			return iterationsLoadedMsg{}
+		}
+		summaries, _ := sr.Iterations()
+		return iterationsLoadedMsg{Summaries: summaries}
+	}
 }
 
 // tickCmd schedules the next one-second clock tick.
@@ -208,6 +237,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleCreateSpecRequest(msg)
 	case specsRefreshedMsg:
 		return m.handleSpecsRefreshed(msg)
+	case gitInfoMsg:
+		if msg.Branch != "" {
+			m.branch = msg.Branch
+		}
+		if msg.LastCommit != "" {
+			m.lastCommit = msg.LastCommit
+		}
+		return m, nil
+	case iterationsLoadedMsg:
+		for _, s := range msg.Summaries {
+			m.iterationsPanel = m.iterationsPanel.AddIteration(s)
+		}
+		return m, nil
 	case panels.IterationSelectedMsg:
 		return m.handleIterationSelected(msg)
 	case iterationLogLoadedMsg:

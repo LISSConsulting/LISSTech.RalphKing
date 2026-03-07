@@ -77,7 +77,8 @@ type PlanConfig struct {
 type BuildConfig struct {
 	PromptFile    string `toml:"prompt_file"`
 	MaxIterations int    `toml:"max_iterations"`
-	Roam          bool   `toml:"roam"` // roam freely across the codebase (--roam flag overrides)
+	Roam          bool   `toml:"roam"`  // roam freely across the codebase (--roam flag overrides)
+	Focus         string `toml:"focus"` // constrain roam to a specific topic (--focus flag overrides)
 }
 
 // GitConfig controls git operations between iterations.
@@ -288,6 +289,7 @@ max_iterations = 3
 prompt_file = "BUILD.md"
 max_iterations = 0  # 0 = unlimited
 roam = false        # roam freely across the codebase (--roam flag overrides)
+focus = ""          # constrain roam to a specific topic (--focus flag overrides)
 
 [git]
 auto_pull_rebase = true

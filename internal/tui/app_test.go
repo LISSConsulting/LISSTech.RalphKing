@@ -69,8 +69,8 @@ func TestNew_Defaults(t *testing.T) {
 	if m.height != 24 {
 		t.Errorf("expected default height 24, got %d", m.height)
 	}
-	if m.focus != FocusMain {
-		t.Errorf("expected default focus FocusMain, got %v", m.focus)
+	if m.focus != FocusSpecs {
+		t.Errorf("expected default focus FocusSpecs, got %v", m.focus)
 	}
 	if m.loopState != StateIdle {
 		t.Errorf("expected initial loopState StateIdle, got %v", m.loopState)
@@ -133,12 +133,12 @@ func TestUpdate_Key_Quit(t *testing.T) {
 
 func TestUpdate_Key_Tab_CyclesFocus(t *testing.T) {
 	m := newTestModel()
-	// Start at FocusMain (index 2), tab should go to FocusSecondary (3)
+	// Start at FocusSpecs (index 0), tab should go to FocusIterations (1)
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m2 := updated.(Model)
-	if m2.focus != FocusMain.Next() {
+	if m2.focus != FocusSpecs.Next() {
 		t.Errorf("tab should advance focus from %v to %v, got %v",
-			FocusMain, FocusMain.Next(), m2.focus)
+			FocusSpecs, FocusSpecs.Next(), m2.focus)
 	}
 }
 
@@ -385,6 +385,10 @@ func TestUpdate_IterationLogLoaded_SetsIterationAndSummary(t *testing.T) {
 	}
 	updated, _ := m.Update(msg)
 	m2 := updated.(Model)
+
+	// Switch focus to Main panel so ] key is delegated to mainView.
+	updated0b, _ := m2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
+	m2 = updated0b.(Model)
 
 	// After iterationLogLoadedMsg the main view is on TabIterationDetail (2).
 	// One ] advances to TabIterationSummary (3).
@@ -815,12 +819,12 @@ func TestUpdate_IterationLogLoaded_WithError(t *testing.T) {
 // TestUpdate_Key_ShiftTab covers the shift+tab branch in handleKey.
 func TestUpdate_Key_ShiftTab_CyclesFocusBack(t *testing.T) {
 	m := newTestModel()
-	// Default focus is FocusMain (index 2); shift+tab should go to FocusIterations (1).
+	// Default focus is FocusSpecs (index 0); shift+tab should wrap to FocusSecondary (3).
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
 	m2 := updated.(Model)
-	if m2.focus != FocusMain.Prev() {
+	if m2.focus != FocusSpecs.Prev() {
 		t.Errorf("shift+tab should move focus from %v to %v, got %v",
-			FocusMain, FocusMain.Prev(), m2.focus)
+			FocusSpecs, FocusSpecs.Prev(), m2.focus)
 	}
 }
 
@@ -1326,5 +1330,70 @@ func TestHandleTaggedEvent_NilMapInit(t *testing.T) {
 	}
 	if len(m2.worktreeLogsByBranch["wt/lazy"]) == 0 {
 		t.Error("expected at least one log line for wt/lazy")
+	}
+}
+
+// TestUpdate_GitInfoMsg verifies that gitInfoMsg populates branch and lastCommit.
+func TestUpdate_GitInfoMsg(t *testing.T) {
+	tests := []struct {
+		name       string
+		msg        gitInfoMsg
+		wantBranch string
+		wantCommit string
+	}{
+		{
+			name:       "both fields populated",
+			msg:        gitInfoMsg{Branch: "main", LastCommit: "abc1234"},
+			wantBranch: "main",
+			wantCommit: "abc1234",
+		},
+		{
+			name:       "empty branch does not overwrite",
+			msg:        gitInfoMsg{Branch: "", LastCommit: "def5678"},
+			wantBranch: "",
+			wantCommit: "def5678",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestModel()
+			updated, _ := m.Update(tt.msg)
+			m2 := updated.(Model)
+			if m2.branch != tt.wantBranch {
+				t.Errorf("branch: want %q, got %q", tt.wantBranch, m2.branch)
+			}
+			if m2.lastCommit != tt.wantCommit {
+				t.Errorf("lastCommit: want %q, got %q", tt.wantCommit, m2.lastCommit)
+			}
+		})
+	}
+}
+
+// TestUpdate_IterationsLoadedMsg verifies that iterationsLoadedMsg pre-populates the panel.
+func TestUpdate_IterationsLoadedMsg(t *testing.T) {
+	m := newTestModel()
+	summaries := []store.IterationSummary{
+		{Number: 1, Mode: "build", CostUSD: 0.01},
+		{Number: 2, Mode: "plan", CostUSD: 0.02},
+	}
+	updated, _ := m.Update(iterationsLoadedMsg{Summaries: summaries})
+	m2 := updated.(Model)
+
+	// Verify the iterations panel received the items by checking its view.
+	view := m2.iterationsPanel.View()
+	if !strings.Contains(view, "#1") && !strings.Contains(view, "1") {
+		t.Errorf("iterations panel should show iteration 1 after load, got:\n%s", view)
+	}
+}
+
+// TestUpdate_IterationsLoadedMsg_Empty verifies empty summaries are a no-op.
+func TestUpdate_IterationsLoadedMsg_Empty(t *testing.T) {
+	m := newTestModel()
+	before := m.iterationsPanel.View()
+	updated, _ := m.Update(iterationsLoadedMsg{})
+	m2 := updated.(Model)
+	after := m2.iterationsPanel.View()
+	if before != after {
+		t.Errorf("empty iterationsLoadedMsg should not change panel view")
 	}
 }

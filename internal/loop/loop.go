@@ -47,6 +47,7 @@ type Loop struct {
 	Roam             bool            // roam freely across the codebase (--roam flag)
 	Spec             string          // active spec name for prompt augmentation (empty = no augmentation)
 	SpecDir          string          // active spec directory for prompt augmentation
+	Focus            string          // constrain roam to a specific topic (empty = no constraint)
 }
 
 // Run executes the loop in the given mode. It runs iterations until the
@@ -75,7 +76,7 @@ func (l *Loop) Run(ctx context.Context, mode Mode, maxOverride int) error {
 	}
 
 	// Augment prompt with spec context guardrails when applicable.
-	prompt := augmentPrompt(string(promptBytes), l.Spec, l.SpecDir, l.Roam)
+	prompt := augmentPrompt(string(promptBytes), l.Spec, l.SpecDir, l.Roam, l.Focus)
 
 	branch, err := l.Git.CurrentBranch()
 	if err != nil {
@@ -381,13 +382,25 @@ func iterLabel(max int) string {
 // In roam mode, Claude is told to roam freely across the entire codebase.
 // When a spec name is set (and roam is false), the section names the active spec
 // and its directory to keep Claude focused on the spec boundary.
+// When focus is non-empty, a focus directive is appended to constrain the topic.
 // When neither applies, the prompt is returned unchanged.
-func augmentPrompt(prompt, spec, specDir string, roam bool) string {
+func augmentPrompt(prompt, spec, specDir string, roam bool, focus string) string {
 	if roam {
-		return prompt + "\n\n## Spec Context\n\nRoam mode is active. You are free to review and improve the entire codebase — refactor, fix, optimise, and tidy without being confined to any single spec."
+		result := prompt + "\n\n## Spec Context\n\nRoam mode is active. You are free to review and improve the entire codebase — refactor, fix, optimise, and tidy without being confined to any single spec."
+		if focus != "" {
+			result += fmt.Sprintf("\n\nFocus your work on: %s. Prioritize changes related to this area over other improvements.", focus)
+		}
+		return result
 	}
 	if spec != "" {
-		return prompt + fmt.Sprintf("\n\n## Spec Context\n\nActive spec: %s\nSpec directory: %s\n\nStay focused on this spec. When the work described in this spec is complete, stop making changes.", spec, specDir)
+		result := prompt + fmt.Sprintf("\n\n## Spec Context\n\nActive spec: %s\nSpec directory: %s\n\nStay focused on this spec. When the work described in this spec is complete, stop making changes.", spec, specDir)
+		if focus != "" {
+			result += fmt.Sprintf("\n\nFocus your work on: %s. Prioritize changes related to this area over other improvements.", focus)
+		}
+		return result
+	}
+	if focus != "" {
+		return prompt + fmt.Sprintf("\n\n## Spec Context\n\nFocus your work on: %s. Prioritize changes related to this area over other improvements.", focus)
 	}
 	return prompt
 }

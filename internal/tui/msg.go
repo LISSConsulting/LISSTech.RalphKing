@@ -31,6 +31,17 @@ type iterationLogLoadedMsg struct {
 // specsRefreshedMsg carries refreshed spec list after creation/edit.
 type specsRefreshedMsg struct{ Specs []spec.SpecFile }
 
+// gitInfoMsg carries git branch and last commit read on startup.
+type gitInfoMsg struct {
+	Branch     string
+	LastCommit string
+}
+
+// iterationsLoadedMsg carries iteration summaries pre-loaded from the store on startup.
+type iterationsLoadedMsg struct {
+	Summaries []store.IterationSummary
+}
+
 // taggedEventMsg wraps a log entry from the orchestrator fan-in channel together
 // with the source worktree branch name.  Defined here without importing
 // orchestrator so that msg.go stays import-free of business-logic packages.

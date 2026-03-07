@@ -1,5 +1,5 @@
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> **Specs 001-007 complete. Spec 008 (TUI overhaul) specified — 84 tasks, 13 phases.** ~90% coverage.
+> **Specs 001-008 in progress. Spec 008 (TUI overhaul) phases 1-4 complete (T001-T028).** ~90% coverage.
 
 ## Completed Work
 
@@ -12,10 +12,20 @@
 | Roam (005) | Completion state machine, `--roam`, augmentPrompt(), LogSpecComplete/LogSweepComplete | spec 005 |
 | Polish (006) | lineFormatter, `--no-color`, loopSetup refactor, CI coverage, README | spec 006 |
 | Worktrees (007) | `internal/worktree/`, `internal/orchestrator/`, `--worktree`, WorktreesPanel, per-agent Regent | spec 007 |
+| TUI Overhaul (008) Phase 1-4 | glamour dep, Focus config/loop field, default FocusSpecs, git info on startup, iterations pre-load, --focus flag, interactive speckit | 008-tui-overhaul |
 
 ## Remaining Work
 
-Spec 008: TUI Overhaul — see `specs/008-tui-overhaul/tasks.md`
+Spec 008 phases 5-13 — see `specs/008-tui-overhaul/tasks.md` (T029-T084):
+- Phase 5 (US5): Per-tab content buffers in MainView — T029-T039
+- Phase 6 (US2): Panel titles and numbers — T040-T044
+- Phase 7 (US6): Layout correctness audit — T045-T050
+- Phase 8 (US3): Specs as traversable tree — T051-T060
+- Phase 9 (US11): Markdown rendering with glamour — T061-T064
+- Phase 10 (US4): Correct spec status detection — T065-T068
+- Phase 11 (US10): Functional cost tracking — T069-T073
+- Phase 12 (US9): Footer detail view — T074-T077
+- Phase 13: Polish, vet, lint — T078-T084
 
 ## Key Learnings
 

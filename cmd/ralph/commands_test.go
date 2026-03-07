@@ -568,6 +568,34 @@ func TestBuildCmdRunE_NoConfig(t *testing.T) {
 	}
 }
 
+// TestBuildCmd_FocusFlag verifies the --focus flag is registered on build, loop build,
+// and loop run commands and parsed correctly.
+func TestBuildCmd_FocusFlag(t *testing.T) {
+	cmds := []struct {
+		name string
+		cmd  *cobra.Command
+	}{
+		{"build", buildCmd()},
+		{"loop build", loopBuildCmd()},
+		{"loop run", loopRunCmd()},
+	}
+	for _, tc := range cmds {
+		t.Run(tc.name, func(t *testing.T) {
+			f := tc.cmd.Flags().Lookup("focus")
+			if f == nil {
+				t.Fatalf("%s: --focus flag not registered", tc.name)
+			}
+			if err := tc.cmd.Flags().Set("focus", "UI/UX"); err != nil {
+				t.Fatalf("%s: set --focus: %v", tc.name, err)
+			}
+			got, _ := tc.cmd.Flags().GetString("focus")
+			if got != "UI/UX" {
+				t.Errorf("%s: focus=%q, want %q", tc.name, got, "UI/UX")
+			}
+		})
+	}
+}
+
 // TestRootCmd_NoSubcommand_CallsDashboard exercises the rootCmd RunE body
 // (return executeDashboard()) by executing the root command with no subcommand.
 // Without ralph.toml present, executeDashboard fails early at config.Load,

@@ -54,7 +54,7 @@ func specifyCmd() *cobra.Command {
 			defer cancel()
 
 			_ = activeSpec // spec directory created; claude operates in CWD
-			return executeSpeckit(ctx, "speckit.specify", args)
+			return executeSpeckit(ctx, "speckit.specify", args, true)
 		},
 	}
 	cmd.Flags().StringVar(&specFlag, "spec", "", "spec directory name (e.g. 004-my-feature)")
@@ -87,7 +87,7 @@ func speckitPlanCmd() *cobra.Command {
 			ctx, cancel := signalContext()
 			defer cancel()
 
-			return executeSpeckit(ctx, "speckit.plan", nil)
+			return executeSpeckit(ctx, "speckit.plan", nil, false)
 		},
 	}
 	cmd.Flags().StringVar(&specFlag, "spec", "", "spec directory name (e.g. 004-my-feature)")
@@ -120,7 +120,7 @@ func clarifyCmd() *cobra.Command {
 			ctx, cancel := signalContext()
 			defer cancel()
 
-			return executeSpeckit(ctx, "speckit.clarify", nil)
+			return executeSpeckit(ctx, "speckit.clarify", nil, true)
 		},
 	}
 	cmd.Flags().StringVar(&specFlag, "spec", "", "spec directory name (e.g. 004-my-feature)")
@@ -153,7 +153,7 @@ func speckitTasksCmd() *cobra.Command {
 			ctx, cancel := signalContext()
 			defer cancel()
 
-			return executeSpeckit(ctx, "speckit.tasks", nil)
+			return executeSpeckit(ctx, "speckit.tasks", nil, false)
 		},
 	}
 	cmd.Flags().StringVar(&specFlag, "spec", "", "spec directory name (e.g. 004-my-feature)")
@@ -186,7 +186,7 @@ func speckitRunCmd() *cobra.Command {
 			ctx, cancel := signalContext()
 			defer cancel()
 
-			return executeSpeckit(ctx, "speckit.implement", nil)
+			return executeSpeckit(ctx, "speckit.implement", nil, false)
 		},
 	}
 	cmd.Flags().StringVar(&specFlag, "spec", "", "spec directory name (e.g. 004-my-feature)")

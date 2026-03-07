@@ -1331,7 +1331,7 @@ func TestAugmentPrompt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := augmentPrompt(tt.prompt, tt.spec, tt.specDir, tt.roam)
+			got := augmentPrompt(tt.prompt, tt.spec, tt.specDir, tt.roam, "")
 			for _, part := range tt.wantParts {
 				if !strings.Contains(got, part) {
 					t.Errorf("augmentPrompt() output should contain %q\ngot: %q", part, got)
@@ -1339,6 +1339,53 @@ func TestAugmentPrompt(t *testing.T) {
 			}
 			if tt.wantUnchanged && got != tt.prompt {
 				t.Errorf("augmentPrompt() should return prompt unchanged\nwant: %q\ngot:  %q", tt.prompt, got)
+			}
+		})
+	}
+}
+
+// TestAugmentPromptFocus verifies the focus parameter appends a directive.
+func TestAugmentPromptFocus(t *testing.T) {
+	tests := []struct {
+		name      string
+		spec      string
+		specDir   string
+		roam      bool
+		focus     string
+		wantParts []string
+	}{
+		{
+			name:      "focus in roam mode",
+			roam:      true,
+			focus:     "UI/UX",
+			wantParts: []string{"Roam mode", "Focus your work on: UI/UX"},
+		},
+		{
+			name:      "focus with spec",
+			spec:      "005-test",
+			specDir:   "specs/005-test",
+			focus:     "testing",
+			wantParts: []string{"Active spec:", "Focus your work on: testing"},
+		},
+		{
+			name:      "focus only (no spec, no roam)",
+			focus:     "performance",
+			wantParts: []string{"## Spec Context", "Focus your work on: performance"},
+		},
+		{
+			name:      "empty focus — no directive appended",
+			roam:      true,
+			focus:     "",
+			wantParts: []string{"Roam mode"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := augmentPrompt("base", tt.spec, tt.specDir, tt.roam, tt.focus)
+			for _, part := range tt.wantParts {
+				if !strings.Contains(got, part) {
+					t.Errorf("augmentPrompt() output should contain %q\ngot: %q", part, got)
+				}
 			}
 		})
 	}

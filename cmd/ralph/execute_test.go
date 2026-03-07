@@ -392,7 +392,7 @@ func TestExecuteLoop_ConfigNotFound(t *testing.T) {
 	// Isolated temp dir with no ralph.toml anywhere in its ancestor tree.
 	t.Chdir(t.TempDir())
 
-	err := executeLoop(loop.ModePlan, 1, true, false, false, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, "", false, false)
 	if err == nil {
 		t.Fatal("expected error when ralph.toml not found")
 	}
@@ -407,7 +407,7 @@ func TestExecuteLoop_ConfigInvalid(t *testing.T) {
 	// Empty plan.prompt_file fails Validate()
 	writeExecTestFile(t, dir, "ralph.toml", "[plan]\nprompt_file = \"\"\n[build]\nprompt_file = \"b.md\"\n")
 
-	err := executeLoop(loop.ModePlan, 1, true, false, false, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, "", false, false)
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -423,7 +423,7 @@ func TestExecuteLoop_RegentDisabled_PromptMissing(t *testing.T) {
 	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
 	// PLAN.md intentionally absent — loop.Run fails reading it.
 
-	err := executeLoop(loop.ModePlan, 1, true, false, false, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, "", false, false)
 	if err == nil {
 		t.Fatal("expected error when prompt file missing")
 	}
@@ -440,7 +440,7 @@ func TestExecuteLoop_RegentEnabled_PromptMissing(t *testing.T) {
 	// PLAN.md intentionally absent.
 	// Pre-flight check returns an error before Regent is initialised.
 
-	err := executeLoop(loop.ModePlan, 1, true, false, false, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, "", false, false)
 	if err == nil {
 		t.Fatal("expected error when prompt file missing")
 	}
@@ -456,7 +456,7 @@ func TestExecuteLoop_BuildMode_PromptMissing(t *testing.T) {
 	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
 	// BUILD.md intentionally absent — covers default case in mode switch.
 
-	err := executeLoop(loop.ModeBuild, 1, true, false, false, false)
+	err := executeLoop(loop.ModeBuild, 1, true, false, "", false, false)
 	if err == nil {
 		t.Fatal("expected error when build prompt file missing")
 	}
@@ -474,7 +474,7 @@ func TestExecuteLoop_RegentDisabled_PromptExists_GitFails(t *testing.T) {
 	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
 	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
 
-	err := executeLoop(loop.ModePlan, 1, true, false, false, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, "", false, false)
 	// Loop fails at git CurrentBranch — must be an error but not a prompt-file error.
 	if err == nil {
 		t.Fatal("expected error from git operations")
@@ -494,7 +494,7 @@ func TestExecuteLoop_RegentEnabled_PromptExists_GitFails(t *testing.T) {
 	writeExecTestFile(t, dir, "ralph.toml", testConfigWithRegent())
 	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
 
-	err := executeLoop(loop.ModePlan, 1, true, false, false, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, "", false, false)
 	// Regent gives up after 0 retries — must be an error.
 	if err == nil {
 		t.Fatal("expected error — Regent should give up after 0 retries")
@@ -509,7 +509,7 @@ func TestExecuteLoop_RegentEnabled_PromptExists_GitFails(t *testing.T) {
 func TestExecuteSmartRun_ConfigNotFound(t *testing.T) {
 	t.Chdir(t.TempDir())
 
-	err := executeSmartRun(1, true, false, false, false)
+	err := executeSmartRun(1, true, false, "", false, false)
 	if err == nil {
 		t.Fatal("expected error when ralph.toml not found")
 	}
@@ -526,7 +526,7 @@ func TestExecuteSmartRun_NeedsPlan_PromptMissing(t *testing.T) {
 	// No CHRONICLE.md → needsPlanPhase returns true.
 	// No PLAN.md → plan phase fails reading it.
 
-	err := executeSmartRun(1, true, false, false, false)
+	err := executeSmartRun(1, true, false, "", false, false)
 	if err == nil {
 		t.Fatal("expected error when plan prompt file missing")
 	}
@@ -544,7 +544,7 @@ func TestExecuteSmartRun_SkipPlan_BuildPromptMissing(t *testing.T) {
 	writeExecTestFile(t, dir, "CHRONICLE.md", "# Plan\n\nSome content.\n")
 	// BUILD.md absent → build loop fails reading it.
 
-	err := executeSmartRun(1, true, false, false, false)
+	err := executeSmartRun(1, true, false, "", false, false)
 	if err == nil {
 		t.Fatal("expected error when build prompt file missing")
 	}
@@ -559,7 +559,7 @@ func TestExecuteSmartRun_ConfigInvalid(t *testing.T) {
 	// Empty plan.prompt_file triggers Validate() error.
 	writeExecTestFile(t, dir, "ralph.toml", "[plan]\nprompt_file = \"\"\n[build]\nprompt_file = \"b.md\"\n")
 
-	err := executeSmartRun(1, true, false, false, false)
+	err := executeSmartRun(1, true, false, "", false, false)
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -577,7 +577,7 @@ func TestExecuteSmartRun_RegentEnabled_PromptMissing(t *testing.T) {
 	// No PLAN.md → plan phase fails reading it.
 	// Regent gives up after 0 retries and returns max-retries error.
 
-	err := executeSmartRun(1, true, false, false, false)
+	err := executeSmartRun(1, true, false, "", false, false)
 	if err == nil {
 		t.Fatal("expected error — Regent should give up (max_retries=0)")
 	}
@@ -596,7 +596,7 @@ func TestExecuteLoop_StoreUnavailable(t *testing.T) {
 		t.Fatalf("WriteFile .ralph: %v", err)
 	}
 
-	err := executeLoop(loop.ModePlan, 1, true, false, false, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, "", false, false)
 	if err == nil {
 		t.Fatal("expected error from git operations")
 	}
@@ -614,7 +614,7 @@ func TestExecuteSmartRun_StoreUnavailable(t *testing.T) {
 		t.Fatalf("WriteFile .ralph: %v", err)
 	}
 
-	err := executeSmartRun(1, true, false, false, false)
+	err := executeSmartRun(1, true, false, "", false, false)
 	if err == nil {
 		t.Fatal("expected error from git operations")
 	}
@@ -629,7 +629,7 @@ func TestExecuteLoop_NotificationsURLSet(t *testing.T) {
 	writeExecTestFile(t, dir, "ralph.toml", cfg)
 	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
 
-	err := executeLoop(loop.ModePlan, 1, true, false, false, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, "", false, false)
 	if err == nil {
 		t.Fatal("expected error from git operations")
 	}
@@ -648,7 +648,7 @@ func TestExecuteSmartRun_NotificationsURLSet(t *testing.T) {
 	writeExecTestFile(t, dir, "CHRONICLE.md", "# Done\n\nSome content.\n")
 	writeExecTestFile(t, dir, "BUILD.md", "# Build\n")
 
-	err := executeSmartRun(1, true, false, false, false)
+	err := executeSmartRun(1, true, false, "", false, false)
 	if err == nil {
 		t.Fatal("expected error from git operations")
 	}
@@ -849,7 +849,7 @@ func TestExecuteLoop_Roam_StaysOnCurrentBranch(t *testing.T) {
 	branchBefore := strings.TrimSpace(string(outBefore))
 
 	// roam=true: should stay on the current branch (no sweep branch creation).
-	_ = executeLoop(loop.ModeBuild, 1, true, true, false, false)
+	_ = executeLoop(loop.ModeBuild, 1, true, true, "", false, false)
 
 	after := exec.Command("git", "branch", "--show-current")
 	after.Dir = dir
