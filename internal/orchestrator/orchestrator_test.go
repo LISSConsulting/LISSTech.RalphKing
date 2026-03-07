@@ -239,7 +239,7 @@ func TestFanIn_EventsTaggedCorrectly(t *testing.T) {
 	events := make(chan loop.LogEntry, 4)
 	var wg sync.WaitGroup
 
-	startFanIn("feat/fan", events, merged, &wg)
+	startFanIn("feat/fan", events, merged, nil, &wg)
 
 	events <- loop.LogEntry{Kind: loop.LogInfo, Message: "hello from fan-in"}
 	close(events)
@@ -267,9 +267,136 @@ func TestFanIn_ChannelCloseHandled(t *testing.T) {
 	events := make(chan loop.LogEntry)
 	var wg sync.WaitGroup
 
-	startFanIn("feat/close", events, merged, &wg)
+	startFanIn("feat/close", events, merged, nil, &wg)
 	close(events) // goroutine should exit cleanly
 	wg.Wait()
+}
+
+// ─── WorktreePaths ────────────────────────────────────────────────────────────
+
+// ─── autoMergeIfNeeded ────────────────────────────────────────────────────────
+
+func TestAutoMergeIfNeeded_Disabled_NoAction(t *testing.T) {
+	ops := &fakeWorktreeOps{switchPath: "/tmp/wt"}
+	o := newTestOrchestrator(ops)
+	o.AutoMerge = false
+
+	agent := &WorktreeAgent{Branch: "feat/am", State: StateCompleted, WorktreePath: "/tmp/wt"}
+	o.agents["feat/am"] = agent
+
+	o.autoMergeIfNeeded(agent, "feat/am")
+
+	if agent.State != StateCompleted {
+		t.Errorf("expected StateCompleted, got %v (auto-merge should not trigger when disabled)", agent.State)
+	}
+}
+
+func TestAutoMergeIfNeeded_Success_NoTestCommand(t *testing.T) {
+	ops := &fakeWorktreeOps{switchPath: "/tmp/wt"}
+	o := newTestOrchestrator(ops)
+	o.AutoMerge = true
+	// No test_command configured — merge should proceed immediately.
+
+	agent := &WorktreeAgent{Branch: "feat/am", State: StateCompleted, WorktreePath: "/tmp/wt"}
+	o.agents["feat/am"] = agent
+
+	o.autoMergeIfNeeded(agent, "feat/am")
+
+	if agent.State != StateMerged {
+		t.Errorf("expected StateMerged, got %v", agent.State)
+	}
+}
+
+func TestAutoMergeIfNeeded_MergeConflict(t *testing.T) {
+	ops := &fakeWorktreeOps{switchPath: "/tmp/wt", mergeErr: errors.New("conflict")}
+	o := newTestOrchestrator(ops)
+	o.AutoMerge = true
+
+	var notified []loop.LogEntry
+	o.NotificationHook = func(e loop.LogEntry) { notified = append(notified, e) }
+
+	agent := &WorktreeAgent{Branch: "feat/conflict", State: StateCompleted, WorktreePath: "/tmp/wt"}
+	o.agents["feat/conflict"] = agent
+
+	o.autoMergeIfNeeded(agent, "feat/conflict")
+
+	if agent.State != StateMergeFailed {
+		t.Errorf("expected StateMergeFailed, got %v", agent.State)
+	}
+	if len(notified) == 0 {
+		t.Error("expected notification hook called on merge failure")
+	}
+	if notified[0].Kind != loop.LogError {
+		t.Errorf("notification kind = %v, want LogError", notified[0].Kind)
+	}
+}
+
+func TestAutoMergeIfNeeded_TestFailed_SkipsMerge(t *testing.T) {
+	ops := &fakeWorktreeOps{switchPath: "/tmp/wt"}
+	o := newTestOrchestrator(ops)
+	o.AutoMerge = true
+	// Set a test command that always fails.
+	o.cfg.Regent.TestCommand = "exit 1"
+
+	var notified []loop.LogEntry
+	o.NotificationHook = func(e loop.LogEntry) { notified = append(notified, e) }
+
+	agent := &WorktreeAgent{Branch: "feat/testfail", State: StateCompleted, WorktreePath: t.TempDir()}
+	o.agents["feat/testfail"] = agent
+
+	o.autoMergeIfNeeded(agent, "feat/testfail")
+
+	// Agent should stay Completed — merge skipped.
+	if agent.State != StateCompleted {
+		t.Errorf("expected StateCompleted (no merge), got %v", agent.State)
+	}
+	if len(notified) == 0 {
+		t.Error("expected notification hook called when tests fail")
+	}
+}
+
+func TestAutoMergeIfNeeded_NotificationHook_OnSuccess(t *testing.T) {
+	ops := &fakeWorktreeOps{switchPath: "/tmp/wt"}
+	o := newTestOrchestrator(ops)
+	o.AutoMerge = true
+
+	var notified []loop.LogEntry
+	o.NotificationHook = func(e loop.LogEntry) { notified = append(notified, e) }
+
+	agent := &WorktreeAgent{Branch: "feat/notify", State: StateCompleted, WorktreePath: "/tmp/wt"}
+	o.agents["feat/notify"] = agent
+
+	o.autoMergeIfNeeded(agent, "feat/notify")
+
+	if len(notified) == 0 {
+		t.Error("expected notification hook called on successful merge")
+	}
+	if notified[0].Kind != loop.LogInfo {
+		t.Errorf("notification kind = %v, want LogInfo", notified[0].Kind)
+	}
+}
+
+// ─── Fan-in stats callback ────────────────────────────────────────────────────
+
+func TestFanIn_OnEntryCallback_UpdatesStats(t *testing.T) {
+	merged := make(chan TaggedLogEntry, 16)
+	events := make(chan loop.LogEntry, 4)
+	var wg sync.WaitGroup
+
+	var callCount int
+	startFanIn("feat/stats", events, merged, func(e loop.LogEntry) {
+		callCount++
+	}, &wg)
+
+	events <- loop.LogEntry{Kind: loop.LogInfo, Message: "msg1"}
+	events <- loop.LogEntry{Kind: loop.LogIterComplete, CostUSD: 0.05}
+	close(events)
+	wg.Wait()
+	close(merged)
+
+	if callCount != 2 {
+		t.Errorf("onEntry called %d times, want 2", callCount)
+	}
 }
 
 // ─── WorktreePaths ────────────────────────────────────────────────────────────

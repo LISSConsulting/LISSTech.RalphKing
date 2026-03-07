@@ -8,6 +8,7 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/worktree"
 )
 
@@ -27,6 +28,10 @@ type Orchestrator struct {
 	// MergedEvents receives tagged events from all agent fan-in goroutines.
 	// Consumers (e.g. TUI) read from this channel.
 	MergedEvents chan TaggedLogEntry
+
+	// NotificationHook, if set, is called for synthesised merge-result log
+	// entries so the external notification system can fire webhooks.
+	NotificationHook func(loop.LogEntry)
 }
 
 // New creates an Orchestrator with the given settings.
@@ -133,7 +138,15 @@ func (o *Orchestrator) Launch(ctx context.Context, branch, specName, specDir str
 	o.mu.Unlock()
 
 	// Register with fan-in so events reach MergedEvents.
-	startFanIn(branch, events, o.MergedEvents, &o.fanInWg)
+	// The onEntry callback updates per-agent stats under the lock.
+	startFanIn(branch, events, o.MergedEvents, func(e loop.LogEntry) {
+		if e.Kind == loop.LogIterComplete {
+			o.mu.Lock()
+			agent.Iterations++
+			agent.TotalCost += e.CostUSD
+			o.mu.Unlock()
+		}
+	}, &o.fanInWg)
 
 	// Build the loop for this worktree.
 	lp := &loop.Loop{
@@ -161,9 +174,8 @@ func (o *Orchestrator) Launch(ctx context.Context, branch, specName, specDir str
 
 		close(events)
 
-		// Auto-merge if configured and agent completed successfully.
-		if agent.State == StateCompleted && o.AutoMerge {
-			_ = o.Merge(branch)
+		if agent.State == StateCompleted {
+			o.autoMergeIfNeeded(agent, branch)
 		}
 	}()
 
@@ -288,5 +300,63 @@ func (o *Orchestrator) runningCount() int {
 		}
 	}
 	return count
+}
+
+// autoMergeIfNeeded runs optional test-gating and then merges the branch when
+// AutoMerge is enabled and the agent completed successfully.  It is called
+// from the Launch goroutine after the loop exits with StateCompleted.
+//
+//   - If AutoMerge is false, this is a no-op.
+//   - If regent.test_command is configured, the command is executed inside the
+//     worktree directory.  A failing test run skips the merge and logs a warning.
+//   - If wt merge fails the agent transitions to StateMergeFailed.
+//   - Merge result events are emitted to MergedEvents and to NotificationHook.
+func (o *Orchestrator) autoMergeIfNeeded(agent *WorktreeAgent, branch string) {
+	if !o.AutoMerge {
+		return
+	}
+
+	// Optional test-gating (uses regent.RunTests which supports Windows cmd /C).
+	if tc := o.cfg.Regent.TestCommand; tc != "" {
+		res, err := regent.RunTests(agent.WorktreePath, tc)
+		if err != nil {
+			o.emitToMerged(branch, loop.LogEntry{
+				Kind:    loop.LogError,
+				Message: fmt.Sprintf("worktree %s: could not run tests: %v — skipping auto-merge", branch, err),
+			})
+			return
+		}
+		if !res.Passed {
+			o.emitToMerged(branch, loop.LogEntry{
+				Kind:    loop.LogInfo,
+				Message: fmt.Sprintf("worktree %s: tests failed — skipping auto-merge\n%s", branch, res.Output),
+			})
+			return
+		}
+	}
+
+	if err := o.Merge(branch); err != nil {
+		o.emitToMerged(branch, loop.LogEntry{
+			Kind:    loop.LogError,
+			Message: fmt.Sprintf("worktree %s: auto-merge failed: %v", branch, err),
+		})
+	} else {
+		o.emitToMerged(branch, loop.LogEntry{
+			Kind:    loop.LogInfo,
+			Message: fmt.Sprintf("worktree %s: auto-merge completed successfully", branch),
+		})
+	}
+}
+
+// emitToMerged sends a synthesised log entry to MergedEvents (non-blocking)
+// and fires NotificationHook if configured.
+func (o *Orchestrator) emitToMerged(branch string, entry loop.LogEntry) {
+	select {
+	case o.MergedEvents <- TaggedLogEntry{Branch: branch, Entry: entry}:
+	default:
+	}
+	if o.NotificationHook != nil {
+		o.NotificationHook(entry)
+	}
 }
 

@@ -1272,3 +1272,59 @@ func TestKey_X_FocusWorktrees_DelegatesToPanel(t *testing.T) {
 	// With no entries, the panel returns no cmd.
 	_ = cmd
 }
+
+// TestAgentsToEntries_WithAgents verifies the loop body in agentsToEntries.
+func TestAgentsToEntries_WithAgents(t *testing.T) {
+	agents := []*orchestrator.WorktreeAgent{
+		{Branch: "feat/a", State: orchestrator.StateRunning, Iterations: 3, TotalCost: 0.05, SpecName: "spec-a"},
+		{Branch: "feat/b", State: orchestrator.StateCompleted, Iterations: 7, TotalCost: 0.12, SpecName: "spec-b"},
+	}
+	entries := agentsToEntries(agents)
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+	if entries[0].Branch != "feat/a" || entries[0].Iterations != 3 {
+		t.Errorf("entries[0] = %+v, want branch feat/a iter 3", entries[0])
+	}
+	if entries[1].State != "completed" {
+		t.Errorf("entries[1].State = %q, want %q", entries[1].State, "completed")
+	}
+}
+
+// TestWorktreesSplitDims_Clamping verifies that narrow/short rects don't panic
+// and the clamp branches (w<1, itersTopH<1, itersBotH<1) are exercised.
+func TestWorktreesSplitDims_Clamping(t *testing.T) {
+	// Width=1 triggers w < 1 → w = 1 clamp; Height=2 triggers both height clamps.
+	w, itersTopH, itersBotH := worktreesSplitDims(Rect{Width: 1, Height: 2})
+	if w < 1 {
+		t.Errorf("w should be clamped to at least 1, got %d", w)
+	}
+	if itersTopH < 1 {
+		t.Errorf("itersTopH should be clamped to at least 1, got %d", itersTopH)
+	}
+	if itersBotH < 1 {
+		t.Errorf("itersBotH should be clamped to at least 1, got %d", itersBotH)
+	}
+}
+
+// TestHandleTaggedEvent_NilMapInit verifies that handleTaggedEvent initialises
+// worktreeLogsByBranch lazily when it is nil (model not initialised via WithOrchestrator).
+func TestHandleTaggedEvent_NilMapInit(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	orch := newTestOrch()
+	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
+	// Set orch but skip WithOrchestrator to leave worktreeLogsByBranch nil.
+	m.orch = orch
+
+	entry := loop.LogEntry{Kind: loop.LogInfo, Message: "lazy init"}
+	msg := taggedEventMsg{Branch: "wt/lazy", Entry: entry}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	if m2.worktreeLogsByBranch == nil {
+		t.Error("worktreeLogsByBranch should be initialised after handleTaggedEvent")
+	}
+	if len(m2.worktreeLogsByBranch["wt/lazy"]) == 0 {
+		t.Error("expected at least one log line for wt/lazy")
+	}
+}

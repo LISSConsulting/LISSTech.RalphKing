@@ -221,3 +221,14 @@ func TestMainView_SummaryTab_ScrollDelegation(t *testing.T) {
 	mv, _ = mv.Update(keyMsg("j"))
 	_ = mv.View()
 }
+
+func TestMainView_ShowWorktreeLog_SetsContent(t *testing.T) {
+	mv := NewMainView(80, 20)
+	lines := []string{"line A", "line B", "line C"}
+	mv2 := mv.ShowWorktreeLog(lines)
+	view := mv2.View()
+	// After ShowWorktreeLog the output tab is active; view must not be empty.
+	if view == "" {
+		t.Error("View() after ShowWorktreeLog should not be empty")
+	}
+}

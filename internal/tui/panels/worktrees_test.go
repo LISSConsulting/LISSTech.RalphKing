@@ -229,3 +229,27 @@ func TestWorktreesPanel_Update_OtherKey_Passthrough(t *testing.T) {
 	p2, _ := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
 	_ = p2.View() // must not panic
 }
+
+func TestWorktreeItem_Description_ContainsIterAndCost(t *testing.T) {
+	item := worktreeItem{entry: WorktreeEntry{
+		Branch:     "wt/x",
+		State:      "running",
+		Iterations: 7,
+		TotalCost:  0.1234,
+		SpecName:   "my-spec",
+	}}
+	desc := item.Description()
+	if !strings.Contains(desc, "7") {
+		t.Errorf("Description should contain iteration count 7; got %q", desc)
+	}
+	if !strings.Contains(desc, "my-spec") {
+		t.Errorf("Description should contain spec name; got %q", desc)
+	}
+}
+
+func TestWorktreeItem_FilterValue_ReturnsBranch(t *testing.T) {
+	item := worktreeItem{entry: WorktreeEntry{Branch: "wt/feature-x"}}
+	if got := item.FilterValue(); got != "wt/feature-x" {
+		t.Errorf("FilterValue = %q, want %q", got, "wt/feature-x")
+	}
+}
