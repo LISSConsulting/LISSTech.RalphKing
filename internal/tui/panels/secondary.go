@@ -72,6 +72,16 @@ func (p SecondaryPanel) AddIteration(s store.IterationSummary) SecondaryPanel {
 	return p
 }
 
+// ShowDetail replaces the Regent tab content with the given detail lines for a
+// selected item (e.g., a completed iteration) and switches to the Regent tab
+// so the detail is immediately visible.
+func (p SecondaryPanel) ShowDetail(lines []string) SecondaryPanel {
+	p.regent = p.regent.SetContent(lines)
+	p.activeTab = TabRegent
+	p.tabbar = p.tabbar.SetActive(int(TabRegent))
+	return p
+}
+
 // SetSize resizes all internal viewports.
 func (p SecondaryPanel) SetSize(w, h int) SecondaryPanel {
 	p.width = w

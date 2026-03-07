@@ -93,6 +93,27 @@ func TestTabBar_SetWidth(t *testing.T) {
 	}
 }
 
+func TestTabBar_SetActive(t *testing.T) {
+	tb := NewTabBar([]string{"A", "B", "C"})
+	tb = tb.Next().Next() // active = 2
+	tb = tb.SetActive(0)
+	if tb.Active() != 0 {
+		t.Errorf("SetActive(0): got %d, want 0", tb.Active())
+	}
+	// Out of bounds clamped.
+	tb = tb.SetActive(99)
+	if tb.Active() != 2 {
+		t.Errorf("SetActive(99): got %d, want 2 (clamped)", tb.Active())
+	}
+	tb = tb.SetActive(-1)
+	if tb.Active() != 0 {
+		t.Errorf("SetActive(-1): got %d, want 0 (clamped)", tb.Active())
+	}
+	// Empty TabBar.
+	empty := NewTabBar(nil)
+	_ = empty.SetActive(0) // must not panic
+}
+
 func TestTabBar_CycleWraps(t *testing.T) {
 	tabs := []string{"A", "B"}
 	tb := NewTabBar(tabs)

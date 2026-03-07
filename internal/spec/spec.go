@@ -75,8 +75,11 @@ type SpecFile struct {
 //
 // Flat .md files (specs/name.md) use the legacy CHRONICLE.md-based status detection.
 //
-// The dir argument is the project root directory.
+// The dir argument is the project root directory. All file system access uses
+// paths derived from dir — List is independent of the process working directory.
 func List(dir string) ([]SpecFile, error) {
+	// specsDir and all derived paths (absDir, CHRONICLE.md) are rooted at dir,
+	// not at the process CWD, so List works correctly from any working directory.
 	specsDir := filepath.Join(dir, "specs")
 	entries, err := os.ReadDir(specsDir)
 	if err != nil {

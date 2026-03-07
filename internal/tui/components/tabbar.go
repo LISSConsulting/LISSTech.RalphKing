@@ -49,6 +49,22 @@ func (t TabBar) Prev() TabBar {
 	return t
 }
 
+// SetActive returns a TabBar with the given tab index active.
+// If i is out of range it is clamped to valid bounds.
+func (t TabBar) SetActive(i int) TabBar {
+	if len(t.tabs) == 0 {
+		return t
+	}
+	if i < 0 {
+		i = 0
+	}
+	if i >= len(t.tabs) {
+		i = len(t.tabs) - 1
+	}
+	t.active = i
+	return t
+}
+
 // SetWidth returns a TabBar configured for the given render width.
 func (t TabBar) SetWidth(w int) TabBar {
 	t.width = w

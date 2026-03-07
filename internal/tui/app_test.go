@@ -951,6 +951,40 @@ func TestHandleLogEntry_LogIterComplete(t *testing.T) {
 	_ = m2.secondary
 }
 
+// TestHandleLogEntry_CostAccumulation verifies that totalCost increments on
+// each LogIterComplete event (T073) and is overridden by the authoritative
+// TotalCost carried in subsequent LogInfo/LogDone events.
+func TestHandleLogEntry_CostAccumulation(t *testing.T) {
+	m := newTestModel()
+
+	// First iteration: $0.05
+	m2, _ := m.Update(logEntryMsg(loop.LogEntry{
+		Kind: loop.LogIterComplete, Iteration: 1, CostUSD: 0.05,
+	}))
+	m = m2.(Model)
+	if m.totalCost != 0.05 {
+		t.Errorf("after iter 1: totalCost = %.4f, want 0.05", m.totalCost)
+	}
+
+	// Second iteration: $0.03
+	m2, _ = m.Update(logEntryMsg(loop.LogEntry{
+		Kind: loop.LogIterComplete, Iteration: 2, CostUSD: 0.03,
+	}))
+	m = m2.(Model)
+	if m.totalCost != 0.08 {
+		t.Errorf("after iter 2: totalCost = %.4f, want 0.08", m.totalCost)
+	}
+
+	// LogInfo carries the authoritative running total — should override accumulated value.
+	m2, _ = m.Update(logEntryMsg(loop.LogEntry{
+		Kind: loop.LogInfo, TotalCost: 0.08, Message: "Running total",
+	}))
+	m = m2.(Model)
+	if m.totalCost != 0.08 {
+		t.Errorf("after LogInfo: totalCost = %.4f, want 0.08", m.totalCost)
+	}
+}
+
 // TestUpdate_UnknownMsg covers the default case in Update (delegateToFocused
 // for any message type not explicitly handled by the switch).
 func TestUpdate_UnknownMsg(t *testing.T) {

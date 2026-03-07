@@ -468,6 +468,10 @@ func (m Model) handleLogEntry(msg logEntryMsg) (tea.Model, tea.Cmd) {
 		m.iterationsPanel = m.iterationsPanel.SetCurrent(entry.Iteration)
 
 	case loop.LogIterComplete:
+		// Accumulate cost immediately so the header total updates before the
+		// subsequent LogInfo event. LogInfo/LogDone carry the authoritative
+		// TotalCost from the loop and will override this via the check above.
+		m.totalCost += entry.CostUSD
 		summary := store.IterationSummary{
 			Number:   entry.Iteration,
 			Mode:     entry.Mode,
@@ -668,7 +672,9 @@ func (m Model) handleIterationLogLoaded(msg iterationLogLoadedMsg) (tea.Model, t
 		rendered[i] = m.theme.RenderLogLine(e, m.layout.Main.Width)
 	}
 	m.mainView = m.mainView.ShowIterationLog(rendered)
-	m.mainView = m.mainView.SetIterationSummary(renderIterationSummary(msg.Summary))
+	detail := renderIterationSummary(msg.Summary)
+	m.mainView = m.mainView.SetIterationSummary(detail)
+	m.secondary = m.secondary.ShowDetail(detail)
 	return m, nil
 }
 

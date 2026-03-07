@@ -508,6 +508,43 @@ func TestDetectStatus(t *testing.T) {
 	}
 }
 
+// TestList_CWDIndependent verifies that List(dir) returns correct results
+// regardless of the current working directory at call time.
+func TestList_CWDIndependent(t *testing.T) {
+	projectDir := t.TempDir()
+	featureDir := filepath.Join(projectDir, "specs", "001-alpha")
+	if err := os.MkdirAll(featureDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"spec.md", "plan.md", "tasks.md"} {
+		if err := os.WriteFile(filepath.Join(featureDir, f), []byte("# "+f), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Change to a different directory before calling List.
+	otherDir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(otherDir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	specs, err := List(projectDir)
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("List() returned %d specs, want 1", len(specs))
+	}
+	if specs[0].Status != StatusTasked {
+		t.Errorf("Status = %v, want StatusTasked", specs[0].Status)
+	}
+}
+
 func TestStatusSymbol(t *testing.T) {
 	tests := []struct {
 		status Status
