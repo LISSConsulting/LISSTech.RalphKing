@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **Specs 001–006 fully implemented. No remaining work items.** All 12 packages pass; go vet clean; golangci-lint 0 issues; tests green. `internal/tui/components` 100%, `internal/tui/panels` 100%. cmd/ralph ~76% — confirmed ceiling: `runWithRegentTUI`/`runWithTUIAndState`/`runDashboard` (0%) require real TTY; `os.Getwd()` error paths untriggerable in tests; `TestSpecListCmd_SpecsNotDir` skipped on Windows.
+> Current state: **Spec 007 (worktree support) in progress — Phases 1-3 complete (MVP).** All 14 packages pass; go vet clean. Tasks T001–T028 done. Remaining: Phases 4-8 (TUI dashboard multi-agent, auto-merge, per-worktree Regent, polish).
 
 ## Completed Work
 
@@ -26,11 +26,19 @@ Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` 
 | Spec-bounded loop with --roam (spec 005, all phases) | `LogSpecComplete`/`LogSweepComplete` log kinds in `event.go`; `iteration()` refactored to `(cost, subtype, commitsProduced, err)` — `headBefore`/`headAfter` diff detects new commits; completion state machine (`prevSubtype`+`commitsProduced`) in `Run()`; `git.CreateAndCheckout(name)` (`git checkout -b`); `BuildConfig.Roam bool` with `toml:"roam"` tag; `--roam` flag on `buildCmd`/`loopBuildCmd`/`loopRunCmd`; `createSweepBranch()` helper (`sweep/YYYY-MM-DD`, collision retry `-2`…`-10`); `Loop.Roam`/`Loop.Spec`/`Loop.SpecDir` fields; `augmentPrompt()` helper (spec-boundary or sweep directive); `spec.Resolve()` wired in `executeLoop`/`executeSmartRun` for `!effectiveRoam`; `roam = false` in `ralph.toml`; full test coverage across all 20 tasks | 005-spec-bounded-roam |
 | Polish & hardening (spec 006, all 7 phases) | F1: `lineFormatter` struct (`format.go`) delegates to `tui.RenderLogLine` for color, plain `[HH:MM:SS] msg` for no-color; replaces old `formatLogLine()`; wired into all drain goroutines via `lineFormatter{color: !noColor}`; F2: `--no-color` persistent flag on `rootCmd`; `PersistentPreRunE` prints yellow-bold warning when `ANTHROPIC_API_KEY` is set; F3: test coverage — `TestCheckDir_PathIsFile` (spec/resolve), `TestSaveState_CreateTempError` (regent/state), `TestLoadAutoDiscovery` (config), `TestRunTests_ShellNotFound` (regent/tester), `TestAppend_AfterClose`/`TestEnforceRetention_ReadOnlyDir`/`TestNewJSONL_DirIsFile` (store); F4: `loopSetup` struct + `setupLoop(noTUI, roam, noColor bool)` in `execute.go`; `executeLoop`/`executeSmartRun` both call it; F5: README — flag table (`--no-tui`, `--no-color`, `--max`, `--roam`) + usage examples + ANTHROPIC_API_KEY section; F6: deps updated (`colorprofile` 0.4.2, `go-runewidth` 0.0.20, `pflag` 1.0.10, `x/sys` 0.41.0); F7: `ci.yml` emits `coverage.out` + uploads artifact; `release.yml` tag-triggered cross-compile + `svenstaro/upload-release-action@v2` | 006-polish-and-hardening (v0.1.28) |
 
+| Worktree support — Phases 1-3 (spec 007, T001–T028) | Phase 1: `WorktreeConfig` in config.go (`enabled`, `max_parallel`, `auto_merge`, `merge_target`, `path_template`); validation (`max_parallel >= 1`); defaults; `[worktree]` in ralph.toml + InitFile template. Phase 2: `internal/worktree/` package — `Runner` with `WorktreeOps` interface (`Detect`, `Switch`, `List`, `Merge`, `Remove`) via `wt` subprocess calls; Detect() checks `wt`/`git-wt` candidates and validates `--version` contains "worktrunk"; Switch() parses `@ <path>` from stdout; List() tries `wt list --json` then falls back to `git worktree list --porcelain`; `_FAKE_WT=1` subprocess test pattern (bat script on Windows). Phase 3: `internal/orchestrator/` — `AgentState` enum, `WorktreeAgent`, `TaggedLogEntry`; `Orchestrator` with mutex-guarded agents map; `startFanIn()` fan-in multiplexer; `Launch/Stop/StopAll/Merge/Clean/WorktreePaths`; auto-merge on completion. CLI: `--worktree` / `-w` flag on `ralph build`, `loop plan/build/run`; `setupWorktree()` in `execute.go` detects wt, switches to worktree, redirects `loop.Dir` and `git.Runner`; `ralph worktree list/merge/clean` subcommands. | 007-worktree-support |
+
 ## Remaining Work
 
 ### Queue
 
-No remaining work items. All specs 001–006 fully implemented.
+**Spec 007 in progress — Phases 4-8 remaining:**
+
+- [ ] T029-T037: Phase 4 (US2) — WorktreesPanel TUI component + Orchestrator wiring into dashboard; `W` keybind to launch from Specs panel; `x`/`M`/`D` keybinds for stop/merge/clean in WorktreesPanel; Main panel shows selected worktree log
+- [ ] T038-T041: Phase 5 (US3) — Auto-merge trigger in Orchestrator with test-gating; notification on merge/failure
+- [ ] T042-T045: Phase 6 (US4) — Enhanced WorktreesPanel rendering with status icons; real-time status updates via TaggedLogEntry; WorktreePaths() log aggregation
+- [ ] T046-T049: Phase 7 (US5) — Multi-worktree Regent; per-agent hang/crash detection; per-worktree rollback
+- [ ] T050-T055: Phase 8 — README worktree section; TUI keyboard reference; quickstart validation; lint + tests
 
 ### Improvement Sweep History
 
