@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -251,5 +252,22 @@ func TestWorktreeItem_FilterValue_ReturnsBranch(t *testing.T) {
 	item := worktreeItem{entry: WorktreeEntry{Branch: "wt/feature-x"}}
 	if got := item.FilterValue(); got != "wt/feature-x" {
 		t.Errorf("FilterValue = %q, want %q", got, "wt/feature-x")
+	}
+}
+
+// fakeListItem satisfies list.Item but is not a worktreeItem.
+type fakeListItem struct{}
+
+func (fakeListItem) FilterValue() string { return "" }
+
+// TestWorktreeDelegate_Render_NonWorktreeItem covers the early-return guard in
+// worktreeDelegate.Render when the item type assertion fails.
+func TestWorktreeDelegate_Render_NonWorktreeItem(t *testing.T) {
+	d := worktreeDelegate{}
+	l := list.New(nil, d, 40, 10)
+	var buf strings.Builder
+	d.Render(&buf, l, 0, fakeListItem{})
+	if buf.Len() != 0 {
+		t.Errorf("expected no output for non-worktreeItem, got %q", buf.String())
 	}
 }

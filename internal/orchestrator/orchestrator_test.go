@@ -433,6 +433,32 @@ func TestAutoMergeIfNeeded_RunTestsError_SkipsMerge(t *testing.T) {
 	}
 }
 
+// TestAutoMergeIfNeeded_TestPassed_MergeProceeds verifies that when TestCommand
+// is set and the tests pass, autoMergeIfNeeded falls through to perform the merge.
+func TestAutoMergeIfNeeded_TestPassed_MergeProceeds(t *testing.T) {
+	ops := &fakeWorktreeOps{switchPath: "/tmp/wt"}
+	o := newTestOrchestrator(ops)
+	o.AutoMerge = true
+	// "exit 0" succeeds on both Unix (sh -c) and Windows (cmd /C).
+	o.cfg.Regent.TestCommand = "exit 0"
+
+	var notified []loop.LogEntry
+	o.NotificationHook = func(e loop.LogEntry) { notified = append(notified, e) }
+
+	agent := &WorktreeAgent{Branch: "feat/testpass", State: StateCompleted, WorktreePath: t.TempDir()}
+	o.agents["feat/testpass"] = agent
+
+	o.autoMergeIfNeeded(agent, "feat/testpass")
+
+	// Tests passed — merge should proceed. With mergeErr=nil the success event is emitted.
+	if len(notified) == 0 {
+		t.Error("expected notification hook called when tests pass and merge succeeds")
+	}
+	if notified[0].Kind != loop.LogInfo {
+		t.Errorf("notification kind = %v, want LogInfo", notified[0].Kind)
+	}
+}
+
 func TestAutoMergeIfNeeded_NotificationHook_OnSuccess(t *testing.T) {
 	ops := &fakeWorktreeOps{switchPath: "/tmp/wt"}
 	o := newTestOrchestrator(ops)

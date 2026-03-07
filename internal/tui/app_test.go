@@ -1487,3 +1487,94 @@ func TestRenderMarkdown_RawFallback(t *testing.T) {
 		t.Errorf("renderMarkdown(%q) = %q; expected to contain original text or rendered version", raw, result)
 	}
 }
+
+// ── Cmd closure tests ─────────────────────────────────────────────────────────
+// These tests directly invoke the closures returned by Cmd-factory functions to
+// cover branches that the bubbletea runtime would otherwise execute
+// asynchronously and are missed by integration-level program tests.
+
+func TestInitIterationsCmd_NilReader(t *testing.T) {
+	fn := initIterationsCmd(nil)
+	msg := fn()
+	loaded, ok := msg.(iterationsLoadedMsg)
+	if !ok {
+		t.Fatalf("expected iterationsLoadedMsg, got %T", msg)
+	}
+	if len(loaded.Summaries) != 0 {
+		t.Errorf("expected empty summaries for nil reader, got %d", len(loaded.Summaries))
+	}
+}
+
+func TestInitIterationsCmd_WithReader(t *testing.T) {
+	r := &mockStoreReader{
+		iterations: []store.IterationSummary{{Number: 1, Mode: "build"}},
+	}
+	fn := initIterationsCmd(r)
+	msg := fn()
+	loaded, ok := msg.(iterationsLoadedMsg)
+	if !ok {
+		t.Fatalf("expected iterationsLoadedMsg, got %T", msg)
+	}
+	if len(loaded.Summaries) != 1 {
+		t.Errorf("expected 1 summary, got %d", len(loaded.Summaries))
+	}
+	if loaded.Summaries[0].Number != 1 {
+		t.Errorf("summary Number: want 1, got %d", loaded.Summaries[0].Number)
+	}
+}
+
+func TestWaitForTaggedEvent_ClosedChannel(t *testing.T) {
+	ch := make(chan orchestrator.TaggedLogEntry)
+	close(ch)
+	fn := waitForTaggedEvent(ch)
+	msg := fn()
+	if msg != nil {
+		t.Errorf("expected nil for closed channel, got %T", msg)
+	}
+}
+
+func TestWaitForTaggedEvent_SendsEvent(t *testing.T) {
+	ch := make(chan orchestrator.TaggedLogEntry, 1)
+	ch <- orchestrator.TaggedLogEntry{
+		Branch: "feat/test",
+		Entry:  loop.LogEntry{Kind: loop.LogInfo, Message: "hello"},
+	}
+	fn := waitForTaggedEvent(ch)
+	msg := fn()
+	tagged, ok := msg.(taggedEventMsg)
+	if !ok {
+		t.Fatalf("expected taggedEventMsg, got %T", msg)
+	}
+	if tagged.Branch != "feat/test" {
+		t.Errorf("Branch: want feat/test, got %s", tagged.Branch)
+	}
+	if tagged.Entry.Message != "hello" {
+		t.Errorf("Entry.Message: want hello, got %s", tagged.Entry.Message)
+	}
+}
+
+func TestRunGitOutput_Error(t *testing.T) {
+	// An invalid git subcommand exits non-zero — error path returns "".
+	result := runGitOutput("this-subcommand-does-not-exist-xyz")
+	if result != "" {
+		t.Errorf("expected empty string on git error, got %q", result)
+	}
+}
+
+func TestRunGitOutput_Success(t *testing.T) {
+	// "git version" is always available.
+	result := runGitOutput("version")
+	if result == "" {
+		t.Error("expected non-empty output from git version")
+	}
+}
+
+func TestInitGitInfoCmd_ReturnsGitInfoMsg(t *testing.T) {
+	fn := initGitInfoCmd()
+	msg := fn()
+	if _, ok := msg.(gitInfoMsg); !ok {
+		t.Fatalf("expected gitInfoMsg, got %T", msg)
+	}
+	// Branch and commit may be empty in a test environment — just ensure the
+	// function completes without panic.
+}
