@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/glamour"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -566,8 +567,26 @@ func (m Model) handleWorktreeSelected(msg panels.WorktreeSelectedMsg) (tea.Model
 
 func (m Model) handleSpecSelected(msg panels.SpecSelectedMsg) (tea.Model, tea.Cmd) {
 	content := m.readSpecContent(msg.Spec)
-	m.mainView = m.mainView.ShowSpec(content)
+	w, _ := titleContentDims(m.layout.Main)
+	m.mainView = m.mainView.ShowSpec(renderMarkdown(content, w))
 	return m, nil
+}
+
+// renderMarkdown renders markdown content with glamour for display in the Main panel.
+// Falls back to raw text if glamour fails (e.g. unsupported environment).
+func renderMarkdown(content string, width int) string {
+	r, err := glamour.NewTermRenderer(
+		glamour.WithStandardStyle("dark"),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		return content
+	}
+	rendered, err := r.Render(content)
+	if err != nil {
+		return content
+	}
+	return rendered
 }
 
 func (m Model) handleEditSpecRequest(msg panels.EditSpecRequestMsg) (tea.Model, tea.Cmd) {
