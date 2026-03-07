@@ -22,6 +22,16 @@
 
 Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
 
+## Improvement Sweep (2026-03-07, updated 2026-03-09) — v0.1.59 (no new findings)
+
+Full sweep completed with zero actionable findings:
+- **Test coverage**: total 90.4% — all remaining gaps confirmed platform ceilings (git.Pull rebase-fails-merge-succeeds hard to engineer; git.Push -u fallback unreachable with local git; git.Stash "No local changes" modern git exits 0; store.NewJSONL OpenFile/Seek errors; regent.SaveState Write/Close errors require disk-full; config.findConfig os.Getwd impossible; regent.RunTests non-Windows sh branch)
+- **Code hygiene**: no TODO/FIXME/HACK/XXX in non-test Go source
+- **Stale references**: README current — all 8 specs documented, --focus flag present, CI badges accurate
+- **Spec consistency**: specs 001-008 fully implemented, T001-T084 complete, all ACs verified
+- **CI health**: all actions current (checkout@v4, setup-go@v5, golangci-lint-action@v7 v2.1.6, upload-artifact@v4)
+- **Dead code**: no unexported functions with zero callers found
+
 ## Improvement Sweep (2026-03-07, updated 2026-03-08) — v0.1.58
 
 - **Loop fixes committed**: isolateProcess (cross-platform subprocess isolation via procattr_unix/windows.go); HasRemoteBranch guard on auto-pull-rebase (skip when no remote tracking branch yet); StashPop silences "No stash entries found" for no-op stash scenarios
