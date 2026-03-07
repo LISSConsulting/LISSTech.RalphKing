@@ -85,10 +85,10 @@ func New(events <-chan loop.LogEntry, storeReader store.Reader, accentColor, pro
 	th := NewTheme(accentColor)
 	layout := Calculate(80, 24)
 
-	specsW, specsH := innerDims(layout.Specs)
-	itersW, itersH := innerDims(layout.Iterations)
-	mainW, mainH := innerDims(layout.Main)
-	secW, secH := innerDims(layout.Secondary)
+	specsW, specsH := titleContentDims(layout.Specs)
+	itersW, itersH := titleContentDims(layout.Iterations)
+	mainW, mainH := titleContentDims(layout.Main)
+	secW, secH := titleContentDims(layout.Secondary)
 
 	return Model{
 		events:          events,
@@ -127,6 +127,9 @@ func (m Model) WithOrchestrator(orch *orchestrator.Orchestrator) Model {
 	// will be resized on the first WindowSizeMsg).
 	w, itersTopH, itersBotH := worktreesSplitDims(m.layout.Iterations)
 	_ = itersTopH
+	if itersBotH > 1 {
+		itersBotH--
+	}
 	m.worktreesPanel = panels.NewWorktreesPanel(agentsToEntries(orch.ActiveAgents()), w, itersBotH)
 	return m
 }
@@ -267,19 +270,25 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.height = msg.Height
 	m.layout = Calculate(msg.Width, msg.Height)
 	if !m.layout.TooSmall {
-		specsW, specsH := innerDims(m.layout.Specs)
-		mainW, mainH := innerDims(m.layout.Main)
-		secW, secH := innerDims(m.layout.Secondary)
+		specsW, specsH := titleContentDims(m.layout.Specs)
+		mainW, mainH := titleContentDims(m.layout.Main)
+		secW, secH := titleContentDims(m.layout.Secondary)
 		m.specsPanel = m.specsPanel.SetSize(specsW, specsH)
 		m.mainView = m.mainView.SetSize(mainW, mainH)
 		m.secondary = m.secondary.SetSize(secW, secH)
 
 		if m.orch != nil {
 			w, itersTopH, itersBotH := worktreesSplitDims(m.layout.Iterations)
+			if itersTopH > 1 {
+				itersTopH--
+			}
+			if itersBotH > 1 {
+				itersBotH--
+			}
 			m.iterationsPanel = m.iterationsPanel.SetSize(w, itersTopH)
 			m.worktreesPanel = m.worktreesPanel.SetSize(w, itersBotH)
 		} else {
-			itersW, itersH := innerDims(m.layout.Iterations)
+			itersW, itersH := titleContentDims(m.layout.Iterations)
 			m.iterationsPanel = m.iterationsPanel.SetSize(itersW, itersH)
 		}
 	}
@@ -594,7 +603,7 @@ func (m Model) handleCreateSpecRequest(msg panels.CreateSpecRequestMsg) (tea.Mod
 }
 
 func (m Model) handleSpecsRefreshed(msg specsRefreshedMsg) (tea.Model, tea.Cmd) {
-	specsW, specsH := innerDims(m.layout.Specs)
+	specsW, specsH := titleContentDims(m.layout.Specs)
 	m.specsPanel = panels.NewSpecsPanel(msg.Specs, specsW, specsH)
 	return m, nil
 }
@@ -762,33 +771,54 @@ func (m Model) View() string {
 		sidebar = lipgloss.JoinVertical(lipgloss.Left,
 			m.theme.PanelBorderStyle(m.focus == FocusSpecs).
 				Width(specsW).Height(specsH).
-				Render(m.specsPanel.View()),
+				Render(lipgloss.JoinVertical(lipgloss.Left,
+					renderPanelTitle(1, "Specs", m.focus == FocusSpecs, m.theme),
+					m.specsPanel.View(),
+				)),
 			m.theme.PanelBorderStyle(m.focus == FocusIterations).
 				Width(w).Height(itersTopH).
-				Render(m.iterationsPanel.View()),
+				Render(lipgloss.JoinVertical(lipgloss.Left,
+					renderPanelTitle(2, "Iterations", m.focus == FocusIterations, m.theme),
+					m.iterationsPanel.View(),
+				)),
 			m.theme.PanelBorderStyle(m.focus == FocusWorktrees).
 				Width(w).Height(itersBotH).
-				Render(m.worktreesPanel.View()),
+				Render(lipgloss.JoinVertical(lipgloss.Left,
+					renderPanelTitle(5, "Worktrees", m.focus == FocusWorktrees, m.theme),
+					m.worktreesPanel.View(),
+				)),
 		)
 	} else {
 		itersW, itersH := innerDims(m.layout.Iterations)
 		sidebar = lipgloss.JoinVertical(lipgloss.Left,
 			m.theme.PanelBorderStyle(m.focus == FocusSpecs).
 				Width(specsW).Height(specsH).
-				Render(m.specsPanel.View()),
+				Render(lipgloss.JoinVertical(lipgloss.Left,
+					renderPanelTitle(1, "Specs", m.focus == FocusSpecs, m.theme),
+					m.specsPanel.View(),
+				)),
 			m.theme.PanelBorderStyle(m.focus == FocusIterations).
 				Width(itersW).Height(itersH).
-				Render(m.iterationsPanel.View()),
+				Render(lipgloss.JoinVertical(lipgloss.Left,
+					renderPanelTitle(2, "Iterations", m.focus == FocusIterations, m.theme),
+					m.iterationsPanel.View(),
+				)),
 		)
 	}
 
 	rightCol := lipgloss.JoinVertical(lipgloss.Left,
 		m.theme.PanelBorderStyle(m.focus == FocusMain).
 			Width(mainW).Height(mainH).
-			Render(m.mainView.View()),
+			Render(lipgloss.JoinVertical(lipgloss.Left,
+				renderPanelTitle(3, "Output", m.focus == FocusMain, m.theme),
+				m.mainView.View(),
+			)),
 		m.theme.PanelBorderStyle(m.focus == FocusSecondary).
 			Width(secW).Height(secH).
-			Render(m.secondary.View()),
+			Render(lipgloss.JoinVertical(lipgloss.Left,
+				renderPanelTitle(4, "Secondary", m.focus == FocusSecondary, m.theme),
+				m.secondary.View(),
+			)),
 	)
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, rightCol)
@@ -803,6 +833,17 @@ func innerDims(r Rect) (w, h int) {
 		w = 1
 	}
 	h = r.Height - 2
+	if h < 1 {
+		h = 1
+	}
+	return
+}
+
+// titleContentDims returns the content dimensions for a panel that reserves
+// one row for a "[N] Title" label, leaving h-1 rows for the panel body.
+func titleContentDims(r Rect) (w, h int) {
+	w, h = innerDims(r)
+	h--
 	if h < 1 {
 		h = 1
 	}

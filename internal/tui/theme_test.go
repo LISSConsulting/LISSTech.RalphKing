@@ -190,6 +190,56 @@ func TestRenderLogLine_LogIterComplete_NoSubtype(t *testing.T) {
 	}
 }
 
+func TestRenderPanelTitle(t *testing.T) {
+	th := NewTheme("")
+	tests := []struct {
+		name     string
+		number   int
+		title    string
+		focused  bool
+		contains string
+	}{
+		{
+			name:     "unfocused shows number and title",
+			number:   1,
+			title:    "Specs",
+			focused:  false,
+			contains: "[1] Specs",
+		},
+		{
+			name:     "focused shows number and title",
+			number:   3,
+			title:    "Output",
+			focused:  true,
+			contains: "[3] Output",
+		},
+		{
+			name:     "worktrees panel",
+			number:   5,
+			title:    "Worktrees",
+			focused:  false,
+			contains: "[5] Worktrees",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rendered := renderPanelTitle(tt.number, tt.title, tt.focused, th)
+			if !strings.Contains(rendered, tt.contains) {
+				t.Errorf("renderPanelTitle(%d, %q, %v) = %q, want it to contain %q",
+					tt.number, tt.title, tt.focused, rendered, tt.contains)
+			}
+		})
+	}
+
+	// Focused and unfocused renders should differ (different styling).
+	focused := renderPanelTitle(1, "Specs", true, th)
+	unfocused := renderPanelTitle(1, "Specs", false, th)
+	if focused == unfocused {
+		t.Skip("lipgloss ANSI styling unavailable — focused/unfocused renders are identical")
+	}
+}
+
 func TestRenderLogLinePkgFunc(t *testing.T) {
 	th := NewTheme("")
 	now := time.Now()

@@ -141,3 +141,14 @@ func (t Theme) RenderLogLine(entry loop.LogEntry, width int) string {
 func RenderLogLine(entry loop.LogEntry, width int, theme Theme) string {
 	return theme.RenderLogLine(entry, width)
 }
+
+// renderPanelTitle returns a styled "[N] Title" label for use inside panel
+// borders.  When focused, the label is rendered in the accent color; otherwise
+// it falls back to the gray timestamp style.
+func renderPanelTitle(number int, title string, focused bool, th Theme) string {
+	label := fmt.Sprintf("[%d] %s", number, title)
+	if focused {
+		return th.gitStyle.Bold(true).Render(label)
+	}
+	return timestampStyle.Render(label)
+}
