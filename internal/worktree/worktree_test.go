@@ -27,7 +27,7 @@ func init() {
 		_, _ = fmt.Sscan(s, &exitCode)
 	}
 
-	// Handle --version specially: confirm we are worktrunk.
+	// Handle --version specially: confirm we are the wt CLI.
 	if len(args) == 1 && args[0] == "--version" {
 		if os.Getenv("_FAKE_WT_VERSION_FAIL") == "1" {
 			os.Exit(1)
@@ -35,7 +35,7 @@ func init() {
 		if os.Getenv("_FAKE_WT_NOT_WORKTRUNK") == "1" {
 			fmt.Println("Windows Terminal v1.20.0")
 		} else {
-			fmt.Println("worktrunk v0.3.1")
+			fmt.Println("wt v0.28.2")
 		}
 		os.Exit(0)
 	}
@@ -85,7 +85,7 @@ func TestDetect_Found(t *testing.T) {
 		// copied executables. A batch file that echoes "worktrunk" and exits 0
 		// satisfies the Detect() version check.
 		wtBin = filepath.Join(dir, "wt.bat")
-		script := "@echo off\r\necho worktrunk v0.3.1-test\r\n"
+		script := "@echo off\r\necho wt v0.28.2-test\r\n"
 		if err := os.WriteFile(wtBin, []byte(script), 0644); err != nil {
 			t.Fatalf("write wt.bat: %v", err)
 		}
@@ -126,8 +126,8 @@ func TestDetect_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when wt not on PATH")
 	}
-	if !strings.Contains(err.Error(), "worktrunk not found") {
-		t.Errorf("error should mention 'worktrunk not found', got: %v", err)
+	if !strings.Contains(err.Error(), "wt not found") {
+		t.Errorf("error should mention 'wt not found', got: %v", err)
 	}
 }
 
@@ -156,10 +156,10 @@ func TestDetect_NotWorktrunk(t *testing.T) {
 	r := NewRunner(dir)
 	err := r.Detect()
 	if err == nil {
-		t.Fatal("expected error when wt binary is not worktrunk")
+		t.Fatal("expected error when wt binary is Windows Terminal")
 	}
-	if !strings.Contains(err.Error(), "worktrunk not found") {
-		t.Errorf("error should mention 'worktrunk not found', got: %v", err)
+	if !strings.Contains(err.Error(), "wt not found") {
+		t.Errorf("error should mention 'wt not found', got: %v", err)
 	}
 }
 
@@ -518,8 +518,8 @@ func TestDetect_VersionCmdFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when --version fails")
 	}
-	if !strings.Contains(err.Error(), "worktrunk not found") {
-		t.Errorf("error should mention 'worktrunk not found', got: %v", err)
+	if !strings.Contains(err.Error(), "wt not found") {
+		t.Errorf("error should mention 'wt not found', got: %v", err)
 	}
 }
 
