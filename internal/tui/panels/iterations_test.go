@@ -11,6 +11,14 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
 )
 
+// wrongListItem implements list.Item but is not iterItem — used to test
+// delegate.Render's wrong-type branch.
+type wrongListItem struct{}
+
+func (w wrongListItem) Title() string       { return "" }
+func (w wrongListItem) Description() string { return "" }
+func (w wrongListItem) FilterValue() string { return "" }
+
 func makeSummary(n int, mode, subtype string, cost, dur float64) store.IterationSummary {
 	return store.IterationSummary{
 		Number:   n,
@@ -120,7 +128,7 @@ func TestIterDelegate_Render(t *testing.T) {
 
 	// Render with wrong item type — should write nothing.
 	buf.Reset()
-	d.Render(&buf, l, 0, specItem{})
+	d.Render(&buf, l, 0, wrongListItem{}) // exercises wrong-type branch
 	if buf.Len() != 0 {
 		t.Error("Render() with wrong item type should not write anything")
 	}

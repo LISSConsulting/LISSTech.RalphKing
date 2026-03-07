@@ -93,7 +93,7 @@ func New(events <-chan loop.LogEntry, storeReader store.Reader, accentColor, pro
 	return Model{
 		events:          events,
 		storeReader:     storeReader,
-		specsPanel:      panels.NewSpecsPanel(specFiles, specsW, specsH),
+		specsPanel:      panels.NewSpecsPanel(specFiles, workDir, specsW, specsH),
 		iterationsPanel: panels.NewIterationsPanel(itersW, itersH),
 		mainView:        panels.NewMainView(mainW, mainH),
 		secondary:       panels.NewSecondaryPanel(secW, secH),
@@ -604,7 +604,7 @@ func (m Model) handleCreateSpecRequest(msg panels.CreateSpecRequestMsg) (tea.Mod
 
 func (m Model) handleSpecsRefreshed(msg specsRefreshedMsg) (tea.Model, tea.Cmd) {
 	specsW, specsH := titleContentDims(m.layout.Specs)
-	m.specsPanel = panels.NewSpecsPanel(msg.Specs, specsW, specsH)
+	m.specsPanel = panels.NewSpecsPanel(msg.Specs, m.workDir, specsW, specsH)
 	return m, nil
 }
 

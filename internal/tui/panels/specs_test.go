@@ -1,11 +1,11 @@
 package panels
 
 import (
-	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
@@ -15,8 +15,12 @@ func makeSpec(name, path string, status spec.Status) spec.SpecFile {
 	return spec.SpecFile{Name: name, Path: path, Status: status}
 }
 
+// keyMsg is defined in secondary_test.go (shared across panel tests in this package).
+
+// ---- Basic panel tests ----
+
 func TestNewSpecsPanel_Empty(t *testing.T) {
-	p := NewSpecsPanel(nil, 80, 20)
+	p := NewSpecsPanel(nil, "", 80, 20)
 	view := p.View()
 	if !strings.Contains(view, "No specs") {
 		t.Errorf("empty panel should show 'No specs'; got %q", view)
@@ -28,7 +32,7 @@ func TestNewSpecsPanel_WithSpecs(t *testing.T) {
 		makeSpec("spec-one", "specs/spec-one.md", spec.StatusDone),
 		makeSpec("spec-two", "specs/spec-two.md", spec.StatusInProgress),
 	}
-	p := NewSpecsPanel(specs, 80, 20)
+	p := NewSpecsPanel(specs, "", 80, 20)
 	view := p.View()
 	for _, want := range []string{"spec-one", "spec-two"} {
 		if !strings.Contains(view, want) {
@@ -41,7 +45,7 @@ func TestSpecsPanel_SelectedSpec(t *testing.T) {
 	specs := []spec.SpecFile{
 		makeSpec("spec-a", "specs/spec-a.md", spec.StatusNotStarted),
 	}
-	p := NewSpecsPanel(specs, 80, 20)
+	p := NewSpecsPanel(specs, "", 80, 20)
 	sel := p.SelectedSpec()
 	if sel == nil {
 		t.Fatal("SelectedSpec() returned nil for non-empty panel")
@@ -52,16 +56,18 @@ func TestSpecsPanel_SelectedSpec(t *testing.T) {
 }
 
 func TestSpecsPanel_SetSize(t *testing.T) {
-	p := NewSpecsPanel(nil, 80, 20)
+	p := NewSpecsPanel(nil, "", 80, 20)
 	p = p.SetSize(100, 30)
 	if p.width != 100 || p.height != 30 {
 		t.Errorf("SetSize: got %dx%d, want 100x30", p.width, p.height)
 	}
 }
 
+// ---- Key navigation tests ----
+
 func TestSpecsPanel_EKey_EmitsEditRequest(t *testing.T) {
 	specs := []spec.SpecFile{makeSpec("foo", "specs/foo.md", spec.StatusNotStarted)}
-	p := NewSpecsPanel(specs, 80, 20)
+	p := NewSpecsPanel(specs, "", 80, 20)
 	_, cmd := p.Update(keyMsg("e"))
 	if cmd == nil {
 		t.Fatal("'e' key on selected spec should return a cmd")
@@ -77,7 +83,7 @@ func TestSpecsPanel_EKey_EmitsEditRequest(t *testing.T) {
 }
 
 func TestSpecsPanel_EKey_EmptyPanel_NoCmd(t *testing.T) {
-	p := NewSpecsPanel(nil, 80, 20)
+	p := NewSpecsPanel(nil, "", 80, 20)
 	_, cmd := p.Update(keyMsg("e"))
 	if cmd != nil {
 		t.Error("'e' on empty panel should return nil cmd")
@@ -85,7 +91,7 @@ func TestSpecsPanel_EKey_EmptyPanel_NoCmd(t *testing.T) {
 }
 
 func TestSpecsPanel_NKey_ActivatesInput(t *testing.T) {
-	p := NewSpecsPanel(nil, 80, 20)
+	p := NewSpecsPanel(nil, "", 80, 20)
 	p2, _ := p.Update(keyMsg("n"))
 	if !p2.inputActive {
 		t.Error("'n' key should activate inputActive")
@@ -97,15 +103,12 @@ func TestSpecsPanel_NKey_ActivatesInput(t *testing.T) {
 }
 
 func TestSpecsPanel_NKey_Submit_EmitsCreateRequest(t *testing.T) {
-	p := NewSpecsPanel(nil, 80, 20)
-	// Activate input.
+	p := NewSpecsPanel(nil, "", 80, 20)
 	p, _ = p.Update(keyMsg("n"))
-	// Type a name character by character.
 	p, _ = p.Update(keyMsg("t"))
 	p, _ = p.Update(keyMsg("e"))
 	p, _ = p.Update(keyMsg("s"))
 	p, _ = p.Update(keyMsg("t"))
-	// Submit.
 	p2, cmd := p.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatal("enter with typed name should return a cmd")
@@ -124,9 +127,8 @@ func TestSpecsPanel_NKey_Submit_EmitsCreateRequest(t *testing.T) {
 }
 
 func TestSpecsPanel_NKey_EmptySubmit_NoCmd(t *testing.T) {
-	p := NewSpecsPanel(nil, 80, 20)
+	p := NewSpecsPanel(nil, "", 80, 20)
 	p, _ = p.Update(keyMsg("n"))
-	// Submit immediately without typing anything.
 	p2, cmd := p.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd != nil {
 		t.Error("enter with empty name should return nil cmd")
@@ -137,7 +139,7 @@ func TestSpecsPanel_NKey_EmptySubmit_NoCmd(t *testing.T) {
 }
 
 func TestSpecsPanel_NKey_Esc_Cancels(t *testing.T) {
-	p := NewSpecsPanel(nil, 80, 20)
+	p := NewSpecsPanel(nil, "", 80, 20)
 	p, _ = p.Update(keyMsg("n"))
 	if !p.inputActive {
 		t.Fatal("setup: inputActive should be true after 'n'")
@@ -151,88 +153,12 @@ func TestSpecsPanel_NKey_Esc_Cancels(t *testing.T) {
 	}
 }
 
-func TestSpecItem_Description(t *testing.T) {
-	item := specItem{sf: makeSpec("foo", "specs/foo.md", spec.StatusDone)}
-	if got := item.Description(); got != "specs/foo.md" {
-		t.Errorf("Description() = %q, want %q", got, "specs/foo.md")
-	}
-}
-
-func TestSpecItem_Description_IsDir(t *testing.T) {
-	sf := spec.SpecFile{
-		Name:  "004-feature",
-		Path:  "specs/004-feature/spec.md",
-		Dir:   "specs/004-feature",
-		IsDir: true,
-	}
-	item := specItem{sf: sf}
-	if got := item.Description(); got != "specs/004-feature" {
-		t.Errorf("Description() = %q, want %q", got, "specs/004-feature")
-	}
-}
-
-func TestSpecItem_FilterValue(t *testing.T) {
-	item := specItem{sf: makeSpec("bar", "specs/bar.md", spec.StatusDone)}
-	if got := item.FilterValue(); got != "bar" {
-		t.Errorf("FilterValue() = %q, want %q", got, "bar")
-	}
-}
-
-func TestSpecDelegate_Update(t *testing.T) {
-	d := specDelegate{}
-	l := list.New(nil, d, 80, 20)
-	cmd := d.Update(nil, &l)
-	if cmd != nil {
-		t.Error("specDelegate.Update() should return nil cmd")
-	}
-}
-
-func TestSpecDelegate_Render_WrongType(t *testing.T) {
-	d := specDelegate{}
-	l := list.New(nil, d, 80, 20)
-	var buf bytes.Buffer
-	d.Render(&buf, l, 0, iterItem{})
-	if buf.Len() != 0 {
-		t.Error("Render() with wrong item type should not write anything")
-	}
-}
-
-func TestSpecsPanel_Update_JK_Enter(t *testing.T) {
+func TestSpecsPanel_JK_Enter_EmitsSpecSelectedMsg(t *testing.T) {
 	specs := []spec.SpecFile{
 		makeSpec("spec-a", "specs/spec-a.md", spec.StatusNotStarted),
 		makeSpec("spec-b", "specs/spec-b.md", spec.StatusNotStarted),
 	}
-	p := NewSpecsPanel(specs, 80, 20)
-
-	// j key — may emit SpecSelectedMsg.
-	_, _ = p.Update(keyMsg("j"))
-
-	// k key — may emit SpecSelectedMsg.
-	_, _ = p.Update(keyMsg("k"))
-
-	// enter key — should emit SpecSelectedMsg.
-	_, cmd := p.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd == nil {
-		t.Fatal("enter on non-empty panel should return cmd")
-	}
-	if _, ok := cmd().(SpecSelectedMsg); !ok {
-		t.Errorf("enter should emit SpecSelectedMsg, got %T", cmd())
-	}
-
-	// Default key in normal mode — delegates to list.
-	_, _ = p.Update(keyMsg("x"))
-
-	// Non-key message — delegates to list.
-	_, _ = p.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
-}
-
-func TestSpecsPanel_JK_EmitsSpecSelectedMsg(t *testing.T) {
-	// The j and k cmds must be invoked to cover the closure body.
-	specs := []spec.SpecFile{
-		makeSpec("spec-a", "specs/spec-a.md", spec.StatusNotStarted),
-		makeSpec("spec-b", "specs/spec-b.md", spec.StatusNotStarted),
-	}
-	p := NewSpecsPanel(specs, 80, 20)
+	p := NewSpecsPanel(specs, "", 80, 20)
 
 	_, cmd := p.Update(keyMsg("j"))
 	if cmd == nil {
@@ -249,24 +175,270 @@ func TestSpecsPanel_JK_EmitsSpecSelectedMsg(t *testing.T) {
 	if _, ok := cmd().(SpecSelectedMsg); !ok {
 		t.Errorf("k cmd should emit SpecSelectedMsg, got %T", cmd())
 	}
+
+	_, cmd = p.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("enter on non-empty leaf panel should return cmd")
+	}
+	if _, ok := cmd().(SpecSelectedMsg); !ok {
+		t.Errorf("enter should emit SpecSelectedMsg, got %T", cmd())
+	}
 }
 
-func TestSpecItem_Title_ContainsStatusSymbol(t *testing.T) {
+func TestSpecsPanel_NonKeyMsg_Ignored(t *testing.T) {
+	p := NewSpecsPanel(nil, "", 80, 20)
+	_, cmd := p.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
+	if cmd != nil {
+		t.Error("non-key message on empty panel should return nil cmd")
+	}
+}
+
+func TestSpecsPanel_EnterOnEmpty_NoCmd(t *testing.T) {
+	p := NewSpecsPanel(nil, "", 80, 20)
+	_, cmd := p.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Error("enter on empty panel should return nil cmd")
+	}
+}
+
+// ---- Tree-specific tests (T060) ----
+
+func TestBuildTree_FlatSpec(t *testing.T) {
+	specs := []spec.SpecFile{
+		makeSpec("flat-spec", "specs/flat.md", spec.StatusDone),
+	}
+	nodes := buildTree(specs, "")
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+	if nodes[0].sf.Name != "flat-spec" {
+		t.Errorf("node.sf.Name = %q, want %q", nodes[0].sf.Name, "flat-spec")
+	}
+	if len(nodes[0].children) != 0 {
+		t.Errorf("flat spec should have 0 children, got %d", len(nodes[0].children))
+	}
+}
+
+func TestBuildTree_DirSpec_WithChildren(t *testing.T) {
+	tmp := t.TempDir()
+	dir := filepath.Join(tmp, "specs", "001-feature")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "spec.md"), []byte("# spec"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "plan.md"), []byte("# plan"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// tasks.md is intentionally absent.
+
+	specs := []spec.SpecFile{{
+		Name:  "001-feature",
+		Path:  filepath.Join("specs", "001-feature", "spec.md"),
+		Dir:   filepath.Join("specs", "001-feature"),
+		IsDir: true,
+	}}
+	nodes := buildTree(specs, tmp)
+
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(nodes))
+	}
+	if len(nodes[0].children) != 2 {
+		t.Errorf("expected 2 children (spec.md, plan.md), got %d: %v", len(nodes[0].children), nodes[0].children)
+	}
+}
+
+func TestBuildTree_DirSpec_NoChildren(t *testing.T) {
+	specs := []spec.SpecFile{{
+		Name:  "001-feature",
+		Path:  "specs/001-feature/spec.md",
+		Dir:   "specs/001-feature",
+		IsDir: true,
+	}}
+	nodes := buildTree(specs, "")
+	if len(nodes[0].children) != 0 {
+		t.Errorf("expected 0 children with empty workDir, got %d", len(nodes[0].children))
+	}
+}
+
+func TestFlattenTree_CollapsedDir(t *testing.T) {
+	nodes := []specTreeNode{
+		{sf: makeSpec("a", "a.md", spec.StatusDone), children: []string{"a/spec.md"}, expanded: false},
+		{sf: makeSpec("b", "b.md", spec.StatusDone)},
+	}
+	flat := flattenTree(nodes)
+	if len(flat) != 2 {
+		t.Fatalf("collapsed dir should yield 2 rows, got %d", len(flat))
+	}
+}
+
+func TestFlattenTree_ExpandedDir(t *testing.T) {
+	nodes := []specTreeNode{
+		{sf: makeSpec("a", "a.md", spec.StatusDone), children: []string{"a/spec.md", "a/plan.md"}, expanded: true},
+		{sf: makeSpec("b", "b.md", spec.StatusDone)},
+	}
+	flat := flattenTree(nodes)
+	// 1 (dir a) + 2 (children) + 1 (dir b) = 4
+	if len(flat) != 4 {
+		t.Fatalf("expanded dir should yield 4 rows, got %d", len(flat))
+	}
+	if !flat[1].isChild || flat[1].nodeIdx != 0 || flat[1].childIdx != 0 {
+		t.Errorf("row 1 should be first child of node 0; got %+v", flat[1])
+	}
+	if !flat[2].isChild || flat[2].childIdx != 1 {
+		t.Errorf("row 2 should be second child of node 0; got %+v", flat[2])
+	}
+	if flat[3].isChild {
+		t.Errorf("row 3 should be dir b, not a child")
+	}
+}
+
+func TestSpecsPanel_EnterOnDir_TogglesExpand(t *testing.T) {
+	tmp := t.TempDir()
+	dir := filepath.Join(tmp, "specs", "001-feature")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"spec.md", "plan.md"} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	specs := []spec.SpecFile{{
+		Name:  "001-feature",
+		Path:  filepath.Join("specs", "001-feature", "spec.md"),
+		Dir:   filepath.Join("specs", "001-feature"),
+		IsDir: true,
+	}}
+
+	p := NewSpecsPanel(specs, tmp, 80, 20)
+	if len(p.flat) != 1 {
+		t.Fatalf("before expand: expected 1 flat row, got %d", len(p.flat))
+	}
+
+	// Press enter → should expand (no cmd emitted).
+	p2, cmd := p.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Error("enter on dir row should return nil cmd")
+	}
+	// 1 dir + 2 children = 3 rows.
+	if len(p2.flat) != 3 {
+		t.Fatalf("after expand: expected 3 flat rows, got %d", len(p2.flat))
+	}
+
+	// Press enter again → collapse.
+	p3, _ := p2.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if len(p3.flat) != 1 {
+		t.Fatalf("after collapse: expected 1 flat row, got %d", len(p3.flat))
+	}
+}
+
+func TestSpecsPanel_EnterOnChild_EmitsSpecSelectedMsgWithChildPath(t *testing.T) {
+	tmp := t.TempDir()
+	dir := filepath.Join(tmp, "specs", "002-feature")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"spec.md", "plan.md"} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	specs := []spec.SpecFile{{
+		Name:  "002-feature",
+		Path:  filepath.Join("specs", "002-feature", "spec.md"),
+		Dir:   filepath.Join("specs", "002-feature"),
+		IsDir: true,
+	}}
+
+	p := NewSpecsPanel(specs, tmp, 80, 20)
+	// Expand.
+	p, _ = p.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	// Move to first child (cursor=1).
+	p, _ = p.Update(keyMsg("j"))
+	// Enter on child.
+	_, cmd := p.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("enter on child row should return a cmd")
+	}
+	msg, ok := cmd().(SpecSelectedMsg)
+	if !ok {
+		t.Fatalf("expected SpecSelectedMsg, got %T", cmd())
+	}
+	// The path should be the child file path (ends with spec.md).
+	if !strings.HasSuffix(msg.Spec.Path, "spec.md") {
+		t.Errorf("SpecSelectedMsg.Spec.Path = %q, expected to end with spec.md", msg.Spec.Path)
+	}
+}
+
+func TestChildFileIcon(t *testing.T) {
 	tests := []struct {
-		status spec.Status
-		symbol string
+		name string
+		icon string
 	}{
-		{spec.StatusDone, "✅"},
-		{spec.StatusInProgress, "🔄"},
-		{spec.StatusNotStarted, "⬜"},
+		{"spec.md", "📋"},
+		{"plan.md", "📐"},
+		{"tasks.md", "✅"},
+		{"other.md", "📄"},
 	}
 	for _, tt := range tests {
-		t.Run(string(tt.status), func(t *testing.T) {
-			item := specItem{sf: makeSpec("test", "specs/test.md", tt.status)}
-			title := item.Title()
-			if !strings.Contains(title, tt.symbol) {
-				t.Errorf("specItem.Title() = %q, want to contain %q", title, tt.symbol)
-			}
-		})
+		if got := childFileIcon(tt.name); got != tt.icon {
+			t.Errorf("childFileIcon(%q) = %q, want %q", tt.name, got, tt.icon)
+		}
+	}
+}
+
+func TestSpecsPanel_View_ShowsExpandIndicator(t *testing.T) {
+	tmp := t.TempDir()
+	dir := filepath.Join(tmp, "specs", "003-feature")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "spec.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	specs := []spec.SpecFile{{
+		Name:  "003-feature",
+		Path:  filepath.Join("specs", "003-feature", "spec.md"),
+		Dir:   filepath.Join("specs", "003-feature"),
+		IsDir: true,
+	}}
+
+	p := NewSpecsPanel(specs, tmp, 80, 20)
+	if !strings.Contains(p.View(), "▶") {
+		t.Error("collapsed dir should show ▶ indicator")
+	}
+	p, _ = p.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !strings.Contains(p.View(), "▼") {
+		t.Error("expanded dir should show ▼ indicator")
+	}
+}
+
+func TestSpecsPanel_SelectedSpec_ReturnsParentForChild(t *testing.T) {
+	tmp := t.TempDir()
+	dir := filepath.Join(tmp, "specs", "004-feature")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "spec.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	specs := []spec.SpecFile{{
+		Name:  "004-feature",
+		Path:  filepath.Join("specs", "004-feature", "spec.md"),
+		Dir:   filepath.Join("specs", "004-feature"),
+		IsDir: true,
+	}}
+	p := NewSpecsPanel(specs, tmp, 80, 20)
+	p, _ = p.Update(tea.KeyMsg{Type: tea.KeyEnter}) // expand
+	p, _ = p.Update(keyMsg("j"))                    // move to child
+
+	sel := p.SelectedSpec()
+	if sel == nil {
+		t.Fatal("SelectedSpec() returned nil for child row")
+	}
+	if sel.Name != "004-feature" {
+		t.Errorf("SelectedSpec().Name = %q, want %q", sel.Name, "004-feature")
 	}
 }

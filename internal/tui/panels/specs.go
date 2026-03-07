@@ -2,10 +2,10 @@ package panels
 
 import (
 	"fmt"
-	"io"
+	"os"
+	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -13,7 +13,9 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
 )
 
-// SpecSelectedMsg is emitted when the user selects a spec.
+// SpecSelectedMsg is emitted when the user selects a spec or child file.
+// Spec.Path holds the specific file path (spec.md, plan.md, tasks.md, or the
+// flat-file path for non-directory specs).
 type SpecSelectedMsg struct{ Spec spec.SpecFile }
 
 // EditSpecRequestMsg is emitted when the user presses 'e' to open the selected spec in $EDITOR.
@@ -22,68 +24,90 @@ type EditSpecRequestMsg struct{ Path string }
 // CreateSpecRequestMsg is emitted when the user submits a new spec name via the 'n' overlay.
 type CreateSpecRequestMsg struct{ Name string }
 
-// specItem wraps a spec.SpecFile as a list.Item.
-type specItem struct {
-	sf spec.SpecFile
+// specTreeNode holds a directory-level spec with its discovered child files.
+type specTreeNode struct {
+	sf       spec.SpecFile // the directory or single-file spec
+	children []string      // child file paths that exist (relative to workDir)
+	expanded bool          // whether children are currently visible
 }
 
-func (s specItem) Title() string {
-	return fmt.Sprintf("%s  %s", s.sf.Status.Symbol(), s.sf.Name)
+// specRow is one visible row in the flattened tree.
+type specRow struct {
+	nodeIdx  int  // which node this row belongs to
+	isChild  bool // true for child file rows
+	childIdx int  // index in node.children (when isChild)
 }
 
-func (s specItem) Description() string {
-	if s.sf.IsDir {
-		return s.sf.Dir
+// childFileIcon returns a display icon for a known spec child file name.
+func childFileIcon(name string) string {
+	switch name {
+	case "spec.md":
+		return "📋"
+	case "plan.md":
+		return "📐"
+	case "tasks.md":
+		return "✅"
+	default:
+		return "📄"
 	}
-	return s.sf.Path
 }
 
-func (s specItem) FilterValue() string {
-	return s.sf.Name
-}
-
-// specDelegate is a custom item delegate for compact single-line spec items.
-type specDelegate struct{}
-
-func (d specDelegate) Height() int                             { return 1 }
-func (d specDelegate) Spacing() int                            { return 0 }
-func (d specDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
-func (d specDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	si, ok := item.(specItem)
-	if !ok {
-		return
+// buildTree discovers child files for each directory spec node and returns the tree.
+// workDir is used to stat child files; empty string disables file system checks.
+func buildTree(specs []spec.SpecFile, workDir string) []specTreeNode {
+	nodes := make([]specTreeNode, len(specs))
+	for i, sf := range specs {
+		if !sf.IsDir {
+			nodes[i] = specTreeNode{sf: sf}
+			continue
+		}
+		var children []string
+		for _, name := range []string{"spec.md", "plan.md", "tasks.md"} {
+			p := filepath.Join(workDir, sf.Dir, name)
+			if _, err := os.Stat(p); err == nil {
+				children = append(children, filepath.Join(sf.Dir, name))
+			}
+		}
+		nodes[i] = specTreeNode{sf: sf, children: children}
 	}
-	s := si.Title()
-	if index == m.Index() {
-		s = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7D56F4")).Render("> " + s)
-	} else {
-		s = "  " + s
-	}
-	_, _ = fmt.Fprint(w, s)
+	return nodes
 }
 
-// SpecsPanel displays a navigable list of spec files.
+// flattenTree returns the visible rows given the current expansion state.
+func flattenTree(nodes []specTreeNode) []specRow {
+	var rows []specRow
+	for i, n := range nodes {
+		rows = append(rows, specRow{nodeIdx: i})
+		if n.expanded {
+			for j := range n.children {
+				rows = append(rows, specRow{nodeIdx: i, isChild: true, childIdx: j})
+			}
+		}
+	}
+	return rows
+}
+
+// SpecsPanel displays a navigable tree of spec files.
+// Directory specs can be expanded to reveal spec.md, plan.md, and tasks.md children.
 type SpecsPanel struct {
-	list        list.Model
-	specs       []spec.SpecFile
-	width       int
-	height      int
+	nodes     []specTreeNode
+	flat      []specRow // current flattened view (rebuilt on expand/collapse)
+	cursor    int       // cursor position in flat
+	scrollTop int       // first visible row index
+	workDir   string
+	specs     []spec.SpecFile // original spec list preserved for callers
+	width     int
+	height    int
+
 	input       textinput.Model
 	inputActive bool
 }
 
-// NewSpecsPanel creates a specs panel with the given spec files.
-func NewSpecsPanel(specs []spec.SpecFile, w, h int) SpecsPanel {
-	items := make([]list.Item, len(specs))
-	for i, sf := range specs {
-		items[i] = specItem{sf: sf}
-	}
-	delegate := specDelegate{}
-	l := list.New(items, delegate, w, h)
-	l.SetShowTitle(false)
-	l.SetShowHelp(false)
-	l.SetShowStatusBar(false)
-	l.SetFilteringEnabled(false)
+// NewSpecsPanel creates a specs panel. workDir is used to discover child files
+// for directory specs; pass "" to skip file system checks (e.g. in tests).
+func NewSpecsPanel(specs []spec.SpecFile, workDir string, w, h int) SpecsPanel {
+	nodes := buildTree(specs, workDir)
+	flat := flattenTree(nodes)
 
 	ti := textinput.New()
 	ti.Placeholder = "spec-name"
@@ -93,35 +117,63 @@ func NewSpecsPanel(specs []spec.SpecFile, w, h int) SpecsPanel {
 	}
 
 	return SpecsPanel{
-		list:   l,
-		specs:  specs,
-		width:  w,
-		height: h,
-		input:  ti,
+		nodes:   nodes,
+		flat:    flat,
+		specs:   specs,
+		workDir: workDir,
+		width:   w,
+		height:  h,
+		input:   ti,
 	}
 }
 
-// SelectedSpec returns the currently highlighted spec, or nil.
+// SelectedSpec returns the directory-level spec for the current cursor position.
+// For child-file rows the parent directory spec is returned so callers can use
+// it for operations like launching worktree agents.  Returns nil when empty.
 func (p SpecsPanel) SelectedSpec() *spec.SpecFile {
-	if item, ok := p.list.SelectedItem().(specItem); ok {
-		sf := item.sf
-		return &sf
+	if len(p.flat) == 0 {
+		return nil
 	}
-	return nil
+	sf := p.nodes[p.flat[p.cursor].nodeIdx].sf
+	return &sf
 }
 
 // SetSize resizes the panel.
 func (p SpecsPanel) SetSize(w, h int) SpecsPanel {
 	p.width = w
 	p.height = h
-	p.list.SetSize(w, h)
 	if w > 4 {
 		p.input.Width = w - 4
 	}
 	return p
 }
 
-// Update handles key/mouse messages for the panel.
+// moveCursor adjusts cursor by delta and updates scrollTop to keep it visible.
+func (p SpecsPanel) moveCursor(delta int) SpecsPanel {
+	n := len(p.flat)
+	if n == 0 {
+		return p
+	}
+	p.cursor += delta
+	if p.cursor < 0 {
+		p.cursor = 0
+	}
+	if p.cursor >= n {
+		p.cursor = n - 1
+	}
+	if p.cursor < p.scrollTop {
+		p.scrollTop = p.cursor
+	}
+	if p.cursor >= p.scrollTop+p.height {
+		p.scrollTop = p.cursor - p.height + 1
+	}
+	if p.scrollTop < 0 {
+		p.scrollTop = 0
+	}
+	return p
+}
+
+// Update handles key messages for the panel.
 func (p SpecsPanel) Update(msg tea.Msg) (SpecsPanel, tea.Cmd) {
 	// When the name-input overlay is active, route messages there first.
 	if p.inputActive {
@@ -148,48 +200,76 @@ func (p SpecsPanel) Update(msg tea.Msg) (SpecsPanel, tea.Cmd) {
 		return p, cmd
 	}
 
-	// Normal mode.
-	var cmd tea.Cmd
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "j", "down":
-			p.list, cmd = p.list.Update(tea.KeyMsg{Type: tea.KeyDown})
-			if sel := p.SelectedSpec(); sel != nil {
-				sf := *sel
-				return p, func() tea.Msg { return SpecSelectedMsg{Spec: sf} }
-			}
-		case "k", "up":
-			p.list, cmd = p.list.Update(tea.KeyMsg{Type: tea.KeyUp})
-			if sel := p.SelectedSpec(); sel != nil {
-				sf := *sel
-				return p, func() tea.Msg { return SpecSelectedMsg{Spec: sf} }
-			}
-		case "enter":
-			if sel := p.SelectedSpec(); sel != nil {
-				sf := *sel
-				return p, func() tea.Msg { return SpecSelectedMsg{Spec: sf} }
-			}
-		case "e":
-			if sel := p.SelectedSpec(); sel != nil {
-				path := sel.Path
-				return p, func() tea.Msg { return EditSpecRequestMsg{Path: path} }
-			}
-		case "n":
-			p.inputActive = true
-			p.input.Reset()
-			p.input.Focus()
-			return p, textinput.Blink
-		default:
-			p.list, cmd = p.list.Update(msg)
-		}
-	default:
-		p.list, cmd = p.list.Update(msg)
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return p, nil
 	}
-	return p, cmd
+
+	switch keyMsg.String() {
+	case "j", "down":
+		p = p.moveCursor(1)
+		if sel := p.SelectedSpec(); sel != nil {
+			sf := *sel
+			return p, func() tea.Msg { return SpecSelectedMsg{Spec: sf} }
+		}
+
+	case "k", "up":
+		p = p.moveCursor(-1)
+		if sel := p.SelectedSpec(); sel != nil {
+			sf := *sel
+			return p, func() tea.Msg { return SpecSelectedMsg{Spec: sf} }
+		}
+
+	case "enter":
+		if len(p.flat) == 0 {
+			return p, nil
+		}
+		row := p.flat[p.cursor]
+		if row.isChild {
+			// Emit SpecSelectedMsg with the child file path.
+			childPath := p.nodes[row.nodeIdx].children[row.childIdx]
+			sf := p.nodes[row.nodeIdx].sf
+			sf.Path = childPath
+			return p, func() tea.Msg { return SpecSelectedMsg{Spec: sf} }
+		}
+		// Directory row: toggle expand if children exist.
+		node := p.nodes[row.nodeIdx]
+		if len(node.children) > 0 {
+			p.nodes[row.nodeIdx].expanded = !p.nodes[row.nodeIdx].expanded
+			p.flat = flattenTree(p.nodes)
+			if p.cursor >= len(p.flat) {
+				p.cursor = len(p.flat) - 1
+			}
+		} else {
+			// Leaf spec (no children discovered) — emit SpecSelectedMsg directly.
+			sf := node.sf
+			return p, func() tea.Msg { return SpecSelectedMsg{Spec: sf} }
+		}
+
+	case "e":
+		if len(p.flat) == 0 {
+			return p, nil
+		}
+		row := p.flat[p.cursor]
+		var path string
+		if row.isChild {
+			path = p.nodes[row.nodeIdx].children[row.childIdx]
+		} else {
+			path = p.nodes[row.nodeIdx].sf.Path
+		}
+		return p, func() tea.Msg { return EditSpecRequestMsg{Path: path} }
+
+	case "n":
+		p.inputActive = true
+		p.input.Reset()
+		p.input.Focus()
+		return p, textinput.Blink
+	}
+
+	return p, nil
 }
 
-// View renders the specs panel.
+// View renders the specs panel as a tree with expand/collapse indicators.
 func (p SpecsPanel) View() string {
 	if p.inputActive {
 		prompt := lipgloss.NewStyle().
@@ -207,12 +287,61 @@ func (p SpecsPanel) View() string {
 			Width(p.width).Height(p.height).
 			Render(content)
 	}
-	if len(p.specs) == 0 {
+
+	if len(p.nodes) == 0 {
 		return lipgloss.NewStyle().
 			Width(p.width).Height(p.height).
 			Align(lipgloss.Center, lipgloss.Center).
 			Foreground(lipgloss.Color("#888888")).
 			Render("No specs")
 	}
-	return p.list.View()
+
+	accentStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7D56F4"))
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888"))
+
+	end := p.scrollTop + p.height
+	if end > len(p.flat) {
+		end = len(p.flat)
+	}
+
+	var lines []string
+	for i := p.scrollTop; i < end; i++ {
+		row := p.flat[i]
+		node := p.nodes[row.nodeIdx]
+		selected := i == p.cursor
+
+		var line string
+		if row.isChild {
+			name := filepath.Base(node.children[row.childIdx])
+			icon := childFileIcon(name)
+			text := fmt.Sprintf("  %s %s", icon, name)
+			if selected {
+				line = accentStyle.Render("> " + strings.TrimLeft(text, " "))
+			} else {
+				line = dimStyle.Render(text)
+			}
+		} else {
+			expand := "▶"
+			if node.expanded {
+				expand = "▼"
+			}
+			if len(node.children) == 0 {
+				expand = " "
+			}
+			text := fmt.Sprintf("%s %s  %s", expand, node.sf.Status.Symbol(), node.sf.Name)
+			if selected {
+				line = accentStyle.Render("> " + text)
+			} else {
+				line = "  " + text
+			}
+		}
+		lines = append(lines, line)
+	}
+
+	// Pad to height with blank lines.
+	for len(lines) < p.height {
+		lines = append(lines, "")
+	}
+
+	return strings.Join(lines, "\n")
 }
