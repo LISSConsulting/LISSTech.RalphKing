@@ -3,6 +3,7 @@ package spec
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -338,6 +339,57 @@ func TestList_DirHiddenIgnored(t *testing.T) {
 	}
 	if specs[0].Name != "001-visible" {
 		t.Errorf("got spec %q, want 001-visible", specs[0].Name)
+	}
+}
+
+// TestList_NonMdFileIgnored covers the !strings.HasSuffix(".md") skip branch:
+// flat files that are not .md are silently ignored by List().
+func TestList_NonMdFileIgnored(t *testing.T) {
+	dir := t.TempDir()
+	specsDir := filepath.Join(dir, "specs")
+	if err := os.MkdirAll(specsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// A .md spec file — should be included.
+	if err := os.WriteFile(filepath.Join(specsDir, "a-spec.md"), []byte("# Spec"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A non-.md file — should be ignored.
+	if err := os.WriteFile(filepath.Join(specsDir, "README.txt"), []byte("notes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	specs, err := List(dir)
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("List() returned %d specs, want 1 (non-.md file excluded)", len(specs))
+	}
+	if specs[0].Name != "a-spec" {
+		t.Errorf("got spec %q, want a-spec", specs[0].Name)
+	}
+}
+
+// TestList_SpecsNotDir covers the non-IsNotExist ReadDir error branch in List().
+// On Windows, ReadDir on a regular file returns an IsNotExist-like error so the
+// branch is unreachable; the test is skipped there (same constraint documented
+// for TestSpecListCmd_SpecsNotDir in cmd/ralph).
+func TestList_SpecsNotDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("ReadDir on a regular file returns IsNotExist on Windows")
+	}
+
+	dir := t.TempDir()
+	// Create a regular file named "specs" so os.ReadDir returns a non-IsNotExist error.
+	if err := os.WriteFile(filepath.Join(dir, "specs"), []byte("not a dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := List(dir)
+	if err == nil {
+		t.Fatal("List() expected error when specs/ is a regular file")
 	}
 }
 

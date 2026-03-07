@@ -124,6 +124,25 @@ func TestIsNumeric(t *testing.T) {
 	}
 }
 
+// TestCheckDir_StatError covers the non-IsNotExist error branch in checkDir.
+// A path containing a null byte causes os.Stat to return syscall.EINVAL on
+// all platforms, which is not os.ErrNotExist, so the "stat: %w" path is taken.
+func TestCheckDir_StatError(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "specs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// "name\x00tail" contains a null byte; os.Stat returns EINVAL (not IsNotExist).
+	_, err := Resolve(dir, "name\x00tail", "")
+	if err == nil {
+		t.Fatal("expected error for path with null byte")
+	}
+	if strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("expected non-IsNotExist error, got: %v", err)
+	}
+}
+
 // TestCheckDir_PathIsFile covers the !info.IsDir() branch in checkDir:
 // when the path exists but is a regular file, Resolve should return a descriptive error.
 func TestCheckDir_PathIsFile(t *testing.T) {
