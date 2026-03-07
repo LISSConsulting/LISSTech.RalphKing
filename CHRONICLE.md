@@ -22,6 +22,16 @@
 
 Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
 
+## Improvement Sweep (2026-03-07) — v0.1.57
+
+- **Test coverage**: panels 97.9%→98.7% (SelectedSpec nil, moveCursor scroll branches); total 89.6%
+- **Code hygiene**: no TODO/FIXME/HACK/XXX found
+- **Stale references**: README updated — added specs 007/008 to project structure, added `--focus` to CLI reference
+- **CI health**: all actions current (checkout@v4, setup-go@v5, golangci-lint-action@v7 v2.1.6, upload-artifact@v4)
+- **Dead code**: none found
+- **Spec consistency**: spec 008 all ACs implemented; `--focus` flag registered on build/loop-build/loop-run
+- Remaining Windows coverage ceilings: store.NewJSONL OpenFile/Seek errors, wtExecutables non-Windows path, regent.SaveState chmod paths — all require platform injection not feasible on Windows
+
 ## Key Learnings
 
 ### Architecture
