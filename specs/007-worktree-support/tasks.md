@@ -15,16 +15,16 @@
 
 **Purpose**: Configuration, worktrunk adapter package, and shared types
 
-- [ ] T001 Add WorktreeConfig struct to internal/config/config.go with fields: Enabled (bool), MaxParallel (int), AutoMerge (bool), MergeTarget (string), PathTemplate (string) and TOML tags; add to top-level Config struct; add validation (MaxParallel >= 1); add defaults in Load()
-- [ ] T002 Add `[worktree]` section to ralph.toml example config with all fields and comments
-- [ ] T003 [P] Add WorktreeConfig validation tests to internal/config/config_test.go — table-driven: missing max_parallel defaults to 5, invalid max_parallel < 1 errors, empty merge_target accepted
-- [ ] T004 Create internal/worktree/worktree.go — define WorktreeOps interface (Detect, Switch, List, Merge, Remove), WorktreeInfo struct, Runner struct with Dir field, and NewRunner constructor
-- [ ] T005 [P] Create internal/worktree/detect.go — implement Runner.Detect(): check for `wt` on PATH (and `git-wt` on Windows); validate output of `--version` contains "worktrunk"; return clear error with install instructions if missing
-- [ ] T006 [P] Create internal/worktree/switch.go — implement Runner.Switch(branch, create): invoke `wt switch -c <branch>` or `wt switch <branch>`; parse worktree path from stdout (after `@ `); return (path, error)
-- [ ] T007 [P] Create internal/worktree/list.go — implement Runner.List(): invoke `wt list --json`; parse JSON into []WorktreeInfo; fall back to `git worktree list --porcelain` if --json unsupported
-- [ ] T008 [P] Create internal/worktree/merge.go — implement Runner.Merge(branch, target): invoke `wt merge <target>` from worktree; return error on conflict/failure
-- [ ] T009 [P] Create internal/worktree/remove.go — implement Runner.Remove(branch): invoke `wt remove <branch>`; return error if branch has running agent
-- [ ] T010 Create internal/worktree/worktree_test.go — subprocess faking via _FAKE_WT=1 env pattern with init() registration; table-driven tests for Detect (found/not-found/windows-git-wt), Switch (create-new/reuse-existing/error), List (json-output/empty), Merge (success/conflict), Remove (success/error)
+- [x] T001 Add WorktreeConfig struct to internal/config/config.go with fields: Enabled (bool), MaxParallel (int), AutoMerge (bool), MergeTarget (string), PathTemplate (string) and TOML tags; add to top-level Config struct; add validation (MaxParallel >= 1); add defaults in Load()
+- [x] T002 Add `[worktree]` section to ralph.toml example config with all fields and comments
+- [x] T003 [P] Add WorktreeConfig validation tests to internal/config/config_test.go — table-driven: missing max_parallel defaults to 5, invalid max_parallel < 1 errors, empty merge_target accepted
+- [x] T004 Create internal/worktree/worktree.go — define WorktreeOps interface (Detect, Switch, List, Merge, Remove), WorktreeInfo struct, Runner struct with Dir field, and NewRunner constructor
+- [x] T005 [P] Create internal/worktree/detect.go — implement Runner.Detect(): check for `wt` on PATH (and `git-wt` on Windows); validate output of `--version` contains "worktrunk"; return clear error with install instructions if missing
+- [x] T006 [P] Create internal/worktree/switch.go — implement Runner.Switch(branch, create): invoke `wt switch -c <branch>` or `wt switch <branch>`; parse worktree path from stdout (after `@ `); return (path, error)
+- [x] T007 [P] Create internal/worktree/list.go — implement Runner.List(): invoke `wt list --json`; parse JSON into []WorktreeInfo; fall back to `git worktree list --porcelain` if --json unsupported
+- [x] T008 [P] Create internal/worktree/merge.go — implement Runner.Merge(branch, target): invoke `wt merge <target>` from worktree; return error on conflict/failure
+- [x] T009 [P] Create internal/worktree/remove.go — implement Runner.Remove(branch): invoke `wt remove <branch>`; return error if branch has running agent
+- [x] T010 Create internal/worktree/worktree_test.go — subprocess faking via _FAKE_WT=1 env pattern with init() registration; table-driven tests for Detect (found/not-found/windows-git-wt), Switch (create-new/reuse-existing/error), List (json-output/empty), Merge (success/conflict), Remove (success/error)
 
 **Checkpoint**: Worktrunk CLI adapter complete with full test coverage. Config supports [worktree] section.
 
@@ -36,14 +36,14 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T011 Create internal/orchestrator/types.go — define AgentState enum (Creating, Running, Completed, Failed, Stopped, Merging, Merged, MergeFailed, Removed), WorktreeAgent struct (Branch, WorktreePath, SpecName, SpecDir, State, Iterations, TotalCost, Events chan, StopCh chan, Error), TaggedLogEntry struct (Branch, Entry)
-- [ ] T012 Create internal/orchestrator/orchestrator.go — Orchestrator struct with mutex-guarded agents map, MaxParallel, AutoMerge, MergeTarget, WorktreeOps, MergedEvents chan; implement New() constructor, ActiveAgents(), RunningCount(), AgentByBranch()
-- [ ] T013 Implement fan-in multiplexer in internal/orchestrator/fanin.go — startFanIn() goroutine that reads from each agent's Events channel, wraps in TaggedLogEntry with branch name, and forwards to MergedEvents; handles agent channel close gracefully
-- [ ] T014 Implement Orchestrator.Launch() in internal/orchestrator/orchestrator.go — validate not at max_parallel, validate no duplicate branch, call WorktreeOps.Switch(create=true), create WorktreeAgent, wire Loop with worktree Dir, start Loop.Run() in goroutine, register in fan-in, update state on completion/failure
-- [ ] T015 Implement Orchestrator.Stop(branch) and StopAll() in internal/orchestrator/orchestrator.go — close agent's StopCh; update state to Stopped
-- [ ] T016 Implement Orchestrator.Merge(branch) in internal/orchestrator/orchestrator.go — validate agent is Completed/Stopped (reject if Running), call WorktreeOps.Merge(), update state to Merged or MergeFailed
-- [ ] T017 Implement Orchestrator.Clean(branch) in internal/orchestrator/orchestrator.go — validate agent is not Running, call WorktreeOps.Remove(), update state to Removed, delete from agents map
-- [ ] T018 Create internal/orchestrator/orchestrator_test.go — table-driven tests: Launch (success, duplicate-branch-rejected, max-parallel-rejected), Stop (running→stopped, not-running-error), Merge (completed→merged, running-rejected, conflict→merge-failed), Clean (completed→removed, running-rejected), ActiveAgents (filters removed), fan-in (events tagged correctly, channel close handled)
+- [x] T011 Create internal/orchestrator/types.go — define AgentState enum (Creating, Running, Completed, Failed, Stopped, Merging, Merged, MergeFailed, Removed), WorktreeAgent struct (Branch, WorktreePath, SpecName, SpecDir, State, Iterations, TotalCost, Events chan, StopCh chan, Error), TaggedLogEntry struct (Branch, Entry)
+- [x] T012 Create internal/orchestrator/orchestrator.go — Orchestrator struct with mutex-guarded agents map, MaxParallel, AutoMerge, MergeTarget, WorktreeOps, MergedEvents chan; implement New() constructor, ActiveAgents(), RunningCount(), AgentByBranch()
+- [x] T013 Implement fan-in multiplexer in internal/orchestrator/fanin.go — startFanIn() goroutine that reads from each agent's Events channel, wraps in TaggedLogEntry with branch name, and forwards to MergedEvents; handles agent channel close gracefully
+- [x] T014 Implement Orchestrator.Launch() in internal/orchestrator/orchestrator.go — validate not at max_parallel, validate no duplicate branch, call WorktreeOps.Switch(create=true), create WorktreeAgent, wire Loop with worktree Dir, start Loop.Run() in goroutine, register in fan-in, update state on completion/failure
+- [x] T015 Implement Orchestrator.Stop(branch) and StopAll() in internal/orchestrator/orchestrator.go — close agent's StopCh; update state to Stopped
+- [x] T016 Implement Orchestrator.Merge(branch) in internal/orchestrator/orchestrator.go — validate agent is Completed/Stopped (reject if Running), call WorktreeOps.Merge(), update state to Merged or MergeFailed
+- [x] T017 Implement Orchestrator.Clean(branch) in internal/orchestrator/orchestrator.go — validate agent is not Running, call WorktreeOps.Remove(), update state to Removed, delete from agents map
+- [x] T018 Create internal/orchestrator/orchestrator_test.go — table-driven tests: Launch (success, duplicate-branch-rejected, max-parallel-rejected), Stop (running→stopped, not-running-error), Merge (completed→merged, running-rejected, conflict→merge-failed), Clean (completed→removed, running-rejected), ActiveAgents (filters removed), fan-in (events tagged correctly, channel close handled)
 
 **Checkpoint**: Orchestrator manages full agent lifecycle. All user stories can now build on this.
 
@@ -57,16 +57,16 @@
 
 ### Implementation for User Story 1
 
-- [ ] T019 [US1] Add `--worktree` / `-w` bool flag to buildCmd, loopBuildCmd, loopPlanCmd, loopRunCmd in cmd/ralph/commands.go — pass value through to execute functions
-- [ ] T020 [US1] Add worktree flag parameter to executeLoop() and executeSmartRun() signatures in cmd/ralph/execute.go; thread through from command handlers
-- [ ] T021 [US1] Implement worktree setup in executeLoop() in cmd/ralph/execute.go — when --worktree is set: create worktree.NewRunner(dir), call Detect() (error if missing), call Switch(branch, create=true), override loop Dir to worktree path, log worktree creation; on completion log worktree path and branch
-- [ ] T022 [US1] Add branch-name prefix to non-TUI log output in cmd/ralph/format.go — when running in worktree mode, prepend `[branch]` to each log line for distinguishability (FR-010)
-- [ ] T023 [US1] Add tests for --worktree flag handling in cmd/ralph/execute_test.go — table-driven: worktree-created-and-loop-runs, wt-not-found-errors, existing-worktree-reused, log-lines-include-branch-prefix
-- [ ] T024 [US1] Create cmd/ralph/worktree_cmds.go — add `ralph worktree` parent command with subcommands: `list`, `merge`, `clean`; register under root command in commands.go
-- [ ] T025 [P] [US1] Implement worktreeListCmd in cmd/ralph/worktree_cmds.go — create worktree.Runner, call List(), format as table (Branch, Status, Iter, Cost, Spec); support --json flag
-- [ ] T026 [P] [US1] Implement worktreeMergeCmd in cmd/ralph/worktree_cmds.go — accept optional branch arg, --target flag, --no-remove flag; validate preconditions (not running); call worktree.Runner.Merge(); print result
-- [ ] T027 [P] [US1] Implement worktreeCleanCmd in cmd/ralph/worktree_cmds.go — accept optional branch arg, --all flag, --force flag; validate preconditions; call worktree.Runner.Remove(); print result
-- [ ] T028 [US1] Add tests for worktree subcommands in cmd/ralph/worktree_cmds_test.go — table-driven: list-shows-worktrees, list-json-format, merge-success, merge-running-rejected, clean-success, clean-all
+- [x] T019 [US1] Add `--worktree` / `-w` bool flag to buildCmd, loopBuildCmd, loopPlanCmd, loopRunCmd in cmd/ralph/commands.go — pass value through to execute functions
+- [x] T020 [US1] Add worktree flag parameter to executeLoop() and executeSmartRun() signatures in cmd/ralph/execute.go; thread through from command handlers
+- [x] T021 [US1] Implement worktree setup in executeLoop() in cmd/ralph/execute.go — when --worktree is set: create worktree.NewRunner(dir), call Detect() (error if missing), call Switch(branch, create=true), override loop Dir to worktree path, log worktree creation; on completion log worktree path and branch
+- [x] T022 [US1] Add branch-name prefix to non-TUI log output in cmd/ralph/format.go — when running in worktree mode, prepend `[branch]` to each log line for distinguishability (FR-010)
+- [x] T023 [US1] Add tests for --worktree flag handling in cmd/ralph/execute_test.go — table-driven: worktree-created-and-loop-runs, wt-not-found-errors, existing-worktree-reused, log-lines-include-branch-prefix
+- [x] T024 [US1] Create cmd/ralph/worktree_cmds.go — add `ralph worktree` parent command with subcommands: `list`, `merge`, `clean`; register under root command in commands.go
+- [x] T025 [P] [US1] Implement worktreeListCmd in cmd/ralph/worktree_cmds.go — create worktree.Runner, call List(), format as table (Branch, Status, Iter, Cost, Spec); support --json flag
+- [x] T026 [P] [US1] Implement worktreeMergeCmd in cmd/ralph/worktree_cmds.go — accept optional branch arg, --target flag, --no-remove flag; validate preconditions (not running); call worktree.Runner.Merge(); print result
+- [x] T027 [P] [US1] Implement worktreeCleanCmd in cmd/ralph/worktree_cmds.go — accept optional branch arg, --all flag, --force flag; validate preconditions; call worktree.Runner.Remove(); print result
+- [x] T028 [US1] Add tests for worktree subcommands in cmd/ralph/worktree_cmds_test.go — table-driven: list-shows-worktrees, list-json-format, merge-success, merge-running-rejected, clean-success, clean-all
 
 **Checkpoint**: `ralph build -w` works end-to-end. `ralph worktree list/merge/clean` commands available. MVP complete.
 
@@ -80,15 +80,15 @@
 
 ### Implementation for User Story 2
 
-- [ ] T029 [US2] Create internal/tui/panels/worktrees.go — new WorktreesPanel component: list of WorktreeAgent entries with columns (Branch, State, Iterations, Cost); j/k navigation; selected item tracking; renders agent state with status icons
-- [ ] T030 [US2] Add WorktreesPanel to TUI layout in internal/tui/app.go — add as fifth panel or replace/augment existing panel when worktree mode is enabled; wire into panel focus cycle (tab/shift+tab and number keys)
-- [ ] T031 [US2] Wire Orchestrator into TUI in internal/tui/app.go — accept Orchestrator in tui.New() (optional, nil when worktree disabled); subscribe to MergedEvents channel; dispatch TaggedLogEntry updates to appropriate panels
-- [ ] T032 [US2] Implement `W` keybind in internal/tui/app.go — when Specs panel focused and spec selected: call Orchestrator.Launch(selectedSpec, ModeBuild); show error message if at max or duplicate branch
-- [ ] T033 [US2] Implement worktree-specific keybinds in internal/tui/app.go — when WorktreesPanel focused: `x` calls Orchestrator.Stop(branch), `M` calls Orchestrator.Merge(branch), `D` calls Orchestrator.Clean(branch); show result/error in status bar
-- [ ] T034 [US2] Update Main panel to show selected worktree's log in internal/tui/app.go — when user selects a worktree in WorktreesPanel and presses enter, switch Main panel to show that agent's log stream (filter TaggedLogEntry by branch)
-- [ ] T035 [US2] Wire Orchestrator creation in cmd/ralph/wiring.go — when [worktree] enabled in config: create worktree.Runner, create Orchestrator with config values, pass to tui.New()
-- [ ] T036 [US2] Add tests for WorktreesPanel in internal/tui/panels/worktrees_test.go — table-driven: renders-empty, renders-agents-with-status, navigation-j-k, selected-item-correct
-- [ ] T037 [US2] Add tests for Orchestrator TUI wiring in cmd/ralph/wiring_test.go — verify orchestrator created when [worktree] enabled; nil when disabled; keybinds dispatch correctly
+- [x] T029 [US2] Create internal/tui/panels/worktrees.go — new WorktreesPanel component: list of WorktreeAgent entries with columns (Branch, State, Iterations, Cost); j/k navigation; selected item tracking; renders agent state with status icons
+- [x] T030 [US2] Add WorktreesPanel to TUI layout in internal/tui/app.go — add as fifth panel or replace/augment existing panel when worktree mode is enabled; wire into panel focus cycle (tab/shift+tab and number keys)
+- [x] T031 [US2] Wire Orchestrator into TUI in internal/tui/app.go — accept Orchestrator in tui.New() (optional, nil when worktree disabled); subscribe to MergedEvents channel; dispatch TaggedLogEntry updates to appropriate panels
+- [x] T032 [US2] Implement `W` keybind in internal/tui/app.go — when Specs panel focused and spec selected: call Orchestrator.Launch(selectedSpec, ModeBuild); show error message if at max or duplicate branch
+- [x] T033 [US2] Implement worktree-specific keybinds in internal/tui/app.go — when WorktreesPanel focused: `x` calls Orchestrator.Stop(branch), `M` calls Orchestrator.Merge(branch), `D` calls Orchestrator.Clean(branch); show result/error in status bar
+- [x] T034 [US2] Update Main panel to show selected worktree's log in internal/tui/app.go — when user selects a worktree in WorktreesPanel and presses enter, switch Main panel to show that agent's log stream (filter TaggedLogEntry by branch)
+- [x] T035 [US2] Wire Orchestrator creation in cmd/ralph/wiring.go — when [worktree] enabled in config: create worktree.Runner, create Orchestrator with config values, pass to tui.New()
+- [x] T036 [US2] Add tests for WorktreesPanel in internal/tui/panels/worktrees_test.go — table-driven: renders-empty, renders-agents-with-status, navigation-j-k, selected-item-correct
+- [x] T037 [US2] Add tests for Orchestrator TUI wiring in cmd/ralph/wiring_test.go — verify orchestrator created when [worktree] enabled; nil when disabled; keybinds dispatch correctly
 
 **Checkpoint**: Dashboard supports multi-agent worktree management. Parallel agent workflows operational.
 
@@ -102,10 +102,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T038 [US3] Implement auto-merge trigger in internal/orchestrator/orchestrator.go — when agent transitions to Completed and AutoMerge is true: run test command (if configured), if tests pass call Merge(branch), if tests fail log warning and skip merge
-- [ ] T039 [US3] Wire Regent test command into Orchestrator completion handler in internal/orchestrator/orchestrator.go — on agent completion: if regent.test_command configured, exec test in worktree Dir; gate auto-merge on test result
-- [ ] T040 [US3] Add auto-merge tests to internal/orchestrator/orchestrator_test.go — table-driven: auto-merge-on-success, auto-merge-skipped-on-test-failure, auto-merge-disabled-no-action, merge-conflict-preserves-worktree
-- [ ] T041 [US3] Send notification on merge/failure in internal/orchestrator/orchestrator.go — when merge completes or fails, emit LogEntry that triggers notification hook (reuse existing notify infrastructure)
+- [x] T038 [US3] Implement auto-merge trigger in internal/orchestrator/orchestrator.go — when agent transitions to Completed and AutoMerge is true: run test command (if configured), if tests pass call Merge(branch), if tests fail log warning and skip merge
+- [x] T039 [US3] Wire Regent test command into Orchestrator completion handler in internal/orchestrator/orchestrator.go — on agent completion: if regent.test_command configured, exec test in worktree Dir; gate auto-merge on test result
+- [x] T040 [US3] Add auto-merge tests to internal/orchestrator/orchestrator_test.go — table-driven: auto-merge-on-success, auto-merge-skipped-on-test-failure, auto-merge-disabled-no-action, merge-conflict-preserves-worktree
+- [x] T041 [US3] Send notification on merge/failure in internal/orchestrator/orchestrator.go — when merge completes or fails, emit LogEntry that triggers notification hook (reuse existing notify infrastructure)
 
 **Checkpoint**: Auto-merge and explicit merge both functional. Worktree lifecycle fully managed.
 
@@ -119,10 +119,10 @@
 
 ### Implementation for User Story 4
 
-- [ ] T042 [US4] Enhance WorktreesPanel rendering in internal/tui/panels/worktrees.go — add status icons (🔨 running, ✅ completed, ❌ failed, ⏹ stopped, 🔀 merging), iteration count, cost column; empty-state hint when no worktrees
-- [ ] T043 [US4] Implement real-time status updates in internal/tui/app.go — on receiving TaggedLogEntry from MergedEvents: update matching WorktreeAgent's iteration count and cost; trigger panel re-render
-- [ ] T044 [US4] Implement log aggregation for dashboard in internal/orchestrator/orchestrator.go — WorktreePaths() method returns all active worktree paths; dashboard store reader scans each path's .ralph/logs/ for session history
-- [ ] T045 [US4] Add tests for real-time status updates in internal/tui/panels/worktrees_test.go — verify status transitions render correctly, cost accumulates, iteration count increments
+- [x] T042 [US4] Enhance WorktreesPanel rendering in internal/tui/panels/worktrees.go — add status icons (🔨 running, ✅ completed, ❌ failed, ⏹ stopped, 🔀 merging), iteration count, cost column; empty-state hint when no worktrees
+- [x] T043 [US4] Implement real-time status updates in internal/tui/app.go — on receiving TaggedLogEntry from MergedEvents: update matching WorktreeAgent's iteration count and cost; trigger panel re-render
+- [x] T044 [US4] Implement log aggregation for dashboard in internal/orchestrator/orchestrator.go — WorktreePaths() method returns all active worktree paths; dashboard store reader scans each path's .ralph/logs/ for session history
+- [x] T045 [US4] Add tests for real-time status updates in internal/tui/panels/worktrees_test.go — verify status transitions render correctly, cost accumulates, iteration count increments
 
 **Checkpoint**: Full observability into parallel agent activity from the dashboard.
 
@@ -136,10 +136,10 @@
 
 ### Implementation for User Story 5
 
-- [ ] T046 [US5] Refactor Regent to support multiple supervised agents in internal/regent/regent.go — accept a map or slice of supervised processes instead of a single one; per-agent hang timeout tracking, crash detection, and rollback
-- [ ] T047 [US5] Wire per-agent Regent in internal/orchestrator/orchestrator.go — on Launch(), create a Regent instance (or register agent with shared Regent) for the new worktree agent; on agent stop/complete, deregister from Regent
-- [ ] T048 [US5] Implement per-worktree rollback in internal/regent/regent.go — when test command fails for a specific worktree agent: create git.Runner with that worktree's Dir, revert the last commit in that worktree only
-- [ ] T049 [US5] Add tests for multi-agent Regent in internal/regent/state_test.go — table-driven: hang-detected-kills-one-agent-not-others, crash-restarts-one-agent, test-failure-rollback-one-worktree, max-retries-stops-agent
+- [x] T046 [US5] Refactor Regent to support multiple supervised agents in internal/regent/regent.go — accept a map or slice of supervised processes instead of a single one; per-agent hang timeout tracking, crash detection, and rollback
+- [x] T047 [US5] Wire per-agent Regent in internal/orchestrator/orchestrator.go — on Launch(), create a Regent instance (or register agent with shared Regent) for the new worktree agent; on agent stop/complete, deregister from Regent
+- [x] T048 [US5] Implement per-worktree rollback in internal/regent/regent.go — when test command fails for a specific worktree agent: create git.Runner with that worktree's Dir, revert the last commit in that worktree only
+- [x] T049 [US5] Add tests for multi-agent Regent in internal/regent/state_test.go — table-driven: hang-detected-kills-one-agent-not-others, crash-restarts-one-agent, test-failure-rollback-one-worktree, max-retries-stops-agent
 
 **Checkpoint**: Per-worktree supervision operational. Failures isolated between agents.
 
@@ -149,12 +149,12 @@
 
 **Purpose**: Documentation, integration testing, and cleanup
 
-- [ ] T050 [P] Update README.md — add worktree section: quick start with `ralph build -w`, parallel agents from dashboard, merge/clean commands, `[worktree]` config reference
-- [ ] T051 [P] Update ralph.toml example config — add `[worktree]` section with all fields and comments
-- [ ] T052 [P] Update TUI keyboard reference in README.md — add W, M, D keybinds; document WorktreesPanel
-- [ ] T053 Run quickstart.md validation — verify all commands from quickstart.md work end-to-end
-- [ ] T054 Run `go vet ./...` and `golangci-lint run` — fix any warnings in new code
-- [ ] T055 Verify all existing tests pass — `go test ./...` must be green with zero regressions
+- [x] T050 [P] Update README.md — add worktree section: quick start with `ralph build -w`, parallel agents from dashboard, merge/clean commands, `[worktree]` config reference
+- [x] T051 [P] Update ralph.toml example config — add `[worktree]` section with all fields and comments
+- [x] T052 [P] Update TUI keyboard reference in README.md — add W, M, D keybinds; document WorktreesPanel
+- [x] T053 Run quickstart.md validation — verify all commands from quickstart.md work end-to-end
+- [x] T054 Run `go vet ./...` and `golangci-lint run` — fix any warnings in new code
+- [x] T055 Verify all existing tests pass — `go test ./...` must be green with zero regressions
 
 ---
 
