@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"errors"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -143,6 +144,18 @@ func TestMerge_RunningRejected(t *testing.T) {
 	err := o.Merge("feat/r")
 	if err == nil {
 		t.Fatal("expected error merging running agent")
+	}
+}
+
+func TestMerge_NoAgent(t *testing.T) {
+	o := newTestOrchestrator(&fakeWorktreeOps{switchPath: "/tmp/wt"})
+
+	err := o.Merge("nonexistent-branch")
+	if err == nil {
+		t.Fatal("expected error for unknown branch")
+	}
+	if !strings.Contains(err.Error(), "nonexistent-branch") {
+		t.Errorf("error should mention branch name, got: %v", err)
 	}
 }
 
@@ -382,6 +395,41 @@ func TestAutoMergeIfNeeded_TestFailed_SkipsMerge(t *testing.T) {
 	}
 	if len(notified) == 0 {
 		t.Error("expected notification hook called when tests fail")
+	}
+}
+
+// TestAutoMergeIfNeeded_RunTestsError verifies that when regent.RunTests
+// returns a hard error (shell not found), the auto-merge is skipped and a
+// LogError notification is emitted.
+func TestAutoMergeIfNeeded_RunTestsError_SkipsMerge(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// cmd.exe is located via absolute path on Windows, so clearing PATH
+		// does not prevent the shell from being found.
+		t.Skip("PATH clearing does not affect cmd.exe lookup on Windows")
+	}
+	ops := &fakeWorktreeOps{switchPath: "/tmp/wt"}
+	o := newTestOrchestrator(ops)
+	o.AutoMerge = true
+	o.cfg.Regent.TestCommand = "go test ./..."
+	t.Setenv("PATH", "") // make 'sh' unfindable → exec returns non-ExitError
+
+	var notified []loop.LogEntry
+	o.NotificationHook = func(e loop.LogEntry) { notified = append(notified, e) }
+
+	agent := &WorktreeAgent{Branch: "feat/runerr", State: StateCompleted, WorktreePath: t.TempDir()}
+	o.agents["feat/runerr"] = agent
+
+	o.autoMergeIfNeeded(agent, "feat/runerr")
+
+	// Agent should stay Completed — merge was skipped due to test run error.
+	if agent.State != StateCompleted {
+		t.Errorf("expected StateCompleted (no merge), got %v", agent.State)
+	}
+	if len(notified) == 0 {
+		t.Error("expected notification hook called when test run returns error")
+	}
+	if notified[0].Kind != loop.LogError {
+		t.Errorf("notification kind = %v, want LogError", notified[0].Kind)
 	}
 }
 
