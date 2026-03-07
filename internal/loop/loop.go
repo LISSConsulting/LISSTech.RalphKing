@@ -25,6 +25,7 @@ const (
 type GitOps interface {
 	CurrentBranch() (string, error)
 	HasUncommittedChanges() (bool, error)
+	HasRemoteBranch(branch string) bool
 	Pull(branch string) error
 	Push(branch string) error
 	Stash() error
@@ -184,8 +185,8 @@ func (l *Loop) iteration(ctx context.Context, n, maxIter int, prompt, branch str
 		return 0, "", false, err
 	}
 
-	// Pull latest from remote
-	if l.Config.Git.AutoPullRebase {
+	// Pull latest from remote (skip if no remote tracking branch yet)
+	if l.Config.Git.AutoPullRebase && l.Git.HasRemoteBranch(branch) {
 		l.emit(LogEntry{
 			Kind:    LogGitPull,
 			Message: fmt.Sprintf("Pulling %s", branch),

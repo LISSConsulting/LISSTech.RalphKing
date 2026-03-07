@@ -64,6 +64,7 @@ type mockGit struct {
 
 func (m *mockGit) CurrentBranch() (string, error)        { return m.branch, m.branchErr }
 func (m *mockGit) HasUncommittedChanges() (bool, error)  { return m.dirty, m.dirtyErr }
+func (m *mockGit) HasRemoteBranch(_ string) bool         { return true }
 func (m *mockGit) Pull(_ string) error                   { m.pullCalls++; return m.pullErr }
 func (m *mockGit) Push(_ string) error                   { m.pushCalls++; return m.pushErr }
 func (m *mockGit) Stash() error                          { m.stashCalls++; return m.stashErr }

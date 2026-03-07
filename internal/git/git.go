@@ -83,9 +83,14 @@ func (r *Runner) Stash() error {
 }
 
 // StashPop restores the most recent stash entry.
+// Returns nil when there are no stash entries (e.g., stash push was a no-op
+// because only untracked files were present).
 func (r *Runner) StashPop() error {
 	_, err := r.run("stash", "pop")
 	if err != nil {
+		if strings.Contains(err.Error(), "No stash entries found") {
+			return nil
+		}
 		return fmt.Errorf("git stash pop: %w", err)
 	}
 	return nil
@@ -107,6 +112,12 @@ func (r *Runner) Revert(sha string) error {
 		return fmt.Errorf("git revert %s: %w", sha, err)
 	}
 	return nil
+}
+
+// HasRemoteBranch returns true if origin/<branch> exists.
+func (r *Runner) HasRemoteBranch(branch string) bool {
+	_, err := r.run("rev-parse", "--verify", fmt.Sprintf("origin/%s", branch))
+	return err == nil
 }
 
 // DiffFromRemote returns true if HEAD differs from origin/<branch>.

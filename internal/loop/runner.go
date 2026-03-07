@@ -34,6 +34,7 @@ func (a *ClaudeAgent) Run(ctx context.Context, prompt string, opts claude.RunOpt
 	}
 
 	cmd := exec.CommandContext(ctx, exe, args...)
+	isolateProcess(cmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("claude agent: stdout pipe: %w", err)
