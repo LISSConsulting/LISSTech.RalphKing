@@ -232,3 +232,41 @@ func TestMainView_ShowWorktreeLog_SetsContent(t *testing.T) {
 		t.Error("View() after ShowWorktreeLog should not be empty")
 	}
 }
+
+// TestMainView_AppendLine_DoesNotAffectSpecLog verifies that appending output
+// lines never displaces or contaminates the spec tab's independent buffer.
+// This is the key invariant of the per-tab LogView refactor (T039).
+func TestMainView_AppendLine_DoesNotAffectSpecLog(t *testing.T) {
+	mv := NewMainView(80, 20)
+
+	// Load spec content — tab switches to TabSpecContent.
+	mv = mv.ShowSpec("# My Spec\n\nSome spec details here.")
+
+	// Stream several output lines (simulating ongoing loop activity).
+	mv = mv.AppendLine("output line 1")
+	mv = mv.AppendLine("output line 2")
+	mv = mv.AppendLine("output line 3")
+
+	// Spec tab must still show spec content, not the output lines.
+	specView := mv.View()
+	if !strings.Contains(specView, "My Spec") {
+		t.Errorf("Spec tab should still contain spec content after AppendLine; got: %q", specView)
+	}
+	for _, bad := range []string{"output line 1", "output line 2", "output line 3"} {
+		if strings.Contains(specView, bad) {
+			t.Errorf("Spec tab must not contain output line %q; got: %q", bad, specView)
+		}
+	}
+
+	// Switch to output tab — output lines must be visible, spec text must not be.
+	mv = mv.SwitchToOutput()
+	outView := mv.View()
+	for _, want := range []string{"output line 1", "output line 2", "output line 3"} {
+		if !strings.Contains(outView, want) {
+			t.Errorf("Output tab missing %q after AppendLine; got: %q", want, outView)
+		}
+	}
+	if strings.Contains(outView, "My Spec") {
+		t.Errorf("Output tab must not contain spec content; got: %q", outView)
+	}
+}

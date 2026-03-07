@@ -18,13 +18,16 @@ const (
 )
 
 // MainView is the main (right-top) panel showing loop output and spec/iteration content.
+// Each tab owns its own LogView so content is never displaced by output from another tab.
 type MainView struct {
-	tabbar         components.TabBar
-	logview        components.LogView
-	summaryLogview components.LogView
-	width          int
-	height         int
-	activeTab      MainTab
+	tabbar       components.TabBar
+	outputLog    components.LogView // Tab 0: live streaming output
+	specLog      components.LogView // Tab 1: spec file content
+	iterationLog components.LogView // Tab 2: past iteration log
+	summaryLog   components.LogView // Tab 3: iteration metadata summary
+	width        int
+	height       int
+	activeTab    MainTab
 }
 
 var mainTabLabels = []string{"Output", "Spec", "Iteration", "Summary"}
@@ -36,23 +39,27 @@ func NewMainView(w, h int) MainView {
 		contentH = 1
 	}
 	return MainView{
-		tabbar:         components.NewTabBar(mainTabLabels).SetWidth(w),
-		logview:        components.NewLogView(w, contentH),
-		summaryLogview: components.NewLogView(w, contentH),
-		width:          w,
-		height:         h,
+		tabbar:       components.NewTabBar(mainTabLabels).SetWidth(w),
+		outputLog:    components.NewLogView(w, contentH),
+		specLog:      components.NewLogView(w, contentH),
+		iterationLog: components.NewLogView(w, contentH),
+		summaryLog:   components.NewLogView(w, contentH),
+		width:        w,
+		height:       h,
 	}
 }
 
-// AppendLine appends a pre-rendered (styled) line to the output log.
+// AppendLine appends a pre-rendered (styled) line to the output log only.
+// It never touches specLog, iterationLog, or summaryLog so those tabs
+// retain their content independently of live streaming output.
 func (v MainView) AppendLine(rendered string) MainView {
-	v.logview = v.logview.AppendLine(rendered)
+	v.outputLog = v.outputLog.AppendLine(rendered)
 	return v
 }
 
 // ShowSpec loads spec content into the spec viewer and switches to TabSpecContent.
 func (v MainView) ShowSpec(content string) MainView {
-	v.logview = v.logview.SetContent(splitLines(content))
+	v.specLog = v.specLog.SetContent(splitLines(content))
 	v.activeTab = TabSpecContent
 	v.tabbar = components.NewTabBar(mainTabLabels).SetWidth(v.width)
 	for i := 0; i < int(TabSpecContent); i++ {
@@ -64,7 +71,7 @@ func (v MainView) ShowSpec(content string) MainView {
 // ShowIterationLog loads a past iteration's log entries and switches to TabIterationDetail.
 // entries are pre-rendered strings (app.go renders via theme.RenderLogLine before passing).
 func (v MainView) ShowIterationLog(rendered []string) MainView {
-	v.logview = v.logview.SetContent(rendered)
+	v.iterationLog = v.iterationLog.SetContent(rendered)
 	v.activeTab = TabIterationDetail
 	v.tabbar = components.NewTabBar(mainTabLabels).SetWidth(v.width)
 	for i := 0; i < int(TabIterationDetail); i++ {
@@ -76,7 +83,7 @@ func (v MainView) ShowIterationLog(rendered []string) MainView {
 // SetIterationSummary loads summary key-value lines into the summary viewport.
 // The tab is not switched; the user navigates to Summary with ].
 func (v MainView) SetIterationSummary(lines []string) MainView {
-	v.summaryLogview = v.summaryLogview.SetContent(lines)
+	v.summaryLog = v.summaryLog.SetContent(lines)
 	return v
 }
 
@@ -91,7 +98,7 @@ func (v MainView) SwitchToOutput() MainView {
 // Output tab so the user can review a specific agent's activity.
 // lines are pre-rendered strings (app.go renders via theme.RenderLogLine).
 func (v MainView) ShowWorktreeLog(lines []string) MainView {
-	v.logview = v.logview.SetContent(lines)
+	v.outputLog = v.outputLog.SetContent(lines)
 	v.activeTab = TabOutput
 	v.tabbar = components.NewTabBar(mainTabLabels).SetWidth(v.width)
 	return v
@@ -106,9 +113,26 @@ func (v MainView) SetSize(w, h int) MainView {
 		contentH = 1
 	}
 	v.tabbar = v.tabbar.SetWidth(w)
-	v.logview = v.logview.SetSize(w, contentH)
-	v.summaryLogview = v.summaryLogview.SetSize(w, contentH)
+	v.outputLog = v.outputLog.SetSize(w, contentH)
+	v.specLog = v.specLog.SetSize(w, contentH)
+	v.iterationLog = v.iterationLog.SetSize(w, contentH)
+	v.summaryLog = v.summaryLog.SetSize(w, contentH)
 	return v
+}
+
+// activeLogView returns a pointer to the LogView for the current tab so that
+// Update and View can dispatch to the right buffer without a switch per call-site.
+func (v *MainView) activeLogView() *components.LogView {
+	switch v.activeTab {
+	case TabSpecContent:
+		return &v.specLog
+	case TabIterationDetail:
+		return &v.iterationLog
+	case TabIterationSummary:
+		return &v.summaryLog
+	default:
+		return &v.outputLog
+	}
 }
 
 // Update handles key messages for the main panel.
@@ -125,21 +149,16 @@ func (v MainView) Update(msg tea.Msg) (MainView, tea.Cmd) {
 			v.activeTab = MainTab(v.tabbar.Active())
 		case "f":
 			if v.activeTab != TabIterationSummary {
-				v.logview = v.logview.ToggleFollow()
+				lv := v.activeLogView()
+				*lv = lv.ToggleFollow()
 			}
 		default:
-			if v.activeTab == TabIterationSummary {
-				v.summaryLogview, cmd = v.summaryLogview.Update(msg)
-			} else {
-				v.logview, cmd = v.logview.Update(msg)
-			}
+			lv := v.activeLogView()
+			*lv, cmd = lv.Update(msg)
 		}
 	default:
-		if v.activeTab == TabIterationSummary {
-			v.summaryLogview, cmd = v.summaryLogview.Update(msg)
-		} else {
-			v.logview, cmd = v.logview.Update(msg)
-		}
+		lv := v.activeLogView()
+		*lv, cmd = lv.Update(msg)
 	}
 	return v, cmd
 }
@@ -147,13 +166,8 @@ func (v MainView) Update(msg tea.Msg) (MainView, tea.Cmd) {
 // View renders the main panel: tab bar + content area.
 func (v MainView) View() string {
 	tabRow := v.tabbar.View()
-	var content string
-	if v.activeTab == TabIterationSummary {
-		content = v.summaryLogview.View()
-	} else {
-		content = v.logview.View()
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, tabRow, content)
+	lv := v.activeLogView()
+	return lipgloss.JoinVertical(lipgloss.Left, tabRow, lv.View())
 }
 
 // splitLines splits a string into lines for SetContent.
