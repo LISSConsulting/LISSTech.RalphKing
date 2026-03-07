@@ -1,6 +1,7 @@
 package panels
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -440,5 +441,69 @@ func TestSpecsPanel_SelectedSpec_ReturnsParentForChild(t *testing.T) {
 	}
 	if sel.Name != "004-feature" {
 		t.Errorf("SelectedSpec().Name = %q, want %q", sel.Name, "004-feature")
+	}
+}
+
+func TestSpecsPanel_SelectedSpec_EmptyPanel_ReturnsNil(t *testing.T) {
+	p := NewSpecsPanel(nil, "", 80, 20)
+	if p.SelectedSpec() != nil {
+		t.Error("SelectedSpec() on empty panel should return nil")
+	}
+}
+
+// buildManySpecs creates n flat specs for scroll tests.
+func buildManySpecs(n int) []spec.SpecFile {
+	specs := make([]spec.SpecFile, n)
+	for i := range specs {
+		specs[i] = makeSpec(fmt.Sprintf("spec-%02d", i), fmt.Sprintf("specs/spec-%02d.md", i), spec.StatusNotStarted)
+	}
+	return specs
+}
+
+func TestSpecsPanel_ScrollDown_AdjustsScrollTop(t *testing.T) {
+	p := NewSpecsPanel(buildManySpecs(10), "", 80, 3)
+	// Navigate to the last item — each j should scroll when we go past the visible window.
+	for i := 0; i < 9; i++ {
+		p, _ = p.Update(keyMsg("j"))
+	}
+	if p.cursor != 9 {
+		t.Fatalf("cursor = %d, want 9", p.cursor)
+	}
+	// Cursor must be within the visible window [scrollTop, scrollTop+height).
+	if p.cursor < p.scrollTop || p.cursor >= p.scrollTop+p.height {
+		t.Errorf("cursor %d not visible: scrollTop=%d height=%d", p.cursor, p.scrollTop, p.height)
+	}
+	if p.scrollTop <= 0 {
+		t.Errorf("scrollTop = %d; expected > 0 after scrolling down 9 rows with height 3", p.scrollTop)
+	}
+}
+
+func TestSpecsPanel_ScrollUp_AdjustsScrollTop(t *testing.T) {
+	p := NewSpecsPanel(buildManySpecs(10), "", 80, 3)
+	// Scroll to bottom.
+	for i := 0; i < 9; i++ {
+		p, _ = p.Update(keyMsg("j"))
+	}
+	// Now scroll back to top.
+	for i := 0; i < 9; i++ {
+		p, _ = p.Update(keyMsg("k"))
+	}
+	if p.cursor != 0 {
+		t.Errorf("cursor = %d, want 0", p.cursor)
+	}
+	if p.scrollTop != 0 {
+		t.Errorf("scrollTop = %d, want 0 after scrolling back to top", p.scrollTop)
+	}
+}
+
+func TestSpecsPanel_JKOnEmpty_NoCmd(t *testing.T) {
+	p := NewSpecsPanel(nil, "", 80, 20)
+	_, cmd := p.Update(keyMsg("j"))
+	if cmd != nil {
+		t.Error("j on empty panel should return nil cmd")
+	}
+	_, cmd = p.Update(keyMsg("k"))
+	if cmd != nil {
+		t.Error("k on empty panel should return nil cmd")
 	}
 }
