@@ -34,9 +34,11 @@ No remaining work items. All specs 001–006 fully implemented.
 
 ### Improvement Sweep History
 
-**Established floors (as of v0.1.40, 2026-03-06):** `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 99.0% (Windows; ~99.5%+ Linux CI), `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.6% (TTY ceiling). Total: 92.1% (Windows). `go vet ./...` clean. `golangci-lint` 0 issues.
+**Established floors (as of v0.1.41, 2026-03-06):** `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 99.0% (Windows; ~99.5%+ Linux CI), `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 92.0% (`IterationLog` 95.2% — ReadAt error covered; `EnforceRetention` ReadDir non-IsNotExist branch is Windows ceiling since `os.ReadDir` on a regular file returns IsNotExist on Windows), `cmd/ralph` 76.6% (TTY ceiling). Total: 92.1% (Windows). `go vet ./...` clean. `golangci-lint` 0 issues.
 
 **Sweeps with findings (most recent first):**
+
+- **v0.1.41** (2026-03-06): +2 tests in `internal/store` — `TestIterationLog_ReadError` (call IterationLog after Close; covers ReadAt error path; `IterationLog` 90.5%→95.2%), `TestEnforceRetention_DirIsFile` (pass regular file as dir; covers ReadDir non-IsNotExist error on Linux; skipped on Windows — Windows ceiling confirmed: `os.ReadDir` on a file returns IsNotExist). `internal/store` 91.0%→92.0%.
 
 - **v0.1.40** (2026-03-06): +3 tests in `internal/spec` — `TestCheckDir_StatError` (null-byte path → EINVAL, non-IsNotExist stat error; `checkDir` 87.5%→100%), `TestList_NonMdFileIgnored` (non-.md flat file in specs/ → skip branch covered), `TestList_SpecsNotDir` (specs/ is a regular file → non-IsNotExist ReadDir error; Linux-only). +1 test in `cmd/ralph` — `TestSignalContextGraceful_CancelAfterFirstSignal` (ctx.Done in second select after first SIGINT; Linux-only). `internal/spec` 98.0%→99.0%.
 - **v0.1.37** (2026-03-06): Spec 005 FR-005 intentional drift documented — `--roam` no longer creates `sweep/YYYY-MM-DD` branch (refactor `b872e6b` removed `createSweepBranch()`); roam now operates on the current branch. No code change.

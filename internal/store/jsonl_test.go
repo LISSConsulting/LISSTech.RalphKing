@@ -601,6 +601,48 @@ func TestEnforceRetention_ReadOnlyDir(t *testing.T) {
 	}
 }
 
+func TestIterationLog_ReadError(t *testing.T) {
+	dir := t.TempDir()
+	s, err := store.NewJSONL(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	_ = s.Append(loop.LogEntry{Kind: loop.LogIterStart, Iteration: 1, Timestamp: now})
+	_ = s.Append(loop.LogEntry{Kind: loop.LogIterComplete, Iteration: 1, CostUSD: 0.01, Timestamp: now})
+
+	// Close the store so the underlying file handle is invalid.
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// IterationLog now attempts ReadAt on a closed file — must return an error.
+	_, err = s.IterationLog(1)
+	if err == nil {
+		t.Fatal("expected error when reading from a closed store")
+	}
+}
+
+func TestEnforceRetention_DirIsFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// On Windows, os.ReadDir on a regular file returns an IsNotExist error,
+		// so EnforceRetention returns nil — the non-IsNotExist ReadDir error
+		// branch is a Windows ceiling.
+		t.Skip("os.ReadDir on a file returns IsNotExist on Windows")
+	}
+	base := t.TempDir()
+	file := filepath.Join(base, "not-a-dir")
+	if err := os.WriteFile(file, []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Passing a regular file as dir: os.ReadDir returns ENOTDIR (non-IsNotExist).
+	err := store.EnforceRetention(file, 5)
+	if err == nil {
+		t.Fatal("expected error when dir argument is a regular file")
+	}
+}
+
 // splitLines returns the byte content of each line (without the trailing '\n')
 // from data. An empty trailing line from a final '\n' is omitted.
 func splitLines(data []byte) [][]byte {
