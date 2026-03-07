@@ -8,11 +8,9 @@ const (
 	FocusIterations                    // Left sidebar — iterations list
 	FocusMain                          // Right top — main content panel
 	FocusSecondary                     // Right bottom — secondary panel
-	FocusWorktrees                     // Left sidebar — worktrees panel (only when orch enabled)
 )
 
-// Next returns the next focus target in the 4-panel (no-worktree) forward tab order.
-// When worktree mode is active the Model overrides Tab cycling to include FocusWorktrees.
+// Next returns the next focus target in the 4-panel forward tab order.
 func (f FocusTarget) Next() FocusTarget {
 	return (f + 1) % 4
 }
@@ -33,8 +31,6 @@ func (f FocusTarget) String() string {
 		return "main"
 	case FocusSecondary:
 		return "secondary"
-	case FocusWorktrees:
-		return "worktrees"
 	default:
 		return "unknown"
 	}

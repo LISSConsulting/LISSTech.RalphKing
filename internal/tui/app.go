@@ -31,7 +31,6 @@ type Model struct {
 	iterationsPanel panels.IterationsPanel
 	mainView        panels.MainView
 	secondary       panels.SecondaryPanel
-	worktreesPanel  panels.WorktreesPanel
 
 	// Layout and focus
 	layout Layout
@@ -86,10 +85,10 @@ func New(events <-chan loop.LogEntry, storeReader store.Reader, accentColor, pro
 	th := NewTheme(accentColor)
 	layout := Calculate(80, 24)
 
-	specsW, specsH := titleContentDims(layout.Specs)
-	itersW, itersH := titleContentDims(layout.Iterations)
-	mainW, mainH := titleContentDims(layout.Main)
-	secW, secH := titleContentDims(layout.Secondary)
+	specsW, specsH := innerDims(layout.Specs)
+	itersW, itersH := innerDims(layout.Iterations)
+	mainW, mainH := innerDims(layout.Main)
+	secW, secH := innerDims(layout.Secondary)
 
 	return Model{
 		events:          events,
@@ -98,7 +97,6 @@ func New(events <-chan loop.LogEntry, storeReader store.Reader, accentColor, pro
 		iterationsPanel: panels.NewIterationsPanel(itersW, itersH),
 		mainView:        panels.NewMainView(mainW, mainH),
 		secondary:       panels.NewSecondaryPanel(secW, secH),
-		worktreesPanel:  panels.NewWorktreesPanel(nil, itersW, itersH),
 		layout:          layout,
 		focus:           FocusSpecs,
 		theme:           th,
@@ -115,23 +113,15 @@ func New(events <-chan loop.LogEntry, storeReader store.Reader, accentColor, pro
 }
 
 // WithOrchestrator enables worktree mode for this TUI model.
-// When set, a WorktreesPanel appears in the sidebar and the W/x/M/D keybinds
-// become active.  Pass nil to disable (same as not calling this method).
+// When set, a Worktrees tab appears in the Secondary panel and the W/x/M/D
+// keybinds become active.  Pass nil to disable (same as not calling this method).
 func (m Model) WithOrchestrator(orch *orchestrator.Orchestrator) Model {
 	if orch == nil {
 		return m
 	}
 	m.orch = orch
 	m.worktreeLogsByBranch = make(map[string][]string)
-
-	// Initialise the worktrees panel using the current layout (80×24 default;
-	// will be resized on the first WindowSizeMsg).
-	w, itersTopH, itersBotH := worktreesSplitDims(m.layout.Iterations)
-	_ = itersTopH
-	if itersBotH > 1 {
-		itersBotH--
-	}
-	m.worktreesPanel = panels.NewWorktreesPanel(agentsToEntries(orch.ActiveAgents()), w, itersBotH)
+	m.secondary = m.secondary.EnableWorktrees(agentsToEntries(orch.ActiveAgents()))
 	return m
 }
 
@@ -271,59 +261,24 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.height = msg.Height
 	m.layout = Calculate(msg.Width, msg.Height)
 	if !m.layout.TooSmall {
-		specsW, specsH := titleContentDims(m.layout.Specs)
-		mainW, mainH := titleContentDims(m.layout.Main)
-		secW, secH := titleContentDims(m.layout.Secondary)
+		specsW, specsH := innerDims(m.layout.Specs)
+		mainW, mainH := innerDims(m.layout.Main)
+		secW, secH := innerDims(m.layout.Secondary)
 		m.specsPanel = m.specsPanel.SetSize(specsW, specsH)
 		m.mainView = m.mainView.SetSize(mainW, mainH)
 		m.secondary = m.secondary.SetSize(secW, secH)
 
-		if m.orch != nil {
-			w, itersTopH, itersBotH := worktreesSplitDims(m.layout.Iterations)
-			if itersTopH > 1 {
-				itersTopH--
-			}
-			if itersBotH > 1 {
-				itersBotH--
-			}
-			m.iterationsPanel = m.iterationsPanel.SetSize(w, itersTopH)
-			m.worktreesPanel = m.worktreesPanel.SetSize(w, itersBotH)
-		} else {
-			itersW, itersH := titleContentDims(m.layout.Iterations)
-			m.iterationsPanel = m.iterationsPanel.SetSize(itersW, itersH)
-		}
+		itersW, itersH := innerDims(m.layout.Iterations)
+		m.iterationsPanel = m.iterationsPanel.SetSize(itersW, itersH)
 	}
 	return m, nil
 }
 
-// nextFocus returns the next panel in tab order.  When worktree mode is active
-// the cycle expands to 5 panels: Specs→Iterations→Worktrees→Main→Secondary→Specs.
-func (m Model) nextFocus() FocusTarget {
-	if m.orch == nil {
-		return m.focus.Next()
-	}
-	cycle := []FocusTarget{FocusSpecs, FocusIterations, FocusWorktrees, FocusMain, FocusSecondary}
-	for i, f := range cycle {
-		if f == m.focus {
-			return cycle[(i+1)%len(cycle)]
-		}
-	}
-	return m.focus // should be unreachable: all valid focus values are in the cycle
-}
+// nextFocus returns the next panel in the 4-panel forward tab order.
+func (m Model) nextFocus() FocusTarget { return m.focus.Next() }
 
-// prevFocus returns the previous panel in reverse tab order.
-func (m Model) prevFocus() FocusTarget {
-	if m.orch == nil {
-		return m.focus.Prev()
-	}
-	cycle := []FocusTarget{FocusSpecs, FocusIterations, FocusWorktrees, FocusMain, FocusSecondary}
-	for i, f := range cycle {
-		if f == m.focus {
-			return cycle[(i+len(cycle)-1)%len(cycle)]
-		}
-	}
-	return m.focus // should be unreachable: all valid focus values are in the cycle
-}
+// prevFocus returns the previous panel in the 4-panel reverse tab order.
+func (m Model) prevFocus() FocusTarget { return m.focus.Prev() }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Help overlay absorbs the key press to dismiss it.
@@ -368,12 +323,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "x":
-		if m.focus == FocusWorktrees && m.orch != nil {
-			// Delegate to worktrees panel — it will emit WorktreeActionMsg{Action:"stop"}.
-			var cmd tea.Cmd
-			m.worktreesPanel, cmd = m.worktreesPanel.Update(msg)
-			return m, cmd
-		}
 		if m.controller != nil {
 			m.controller.StopLoop()
 		}
@@ -407,9 +356,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focus = FocusSecondary
 		return m, nil
 	case "5":
-		if m.orch != nil {
-			m.focus = FocusWorktrees
-		}
+		// Reserved — no-op (worktrees live in Secondary panel's Worktrees tab).
 		return m, nil
 	}
 	return m.delegateToFocused(msg)
@@ -426,8 +373,6 @@ func (m Model) delegateToFocused(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mainView, cmd = m.mainView.Update(msg)
 	case FocusSecondary:
 		m.secondary, cmd = m.secondary.Update(msg)
-	case FocusWorktrees:
-		m.worktreesPanel, cmd = m.worktreesPanel.Update(msg)
 	}
 	return m, cmd
 }
@@ -535,9 +480,9 @@ func (m Model) handleTaggedEvent(msg taggedEventMsg) (tea.Model, tea.Cmd) {
 		m.mainView = m.mainView.AppendLine(rendered)
 	}
 
-	// Update worktrees panel with fresh agent state snapshot.
+	// Update worktrees tab with fresh agent state snapshot.
 	if m.orch != nil {
-		m.worktreesPanel = m.worktreesPanel.SetEntries(agentsToEntries(m.orch.ActiveAgents()))
+		m.secondary = m.secondary.SetWorktreeEntries(agentsToEntries(m.orch.ActiveAgents()))
 	}
 
 	return m, waitForTaggedEvent(m.orch.MergedEvents)
@@ -556,8 +501,8 @@ func (m Model) handleWorktreeAction(msg panels.WorktreeActionMsg) (tea.Model, te
 	case "clean":
 		_ = m.orch.Clean(msg.Branch)
 	}
-	// Refresh panel after state change.
-	m.worktreesPanel = m.worktreesPanel.SetEntries(agentsToEntries(m.orch.ActiveAgents()))
+	// Refresh worktrees tab after state change.
+	m.secondary = m.secondary.SetWorktreeEntries(agentsToEntries(m.orch.ActiveAgents()))
 	return m, nil
 }
 
@@ -571,7 +516,7 @@ func (m Model) handleWorktreeSelected(msg panels.WorktreeSelectedMsg) (tea.Model
 
 func (m Model) handleSpecSelected(msg panels.SpecSelectedMsg) (tea.Model, tea.Cmd) {
 	content := m.readSpecContent(msg.Spec)
-	w, _ := titleContentDims(m.layout.Main)
+	w, _ := innerDims(m.layout.Main)
 	m.mainView = m.mainView.ShowSpec(renderMarkdown(content, w))
 	return m, nil
 }
@@ -626,7 +571,7 @@ func (m Model) handleCreateSpecRequest(msg panels.CreateSpecRequestMsg) (tea.Mod
 }
 
 func (m Model) handleSpecsRefreshed(msg specsRefreshedMsg) (tea.Model, tea.Cmd) {
-	specsW, specsH := titleContentDims(m.layout.Specs)
+	specsW, specsH := innerDims(m.layout.Specs)
 	m.specsPanel = panels.NewSpecsPanel(msg.Specs, m.workDir, specsW, specsH)
 	return m, nil
 }
@@ -707,7 +652,6 @@ func (m Model) renderHelp() string {
 		"    tab         Cycle panel focus forward",
 		"    shift+tab   Cycle panel focus backward",
 		"    1-4         Jump to Specs / Iterations / Main / Secondary",
-		"    5           Jump to Worktrees (when worktree mode active)",
 		"",
 		"  LOOP CONTROL  (dashboard mode only)",
 		"    b           Start build loop",
@@ -726,13 +670,6 @@ func (m Model) renderHelp() string {
 		"    j / k       Navigate iterations",
 		"    enter       Open iteration log",
 		"",
-		"  WORKTREES PANEL",
-		"    j / k       Navigate worktree agents",
-		"    enter       View agent log in Main panel",
-		"    x           Stop selected agent",
-		"    M           Merge selected agent",
-		"    D           Clean (remove) selected agent",
-		"",
 		"  MAIN PANEL",
 		"    f           Toggle follow (auto-scroll)",
 		"    [ / ]       Cycle tabs",
@@ -740,8 +677,10 @@ func (m Model) renderHelp() string {
 		"    j / k       Scroll line up / down",
 		"",
 		"  SECONDARY PANEL",
-		"    [ / ]       Cycle tabs",
-		"    j / k       Scroll",
+		"    [ / ]       Cycle tabs (Regent/Git/Tests/Cost/Worktrees)",
+		"    j / k       Scroll / navigate worktree agents",
+		"    enter       View worktree agent log (Worktrees tab)",
+		"    x / M / D   Stop / merge / clean agent (Worktrees tab)",
 		"",
 		"  Press any key to close",
 	}
@@ -784,66 +723,20 @@ func (m Model) View() string {
 		StateLabel:    m.loopState.Label(),
 	}, m.layout.Footer.Width)
 
-	// Left sidebar: specs (top) + iterations [+ worktrees] (bottom)
+	// Left sidebar: specs (top) + iterations (bottom)
 	specsW, specsH := innerDims(m.layout.Specs)
+	itersW, itersH := innerDims(m.layout.Iterations)
 	mainW, mainH := innerDims(m.layout.Main)
 	secW, secH := innerDims(m.layout.Secondary)
 
-	var sidebar string
-	if m.orch != nil {
-		// Split Iterations rect: top half for iterations, bottom half for worktrees.
-		w, itersTopH, itersBotH := worktreesSplitDims(m.layout.Iterations)
-		sidebar = lipgloss.JoinVertical(lipgloss.Left,
-			m.theme.PanelBorderStyle(m.focus == FocusSpecs).
-				Width(specsW).Height(specsH).
-				Render(lipgloss.JoinVertical(lipgloss.Left,
-					renderPanelTitle(1, "Specs", m.focus == FocusSpecs, m.theme),
-					m.specsPanel.View(),
-				)),
-			m.theme.PanelBorderStyle(m.focus == FocusIterations).
-				Width(w).Height(itersTopH).
-				Render(lipgloss.JoinVertical(lipgloss.Left,
-					renderPanelTitle(2, "Iterations", m.focus == FocusIterations, m.theme),
-					m.iterationsPanel.View(),
-				)),
-			m.theme.PanelBorderStyle(m.focus == FocusWorktrees).
-				Width(w).Height(itersBotH).
-				Render(lipgloss.JoinVertical(lipgloss.Left,
-					renderPanelTitle(5, "Worktrees", m.focus == FocusWorktrees, m.theme),
-					m.worktreesPanel.View(),
-				)),
-		)
-	} else {
-		itersW, itersH := innerDims(m.layout.Iterations)
-		sidebar = lipgloss.JoinVertical(lipgloss.Left,
-			m.theme.PanelBorderStyle(m.focus == FocusSpecs).
-				Width(specsW).Height(specsH).
-				Render(lipgloss.JoinVertical(lipgloss.Left,
-					renderPanelTitle(1, "Specs", m.focus == FocusSpecs, m.theme),
-					m.specsPanel.View(),
-				)),
-			m.theme.PanelBorderStyle(m.focus == FocusIterations).
-				Width(itersW).Height(itersH).
-				Render(lipgloss.JoinVertical(lipgloss.Left,
-					renderPanelTitle(2, "Iterations", m.focus == FocusIterations, m.theme),
-					m.iterationsPanel.View(),
-				)),
-		)
-	}
+	sidebar := lipgloss.JoinVertical(lipgloss.Left,
+		m.theme.RenderPanelBox(m.specsPanel.View(), 1, "Specs", m.focus == FocusSpecs, specsW, specsH),
+		m.theme.RenderPanelBox(m.iterationsPanel.View(), 2, "Iterations", m.focus == FocusIterations, itersW, itersH),
+	)
 
 	rightCol := lipgloss.JoinVertical(lipgloss.Left,
-		m.theme.PanelBorderStyle(m.focus == FocusMain).
-			Width(mainW).Height(mainH).
-			Render(lipgloss.JoinVertical(lipgloss.Left,
-				renderPanelTitle(3, "Output", m.focus == FocusMain, m.theme),
-				m.mainView.View(),
-			)),
-		m.theme.PanelBorderStyle(m.focus == FocusSecondary).
-			Width(secW).Height(secH).
-			Render(lipgloss.JoinVertical(lipgloss.Left,
-				renderPanelTitle(4, "Secondary", m.focus == FocusSecondary, m.theme),
-				m.secondary.View(),
-			)),
+		m.theme.RenderPanelBox(m.mainView.View(), 3, "Output", m.focus == FocusMain, mainW, mainH),
+		m.theme.RenderPanelBox(m.secondary.View(), 4, "Secondary", m.focus == FocusSecondary, secW, secH),
 	)
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, rightCol)
@@ -860,43 +753,6 @@ func innerDims(r Rect) (w, h int) {
 	h = r.Height - 2
 	if h < 1 {
 		h = 1
-	}
-	return
-}
-
-// titleContentDims returns the content dimensions for a panel that reserves
-// one row for a "[N] Title" label, leaving h-1 rows for the panel body.
-func titleContentDims(r Rect) (w, h int) {
-	w, h = innerDims(r)
-	h--
-	if h < 1 {
-		h = 1
-	}
-	return
-}
-
-// worktreesSplitDims computes inner content dimensions when the Iterations
-// rect is split evenly between the IterationsPanel (top) and WorktreesPanel
-// (bottom).  Both panels share the same width.
-//
-//	w           — shared inner content width
-//	itersTopH   — inner content height for the IterationsPanel portion
-//	itersBotH   — inner content height for the WorktreesPanel portion
-func worktreesSplitDims(itersRect Rect) (w, itersTopH, itersBotH int) {
-	topOuter := itersRect.Height / 2
-	botOuter := itersRect.Height - topOuter
-
-	w = itersRect.Width - 2
-	if w < 1 {
-		w = 1
-	}
-	itersTopH = topOuter - 2
-	if itersTopH < 1 {
-		itersTopH = 1
-	}
-	itersBotH = botOuter - 2
-	if itersBotH < 1 {
-		itersBotH = 1
 	}
 	return
 }

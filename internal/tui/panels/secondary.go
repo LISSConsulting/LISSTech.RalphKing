@@ -15,24 +15,29 @@ import (
 type SecondaryTab int
 
 const (
-	TabRegent SecondaryTab = iota // Regent supervisor messages
-	TabGit                        // Git operation log
-	TabTests                      // Test output (from Regent entries)
-	TabCost                       // Cost breakdown
+	TabRegent    SecondaryTab = iota // Regent supervisor messages
+	TabGit                           // Git operation log
+	TabTests                         // Test output (from Regent entries)
+	TabCost                          // Cost breakdown
+	TabWorktrees                     // Worktree agents (when orchestrator active)
 )
 
 var secondaryTabLabels = []string{"Regent", "Git", "Tests", "Cost"}
+var secondaryTabLabelsWithWorktrees = []string{"Regent", "Git", "Tests", "Cost", "Worktrees"}
 
 // SecondaryPanel is the secondary (right-bottom) panel with Regent/git/test/cost tabs.
+// When worktree mode is enabled (via EnableWorktrees), a Worktrees tab is added.
 type SecondaryPanel struct {
-	tabbar    components.TabBar
-	regent    components.LogView       // Regent supervisor messages
-	gitLog    components.LogView       // Git operation messages
-	tests     components.LogView       // Test output from Regent entries
-	costData  []store.IterationSummary // Per-iteration cost accumulator
-	width     int
-	height    int
-	activeTab SecondaryTab
+	tabbar       components.TabBar
+	regent       components.LogView       // Regent supervisor messages
+	gitLog       components.LogView       // Git operation messages
+	tests        components.LogView       // Test output from Regent entries
+	costData     []store.IterationSummary // Per-iteration cost accumulator
+	worktrees    WorktreesPanel           // Worktree agents list (only used when hasWorktrees)
+	hasWorktrees bool                     // true when worktree tab is enabled
+	width        int
+	height       int
+	activeTab    SecondaryTab
 }
 
 // NewSecondaryPanel creates a secondary panel.
@@ -50,6 +55,28 @@ func NewSecondaryPanel(w, h int) SecondaryPanel {
 		height:    h,
 		activeTab: TabRegent,
 	}
+}
+
+// EnableWorktrees adds the Worktrees tab to the secondary panel.
+func (p SecondaryPanel) EnableWorktrees(entries []WorktreeEntry) SecondaryPanel {
+	p.hasWorktrees = true
+	contentH := p.height - 1
+	if contentH < 1 {
+		contentH = 1
+	}
+	p.worktrees = NewWorktreesPanel(entries, p.width, contentH)
+	p.tabbar = components.NewTabBar(secondaryTabLabelsWithWorktrees).SetWidth(p.width)
+	return p
+}
+
+// SetWorktreeEntries updates the worktree entries in the Worktrees tab.
+// No-op if worktrees have not been enabled via EnableWorktrees.
+func (p SecondaryPanel) SetWorktreeEntries(entries []WorktreeEntry) SecondaryPanel {
+	if !p.hasWorktrees {
+		return p
+	}
+	p.worktrees = p.worktrees.SetEntries(entries)
+	return p
 }
 
 // AppendLine appends a pre-rendered line routed to the appropriate tab.
@@ -94,6 +121,9 @@ func (p SecondaryPanel) SetSize(w, h int) SecondaryPanel {
 	p.regent = p.regent.SetSize(w, contentH)
 	p.gitLog = p.gitLog.SetSize(w, contentH)
 	p.tests = p.tests.SetSize(w, contentH)
+	if p.hasWorktrees {
+		p.worktrees = p.worktrees.SetSize(w, contentH)
+	}
 	return p
 }
 
@@ -110,7 +140,7 @@ func (p SecondaryPanel) Update(msg tea.Msg) (SecondaryPanel, tea.Cmd) {
 			p.tabbar = p.tabbar.Prev()
 			p.activeTab = SecondaryTab(p.tabbar.Active())
 		default:
-			// Delegate scroll keys to active tab's logview.
+			// Delegate scroll keys to active tab's logview or worktrees panel.
 			switch p.activeTab {
 			case TabRegent:
 				p.regent, cmd = p.regent.Update(msg)
@@ -118,6 +148,8 @@ func (p SecondaryPanel) Update(msg tea.Msg) (SecondaryPanel, tea.Cmd) {
 				p.gitLog, cmd = p.gitLog.Update(msg)
 			case TabTests:
 				p.tests, cmd = p.tests.Update(msg)
+			case TabWorktrees:
+				p.worktrees, cmd = p.worktrees.Update(msg)
 			}
 		}
 	default:
@@ -128,6 +160,8 @@ func (p SecondaryPanel) Update(msg tea.Msg) (SecondaryPanel, tea.Cmd) {
 			p.gitLog, cmd = p.gitLog.Update(msg)
 		case TabTests:
 			p.tests, cmd = p.tests.Update(msg)
+		case TabWorktrees:
+			p.worktrees, cmd = p.worktrees.Update(msg)
 		}
 	}
 	return p, cmd
@@ -146,6 +180,8 @@ func (p SecondaryPanel) View() string {
 		content = p.tests.View()
 	case TabCost:
 		content = p.renderCostTable()
+	case TabWorktrees:
+		content = p.worktrees.View()
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, tabRow, content)
 }

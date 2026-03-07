@@ -1183,77 +1183,34 @@ func TestKey_W_NoOrch_NoOp(t *testing.T) {
 	}
 }
 
-// TestKey_5_WithOrchestrator_FocusesWorktrees verifies key "5" sets focus to
-// FocusWorktrees when worktree mode is active.
-func TestKey_5_WithOrchestrator_FocusesWorktrees(t *testing.T) {
-	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
-	m = m.WithOrchestrator(newTestOrch())
-
+// TestKey_5_NoOp verifies key "5" is a no-op (worktrees now live in secondary tab).
+func TestKey_5_NoOp(t *testing.T) {
+	m := newTestModel()
+	orig := m.focus
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("5")})
 	m2 := updated.(Model)
-	if m2.focus != FocusWorktrees {
-		t.Errorf("key '5' with orch should set focus to FocusWorktrees, got %v", m2.focus)
+	if m2.focus != orig {
+		t.Errorf("key '5' should be no-op, focus changed from %v to %v", orig, m2.focus)
 	}
 }
 
-// TestKey_5_NoOrch_NoFocusChange verifies key "5" is a no-op when orch is nil.
-func TestKey_5_NoOrch_NoFocusChange(t *testing.T) {
-	m := newTestModel() // FocusMain by default
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("5")})
-	m2 := updated.(Model)
-	// Focus should not change to FocusWorktrees (value 4).
-	if m2.focus == FocusWorktrees {
-		t.Error("key '5' without orch should not set focus to FocusWorktrees")
-	}
-}
-
-// TestNextFocus_WithOrchestrator_5Panel verifies that tab cycling includes
-// FocusWorktrees when an orchestrator is active.
-func TestNextFocus_WithOrchestrator_5Panel(t *testing.T) {
+// TestNextFocus_WithOrchestrator_4Panel verifies that tab cycling remains
+// 4-panel even when an orchestrator is active (worktrees are in secondary tab).
+func TestNextFocus_WithOrchestrator_4Panel(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
 	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
 	m = m.WithOrchestrator(newTestOrch())
 	m.focus = FocusIterations
 
-	// From Iterations, tab should go to Worktrees (not Main as in 4-panel mode).
+	// From Iterations, tab should go to Main (standard 4-panel cycle).
 	next := m.nextFocus()
-	if next != FocusWorktrees {
-		t.Errorf("nextFocus() from Iterations with orch = %v, want FocusWorktrees", next)
+	if next != FocusMain {
+		t.Errorf("nextFocus() from Iterations with orch = %v, want FocusMain", next)
 	}
-}
-
-// TestPrevFocus_WithOrchestrator_5Panel verifies reverse tab includes FocusWorktrees.
-func TestPrevFocus_WithOrchestrator_5Panel(t *testing.T) {
-	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
-	m = m.WithOrchestrator(newTestOrch())
-	m.focus = FocusMain
-
-	// From Main, shift+tab should go to Worktrees.
-	prev := m.prevFocus()
-	if prev != FocusWorktrees {
-		t.Errorf("prevFocus() from Main with orch = %v, want FocusWorktrees", prev)
-	}
-}
-
-// TestDelegateToFocused_Worktrees verifies that key messages are delegated to
-// the WorktreesPanel when FocusWorktrees is active.
-func TestDelegateToFocused_Worktrees(t *testing.T) {
-	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
-	m = m.WithOrchestrator(newTestOrch())
-	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m = updated.(Model)
-	m.focus = FocusWorktrees
-
-	// j key should be delegated to worktrees panel without panic.
-	updated2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	_ = updated2.(Model)
 }
 
 // TestView_WithOrchestrator_DoesNotPanic verifies that View() renders correctly
-// with the worktrees panel in the sidebar.
+// with the worktrees tab in the secondary panel.
 func TestView_WithOrchestrator_DoesNotPanic(t *testing.T) {
 	ch := make(chan loop.LogEntry, 1)
 	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
@@ -1264,52 +1221,6 @@ func TestView_WithOrchestrator_DoesNotPanic(t *testing.T) {
 	if view == "" {
 		t.Error("View() with orchestrator should not return empty string")
 	}
-}
-
-// TestWorktreesSplitDims_HalvesCorrectly verifies the helper computes inner dims
-// correctly for rects tall enough that clamping doesn't apply (>= 6 rows so each
-// half has at least 3 outer rows → 1 inner row after border).
-func TestWorktreesSplitDims_HalvesCorrectly(t *testing.T) {
-	tests := []struct {
-		name string
-		rect Rect
-	}{
-		{"even height", Rect{Width: 30, Height: 20}},
-		{"odd height", Rect{Width: 30, Height: 21}},
-		{"minimum valid", Rect{Width: 10, Height: 6}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			w, itersTopH, itersBotH := worktreesSplitDims(tt.rect)
-			// Outer = inner + 2 (border).  The sum must equal the original height.
-			topOuter := itersTopH + 2
-			botOuter := itersBotH + 2
-			if topOuter+botOuter != tt.rect.Height {
-				t.Errorf("outer heights %d+%d = %d, want %d",
-					topOuter, botOuter, topOuter+botOuter, tt.rect.Height)
-			}
-			if w <= 0 {
-				t.Errorf("width should be positive, got %d", w)
-			}
-		})
-	}
-}
-
-// TestKey_X_FocusWorktrees_DelegatesToPanel verifies that x key when focus is
-// on WorktreesPanel emits a WorktreeActionMsg rather than calling StopLoop().
-func TestKey_X_FocusWorktrees_DelegatesToPanel(t *testing.T) {
-	ch := make(chan loop.LogEntry, 1)
-	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
-	orch := newTestOrch()
-	m = m.WithOrchestrator(orch)
-	m.focus = FocusWorktrees
-	// No controller — if StopLoop were called we'd panic (nil controller).
-
-	// x key with empty panel → no cmd (no selected branch).
-	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
-	_ = updated.(Model)
-	// With no entries, the panel returns no cmd.
-	_ = cmd
 }
 
 // TestAgentsToEntries_WithAgents verifies the loop body in agentsToEntries.
@@ -1327,22 +1238,6 @@ func TestAgentsToEntries_WithAgents(t *testing.T) {
 	}
 	if entries[1].State != "completed" {
 		t.Errorf("entries[1].State = %q, want %q", entries[1].State, "completed")
-	}
-}
-
-// TestWorktreesSplitDims_Clamping verifies that narrow/short rects don't panic
-// and the clamp branches (w<1, itersTopH<1, itersBotH<1) are exercised.
-func TestWorktreesSplitDims_Clamping(t *testing.T) {
-	// Width=1 triggers w < 1 → w = 1 clamp; Height=2 triggers both height clamps.
-	w, itersTopH, itersBotH := worktreesSplitDims(Rect{Width: 1, Height: 2})
-	if w < 1 {
-		t.Errorf("w should be clamped to at least 1, got %d", w)
-	}
-	if itersTopH < 1 {
-		t.Errorf("itersTopH should be clamped to at least 1, got %d", itersTopH)
-	}
-	if itersBotH < 1 {
-		t.Errorf("itersBotH should be clamped to at least 1, got %d", itersBotH)
 	}
 }
 
