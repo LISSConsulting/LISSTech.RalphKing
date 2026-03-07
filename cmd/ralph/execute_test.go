@@ -863,3 +863,23 @@ func TestExecuteLoop_Roam_StaysOnCurrentBranch(t *testing.T) {
 		t.Errorf("roam should stay on current branch %q, but switched to %q", branchBefore, branchAfter)
 	}
 }
+
+// TestSetupWorktree_DetectFails verifies that setupWorktree returns an error
+// when worktrunk is not found on PATH, covering the Detect() error branch.
+func TestSetupWorktree_DetectFails(t *testing.T) {
+	t.Setenv("PATH", "")
+	dir := t.TempDir()
+	setup := &loopSetup{
+		dir:       dir,
+		gitRunner: nil,
+		lp:        &loop.Loop{},
+		cleanup:   func() {},
+	}
+	err := setupWorktree(setup)
+	if err == nil {
+		t.Fatal("expected error when worktrunk not on PATH")
+	}
+	if !strings.Contains(err.Error(), "worktrunk") {
+		t.Errorf("error should mention worktrunk, got: %v", err)
+	}
+}

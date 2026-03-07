@@ -208,6 +208,70 @@ func TestSwitch_Error(t *testing.T) {
 	}
 }
 
+func TestSwitch_NonExitError(t *testing.T) {
+	dir := t.TempDir()
+	r := NewRunner(dir)
+	// Point to a non-existent binary so cmd.Output() fails with a path error,
+	// not *exec.ExitError — covers the fmt.Errorf("wt switch %s: %w") branch.
+	r.executable = filepath.Join(dir, "totally-nonexistent-wt-binary")
+
+	_, err := r.Switch("feat/x", false)
+	if err == nil {
+		t.Fatal("expected error from non-existent executable")
+	}
+	if !strings.Contains(err.Error(), "feat/x") {
+		t.Errorf("error should mention branch name, got: %v", err)
+	}
+}
+
+func TestSwitch_NoPath_FallbackFails(t *testing.T) {
+	// Switch succeeds (exit 0) but output has no "@ " path marker.
+	// List() falls back to listPorcelain() which fails in a non-git directory,
+	// so Switch returns a "could not determine worktree path" error.
+	dir := t.TempDir()
+	withEnv(t, "_FAKE_WT", "1", "_FAKE_WT_STDOUT", "switch succeeded but no path marker")
+
+	r := fakeRunner(t, dir)
+	_, err := r.Switch("feat/x", false)
+	if err == nil {
+		t.Fatal("expected error when path cannot be determined")
+	}
+	if !strings.Contains(err.Error(), "could not determine worktree path") {
+		t.Errorf("error should mention path determination, got: %v", err)
+	}
+}
+
+func TestSwitch_NoPath_FallbackFindsViaList(t *testing.T) {
+	// Switch succeeds (exit 0) but output has no "@ " path marker.
+	// listJSON fails (invalid JSON), so List() falls back to listPorcelain()
+	// which succeeds in a real git repo and finds the branch by name.
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+
+	// Determine the actual branch name created by initGitRepo.
+	branchCmd := exec.Command("git", "branch", "--show-current")
+	branchCmd.Dir = dir
+	branchOut, gitErr := branchCmd.Output()
+	if gitErr != nil {
+		t.Fatalf("git branch --show-current: %v", gitErr)
+	}
+	branch := strings.TrimSpace(string(branchOut))
+	if branch == "" {
+		t.Skip("could not determine git branch name")
+	}
+
+	withEnv(t, "_FAKE_WT", "1", "_FAKE_WT_STDOUT", "switch succeeded but no path marker")
+
+	r := fakeRunner(t, dir)
+	path, err := r.Switch(branch, false)
+	if err != nil {
+		t.Fatalf("Switch fallback via porcelain: %v", err)
+	}
+	if path == "" {
+		t.Error("expected non-empty path from porcelain fallback")
+	}
+}
+
 // ─── List tests ───────────────────────────────────────────────────────────────
 
 func TestList_JSONOutput(t *testing.T) {

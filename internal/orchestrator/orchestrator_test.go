@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -180,6 +181,35 @@ func TestClean_RunningRejected(t *testing.T) {
 
 	if err := o.Clean("feat/busy"); err == nil {
 		t.Fatal("expected error cleaning running agent")
+	}
+}
+
+func TestClean_NoAgent(t *testing.T) {
+	o := newTestOrchestrator(&fakeWorktreeOps{switchPath: "/tmp/wt"})
+
+	err := o.Clean("nonexistent-branch")
+	if err == nil {
+		t.Fatal("expected error for unknown branch")
+	}
+	if !strings.Contains(err.Error(), "nonexistent-branch") {
+		t.Errorf("error should mention branch name, got: %v", err)
+	}
+}
+
+func TestClean_RemoveFails(t *testing.T) {
+	ops := &fakeWorktreeOps{switchPath: "/tmp/wt", removeErr: errors.New("disk full")}
+	o := newTestOrchestrator(ops)
+	o.agents["feat/done"] = &WorktreeAgent{Branch: "feat/done", State: StateCompleted}
+
+	err := o.Clean("feat/done")
+	if err == nil {
+		t.Fatal("expected error when Remove fails")
+	}
+	if !strings.Contains(err.Error(), "disk full") {
+		t.Errorf("error should mention remove failure, got: %v", err)
+	}
+	if o.agents["feat/done"].State == StateRemoved {
+		t.Error("state should not be StateRemoved when Remove fails")
 	}
 }
 
