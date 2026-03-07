@@ -22,6 +22,13 @@
 
 Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
 
+## Improvement Sweep (2026-03-07, updated 2026-03-08) — v0.1.58
+
+- **Loop fixes committed**: isolateProcess (cross-platform subprocess isolation via procattr_unix/windows.go); HasRemoteBranch guard on auto-pull-rebase (skip when no remote tracking branch yet); StashPop silences "No stash entries found" for no-op stash scenarios
+- **git coverage**: 88.9% → 93.7% via TestHasRemoteBranch + TestStashPopNoEntries
+- **No TODOs/FIXMEs/HAXes** found in non-test Go source
+- Tagged v0.1.58
+
 ## Improvement Sweep (2026-03-07, updated 2026-03-07) — v0.1.57+
 
 - **Test coverage**: panels 97.9%→98.7% (SelectedSpec nil, moveCursor scroll branches); tui/components 98.5%→100% (TabBar.View width>0 branch); total 89.8%→90.3% (2026-03-07 second sweep: tui 95.3%→98.5% via Cmd-closure direct tests; tui/panels 98.7%→98.9% via worktreeDelegate non-item guard; orchestrator correctness test for TestCommand+pass→merge)
