@@ -16,19 +16,11 @@
 | TUI Overhaul (008) Phase 5 | Per-tab LogView buffers in MainView: outputLog/specLog/iterationLog/summaryLog independent, AppendLine never displaces spec/iteration content | 008-tui-overhaul |
 | TUI Overhaul (008) Phase 6-9 | Panel titles with numbers, layout correctness (ANSI-safe truncation, MaxWidth), specs tree with expand/collapse, glamour markdown rendering | 008-tui-overhaul |
 | TUI Overhaul (008) Phase 10-12 | CWD-independent spec status, immediate cost accumulation on LogIterComplete, ShowDetail on IterationSelected, TabBar.SetActive | 008-tui-overhaul |
+| TUI Overhaul (008) Phase 13 | go vet clean, all tests pass, golangci-lint clean (gofmt fix in app.go), glamour in CLAUDE.md approved deps | 008-tui-overhaul |
 
 ## Remaining Work
 
-Spec 008 phases 5-13 — see `specs/008-tui-overhaul/tasks.md` (T029-T084):
-- ~~Phase 5 (US5): Per-tab content buffers in MainView — T029-T039~~ DONE
-- ~~Phase 6 (US2): Panel titles and numbers — T040-T044~~ DONE
-- ~~Phase 7 (US6): Layout correctness audit — T045-T050~~ DONE
-- ~~Phase 8 (US3): Specs as traversable tree — T051-T060~~ DONE
-- ~~Phase 9 (US11): Markdown rendering with glamour — T061-T064~~ DONE
-- ~~Phase 10 (US4): Correct spec status detection — T065-T068~~ DONE
-- ~~Phase 11 (US10): Functional cost tracking — T069-T073~~ DONE
-- ~~Phase 12 (US9): Footer detail view — T074-T077~~ DONE
-- Phase 13: Polish, vet, lint — T078-T084
+Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
 
 ## Key Learnings
 
