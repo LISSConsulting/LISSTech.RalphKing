@@ -29,6 +29,9 @@ func init() {
 
 	// Handle --version specially: confirm we are worktrunk.
 	if len(args) == 1 && args[0] == "--version" {
+		if os.Getenv("_FAKE_WT_VERSION_FAIL") == "1" {
+			os.Exit(1)
+		}
 		if os.Getenv("_FAKE_WT_NOT_WORKTRUNK") == "1" {
 			fmt.Println("Windows Terminal v1.20.0")
 		} else {
@@ -473,5 +476,106 @@ func TestExeFallback(t *testing.T) {
 			}
 		}
 		t.Errorf("exe() returned unexpected name %q", got)
+	}
+}
+
+// ─── Additional coverage tests ────────────────────────────────────────────────
+
+// TestDetect_VersionCmdFails covers the path in Detect() where exec.LookPath
+// succeeds but the --version command itself exits non-zero.
+func TestDetect_VersionCmdFails(t *testing.T) {
+	dir := t.TempDir()
+
+	var wtBin string
+	if runtime.GOOS == "windows" {
+		// Batch script that exits 1 unconditionally (fails on --version).
+		wtBin = filepath.Join(dir, "wt.bat")
+		script := "@echo off\r\nexit /b 1\r\n"
+		if err := os.WriteFile(wtBin, []byte(script), 0644); err != nil {
+			t.Fatalf("write wt.bat: %v", err)
+		}
+	} else {
+		exe, err := os.Executable()
+		if err != nil {
+			t.Fatalf("os.Executable: %v", err)
+		}
+		wtBin = filepath.Join(dir, "wt")
+		data, readErr := os.ReadFile(exe)
+		if readErr != nil {
+			t.Fatalf("read test binary: %v", readErr)
+		}
+		if writeErr := os.WriteFile(wtBin, data, 0755); writeErr != nil {
+			t.Fatalf("write fake wt: %v", writeErr)
+		}
+		t.Setenv("_FAKE_WT", "1")
+		t.Setenv("_FAKE_WT_VERSION_FAIL", "1")
+	}
+
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	r := NewRunner(dir)
+	err := r.Detect()
+	if err == nil {
+		t.Fatal("expected error when --version fails")
+	}
+	if !strings.Contains(err.Error(), "worktrunk not found") {
+		t.Errorf("error should mention 'worktrunk not found', got: %v", err)
+	}
+}
+
+// TestParsePorcelain_BareWorktree covers the "bare" line case in parsePorcelain.
+func TestParsePorcelain_BareWorktree(t *testing.T) {
+	input := `worktree /home/user/repo
+HEAD abc123
+bare
+
+worktree /home/user/.worktrees/feat-x
+HEAD def456
+branch refs/heads/feat/x
+
+`
+	infos := parsePorcelain(input)
+	if len(infos) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(infos))
+	}
+	if !infos[0].Bare {
+		t.Errorf("first entry should be bare, got: %+v", infos[0])
+	}
+	if infos[1].Bare {
+		t.Errorf("second entry should not be bare, got: %+v", infos[1])
+	}
+}
+
+// TestRemove_ErrorNoOutput covers the msg=="" branch in Remove when the
+// command fails but produces no output.
+func TestRemove_ErrorNoOutput(t *testing.T) {
+	dir := t.TempDir()
+	withEnv(t, "_FAKE_WT", "1", "_FAKE_WT_EXIT", "1")
+	// No _FAKE_WT_STDOUT set → empty combined output → msg == "".
+
+	r := fakeRunner(t, dir)
+	err := r.Remove("feat/silent-fail")
+	if err == nil {
+		t.Fatal("expected error from wt remove exit 1 with no output")
+	}
+	if !strings.Contains(err.Error(), "feat/silent-fail") {
+		t.Errorf("error should mention branch name, got: %v", err)
+	}
+}
+
+// TestMerge_ErrorNoOutput covers the msg=="" branch in Merge when the
+// command fails but produces no output.
+func TestMerge_ErrorNoOutput(t *testing.T) {
+	dir := t.TempDir()
+	withEnv(t, "_FAKE_WT", "1", "_FAKE_WT_EXIT", "1")
+	// No _FAKE_WT_STDOUT set → empty combined output → msg == "".
+
+	r := fakeRunner(t, dir)
+	err := r.Merge("feat/silent-fail", "main")
+	if err == nil {
+		t.Fatal("expected error from wt merge exit 1 with no output")
+	}
+	if !strings.Contains(err.Error(), "feat/silent-fail") {
+		t.Errorf("error should mention branch name, got: %v", err)
 	}
 }
