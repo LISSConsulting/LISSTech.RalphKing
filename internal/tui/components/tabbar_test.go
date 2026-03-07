@@ -125,3 +125,12 @@ func TestTabBar_CycleWraps(t *testing.T) {
 		t.Errorf("expected wrap to 0, got %d", tb.Active())
 	}
 }
+
+func TestTabBar_View_WithWidth(t *testing.T) {
+	// Exercises the t.width > 0 branch in View() that applies MaxWidth truncation.
+	tb := NewTabBar([]string{"Alpha", "Beta", "Gamma"}).SetWidth(40)
+	view := tb.View()
+	if !strings.Contains(view, "Alpha") {
+		t.Errorf("View() with width should contain first tab label; got %q", view)
+	}
+}
