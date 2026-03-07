@@ -966,11 +966,11 @@ func TestUpdate_UnknownMsg(t *testing.T) {
 // Switch always errors so no real worktrees are created.
 type noopWorktreeOps struct{}
 
-func (n *noopWorktreeOps) Detect() error                                    { return nil }
-func (n *noopWorktreeOps) Switch(_ string, _ bool) (string, error)          { return "", fmt.Errorf("noop") }
-func (n *noopWorktreeOps) List() ([]worktree.WorktreeInfo, error)           { return nil, nil }
-func (n *noopWorktreeOps) Merge(_, _ string) error                          { return fmt.Errorf("noop") }
-func (n *noopWorktreeOps) Remove(_ string) error                            { return fmt.Errorf("noop") }
+func (n *noopWorktreeOps) Detect() error                           { return nil }
+func (n *noopWorktreeOps) Switch(_ string, _ bool) (string, error) { return "", fmt.Errorf("noop") }
+func (n *noopWorktreeOps) List() ([]worktree.WorktreeInfo, error)  { return nil, nil }
+func (n *noopWorktreeOps) Merge(_, _ string) error                 { return fmt.Errorf("noop") }
+func (n *noopWorktreeOps) Remove(_ string) error                   { return fmt.Errorf("noop") }
 
 // newTestOrch creates a minimal Orchestrator using noop worktree ops.
 func newTestOrch() *orchestrator.Orchestrator {

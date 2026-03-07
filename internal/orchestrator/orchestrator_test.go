@@ -23,11 +23,11 @@ type fakeWorktreeOps struct {
 	listResult []worktree.WorktreeInfo
 }
 
-func (f *fakeWorktreeOps) Detect() error                                    { return nil }
-func (f *fakeWorktreeOps) Switch(_ string, _ bool) (string, error)          { return f.switchPath, f.switchErr }
-func (f *fakeWorktreeOps) List() ([]worktree.WorktreeInfo, error)           { return f.listResult, nil }
-func (f *fakeWorktreeOps) Merge(_, _ string) error                          { return f.mergeErr }
-func (f *fakeWorktreeOps) Remove(_ string) error                            { return f.removeErr }
+func (f *fakeWorktreeOps) Detect() error                           { return nil }
+func (f *fakeWorktreeOps) Switch(_ string, _ bool) (string, error) { return f.switchPath, f.switchErr }
+func (f *fakeWorktreeOps) List() ([]worktree.WorktreeInfo, error)  { return f.listResult, nil }
+func (f *fakeWorktreeOps) Merge(_, _ string) error                 { return f.mergeErr }
+func (f *fakeWorktreeOps) Remove(_ string) error                   { return f.removeErr }
 
 func defaultCfg() *config.Config {
 	cfg := config.Defaults()
@@ -505,10 +505,10 @@ func TestLaunch_RegentEnabled_AgentFails(t *testing.T) {
 
 	cfg := defaultCfg()
 	cfg.Regent.Enabled = true
-	cfg.Regent.MaxRetries = 0           // give up after first failure
-	cfg.Regent.RetryBackoffSeconds = 0  // no sleep between retries
-	cfg.Regent.HangTimeoutSeconds = 0   // no hang detection
-	cfg.Build.PromptFile = "BUILD.md"   // loop needs this but it won't exist → fail fast
+	cfg.Regent.MaxRetries = 0          // give up after first failure
+	cfg.Regent.RetryBackoffSeconds = 0 // no sleep between retries
+	cfg.Regent.HangTimeoutSeconds = 0  // no hang detection
+	cfg.Build.PromptFile = "BUILD.md"  // loop needs this but it won't exist → fail fast
 
 	o := New(cfg, ops)
 

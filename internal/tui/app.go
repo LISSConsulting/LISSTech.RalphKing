@@ -67,7 +67,7 @@ type Model struct {
 	controller LoopController
 
 	// Worktree mode (nil when [worktree] is disabled)
-	orch                *orchestrator.Orchestrator
+	orch                 *orchestrator.Orchestrator
 	worktreeLogsByBranch map[string][]string // branch → accumulated rendered log lines
 	activeWorktreeBranch string              // branch currently shown in Main panel
 

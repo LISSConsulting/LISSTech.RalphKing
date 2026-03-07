@@ -372,4 +372,3 @@ func (o *Orchestrator) emitToMerged(branch string, entry loop.LogEntry) {
 		o.NotificationHook(entry)
 	}
 }
-

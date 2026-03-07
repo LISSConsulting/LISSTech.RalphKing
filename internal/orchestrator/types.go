@@ -10,15 +10,15 @@ import (
 type AgentState int
 
 const (
-	StateCreating   AgentState = iota // worktree is being created
-	StateRunning                      // loop is actively running
-	StateCompleted                    // loop finished successfully
-	StateFailed                       // loop exited with error
-	StateStopped                      // stop was requested and honoured
-	StateMerging                      // wt merge is in progress
-	StateMerged                       // worktree was merged and removed
-	StateMergeFailed                  // wt merge returned an error
-	StateRemoved                      // worktree was removed without merging
+	StateCreating    AgentState = iota // worktree is being created
+	StateRunning                       // loop is actively running
+	StateCompleted                     // loop finished successfully
+	StateFailed                        // loop exited with error
+	StateStopped                       // stop was requested and honoured
+	StateMerging                       // wt merge is in progress
+	StateMerged                        // worktree was merged and removed
+	StateMergeFailed                   // wt merge returned an error
+	StateRemoved                       // worktree was removed without merging
 )
 
 func (s AgentState) String() string {
@@ -56,7 +56,7 @@ type WorktreeAgent struct {
 	Iterations   int
 	TotalCost    float64
 	Events       chan loop.LogEntry // receives loop events; closed when loop exits
-	StopCh       chan struct{}       // close to request graceful stop
+	StopCh       chan struct{}      // close to request graceful stop
 	Error        error              // non-nil when State == StateFailed
 }
 
