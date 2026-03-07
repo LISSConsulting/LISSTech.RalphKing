@@ -196,6 +196,33 @@ func TestSpeckitRunCmd_HasSpecFlag(t *testing.T) {
 	}
 }
 
+// TestSpecifyCmd_MkdirAllError covers the MkdirAll error branch in specifyCmd
+// when --spec is set but the specs directory cannot be created (blocked by a
+// regular file at the same path).
+func TestSpecifyCmd_MkdirAllError(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	initGitRepoOnBranch(t, dir, "main")
+
+	// Place a regular file named "specs" so MkdirAll("specs/004-my-feature") fails.
+	if err := os.WriteFile("specs", []byte("not a dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := specifyCmd()
+	if err := cmd.Flags().Set("spec", "004-my-feature"); err != nil {
+		t.Fatalf("set --spec flag: %v", err)
+	}
+
+	err := cmd.RunE(cmd, []string{"Add feature"})
+	if err == nil {
+		t.Fatal("specify: expected error when specs dir cannot be created")
+	}
+	if !strings.Contains(err.Error(), "create spec directory") {
+		t.Errorf("error should mention create spec directory, got: %v", err)
+	}
+}
+
 // TestSpecifyCmd_MainBranch_ResolveError tests the else branch of specifyCmd
 // when --spec is absent and the branch name cannot be resolved to a spec directory.
 func TestSpecifyCmd_MainBranch_ResolveError(t *testing.T) {

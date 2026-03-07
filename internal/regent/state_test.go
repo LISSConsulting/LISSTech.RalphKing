@@ -3,6 +3,7 @@ package regent
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -150,6 +151,34 @@ func TestSaveState_MkdirError(t *testing.T) {
 	err := SaveState(dir, State{RalphPID: 1})
 	if err == nil {
 		t.Fatal("expected error when state dir is blocked by a regular file")
+	}
+}
+
+// TestSaveState_CreateTempError verifies that SaveState returns an error when
+// os.CreateTemp fails. This is triggered by making the state directory
+// read-only after it is created so that CreateTemp cannot write to it.
+func TestSaveState_CreateTempError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("cannot test permission errors as root")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod read-only directory is not reliably enforced on Windows")
+	}
+
+	dir := t.TempDir()
+	stateDir := filepath.Join(dir, stateDirName)
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// Make the state directory read-only: CreateTemp cannot create new files.
+	if err := os.Chmod(stateDir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(stateDir, 0755) }) // restore for cleanup
+
+	err := SaveState(dir, State{RalphPID: 1})
+	if err == nil {
+		t.Fatal("expected error when state directory is read-only")
 	}
 }
 

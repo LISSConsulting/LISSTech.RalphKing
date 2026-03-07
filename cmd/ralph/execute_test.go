@@ -15,79 +15,7 @@ import (
 	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
 )
 
-func TestFormatLogLine(t *testing.T) {
-	ts := time.Date(2026, 2, 23, 14, 23, 1, 0, time.UTC)
-
-	tests := []struct {
-		name  string
-		entry loop.LogEntry
-		want  string
-	}{
-		{
-			name: "info entry — timestamp and message",
-			entry: loop.LogEntry{
-				Kind:      loop.LogInfo,
-				Timestamp: ts,
-				Message:   "starting iteration 3",
-			},
-			want: "[14:23:01]  starting iteration 3",
-		},
-		{
-			name: "tool use entry — no special prefix",
-			entry: loop.LogEntry{
-				Kind:      loop.LogToolUse,
-				Timestamp: ts,
-				Message:   "📖  read_file      app/main.go",
-			},
-			want: "[14:23:01]  📖  read_file      app/main.go",
-		},
-		{
-			name: "regent entry — shield prefix",
-			entry: loop.LogEntry{
-				Kind:      loop.LogRegent,
-				Timestamp: ts,
-				Message:   "Ralph exited (exit 1) — retrying in 30s",
-			},
-			want: "[14:23:01]  🛡️  Regent: Ralph exited (exit 1) — retrying in 30s",
-		},
-		{
-			name: "error entry — no special prefix",
-			entry: loop.LogEntry{
-				Kind:      loop.LogError,
-				Timestamp: ts,
-				Message:   "claude exited with error",
-			},
-			want: "[14:23:01]  claude exited with error",
-		},
-		{
-			name: "git push entry — no special prefix",
-			entry: loop.LogEntry{
-				Kind:      loop.LogGitPush,
-				Timestamp: ts,
-				Message:   "⬇ pushed to origin/main",
-			},
-			want: "[14:23:01]  ⬇ pushed to origin/main",
-		},
-		{
-			name: "done entry — no special prefix",
-			entry: loop.LogEntry{
-				Kind:      loop.LogDone,
-				Timestamp: ts,
-				Message:   "loop finished (5 iterations, $1.42)",
-			},
-			want: "[14:23:01]  loop finished (5 iterations, $1.42)",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := formatLogLine(tt.entry)
-			if got != tt.want {
-				t.Errorf("formatLogLine() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
+// TestFormatLogLine is superseded by TestLineFormatter_PlainMode in format_test.go.
 
 func TestClassifyResult(t *testing.T) {
 	now := time.Now()
@@ -464,7 +392,7 @@ func TestExecuteLoop_ConfigNotFound(t *testing.T) {
 	// Isolated temp dir with no ralph.toml anywhere in its ancestor tree.
 	t.Chdir(t.TempDir())
 
-	err := executeLoop(loop.ModePlan, 1, true, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, false)
 	if err == nil {
 		t.Fatal("expected error when ralph.toml not found")
 	}
@@ -479,7 +407,7 @@ func TestExecuteLoop_ConfigInvalid(t *testing.T) {
 	// Empty plan.prompt_file fails Validate()
 	writeExecTestFile(t, dir, "ralph.toml", "[plan]\nprompt_file = \"\"\n[build]\nprompt_file = \"b.md\"\n")
 
-	err := executeLoop(loop.ModePlan, 1, true, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, false)
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -495,7 +423,7 @@ func TestExecuteLoop_RegentDisabled_PromptMissing(t *testing.T) {
 	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
 	// PLAN.md intentionally absent — loop.Run fails reading it.
 
-	err := executeLoop(loop.ModePlan, 1, true, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, false)
 	if err == nil {
 		t.Fatal("expected error when prompt file missing")
 	}
@@ -512,7 +440,7 @@ func TestExecuteLoop_RegentEnabled_PromptMissing(t *testing.T) {
 	// PLAN.md intentionally absent.
 	// Pre-flight check returns an error before Regent is initialised.
 
-	err := executeLoop(loop.ModePlan, 1, true, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, false)
 	if err == nil {
 		t.Fatal("expected error when prompt file missing")
 	}
@@ -528,7 +456,7 @@ func TestExecuteLoop_BuildMode_PromptMissing(t *testing.T) {
 	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
 	// BUILD.md intentionally absent — covers default case in mode switch.
 
-	err := executeLoop(loop.ModeBuild, 1, true, false)
+	err := executeLoop(loop.ModeBuild, 1, true, false, false)
 	if err == nil {
 		t.Fatal("expected error when build prompt file missing")
 	}
@@ -546,7 +474,7 @@ func TestExecuteLoop_RegentDisabled_PromptExists_GitFails(t *testing.T) {
 	writeExecTestFile(t, dir, "ralph.toml", testConfigNoRegent())
 	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
 
-	err := executeLoop(loop.ModePlan, 1, true, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, false)
 	// Loop fails at git CurrentBranch — must be an error but not a prompt-file error.
 	if err == nil {
 		t.Fatal("expected error from git operations")
@@ -566,7 +494,7 @@ func TestExecuteLoop_RegentEnabled_PromptExists_GitFails(t *testing.T) {
 	writeExecTestFile(t, dir, "ralph.toml", testConfigWithRegent())
 	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
 
-	err := executeLoop(loop.ModePlan, 1, true, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, false)
 	// Regent gives up after 0 retries — must be an error.
 	if err == nil {
 		t.Fatal("expected error — Regent should give up after 0 retries")
@@ -581,7 +509,7 @@ func TestExecuteLoop_RegentEnabled_PromptExists_GitFails(t *testing.T) {
 func TestExecuteSmartRun_ConfigNotFound(t *testing.T) {
 	t.Chdir(t.TempDir())
 
-	err := executeSmartRun(1, true, false)
+	err := executeSmartRun(1, true, false, false)
 	if err == nil {
 		t.Fatal("expected error when ralph.toml not found")
 	}
@@ -598,7 +526,7 @@ func TestExecuteSmartRun_NeedsPlan_PromptMissing(t *testing.T) {
 	// No CHRONICLE.md → needsPlanPhase returns true.
 	// No PLAN.md → plan phase fails reading it.
 
-	err := executeSmartRun(1, true, false)
+	err := executeSmartRun(1, true, false, false)
 	if err == nil {
 		t.Fatal("expected error when plan prompt file missing")
 	}
@@ -616,7 +544,7 @@ func TestExecuteSmartRun_SkipPlan_BuildPromptMissing(t *testing.T) {
 	writeExecTestFile(t, dir, "CHRONICLE.md", "# Plan\n\nSome content.\n")
 	// BUILD.md absent → build loop fails reading it.
 
-	err := executeSmartRun(1, true, false)
+	err := executeSmartRun(1, true, false, false)
 	if err == nil {
 		t.Fatal("expected error when build prompt file missing")
 	}
@@ -631,7 +559,7 @@ func TestExecuteSmartRun_ConfigInvalid(t *testing.T) {
 	// Empty plan.prompt_file triggers Validate() error.
 	writeExecTestFile(t, dir, "ralph.toml", "[plan]\nprompt_file = \"\"\n[build]\nprompt_file = \"b.md\"\n")
 
-	err := executeSmartRun(1, true, false)
+	err := executeSmartRun(1, true, false, false)
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -649,7 +577,7 @@ func TestExecuteSmartRun_RegentEnabled_PromptMissing(t *testing.T) {
 	// No PLAN.md → plan phase fails reading it.
 	// Regent gives up after 0 retries and returns max-retries error.
 
-	err := executeSmartRun(1, true, false)
+	err := executeSmartRun(1, true, false, false)
 	if err == nil {
 		t.Fatal("expected error — Regent should give up (max_retries=0)")
 	}
@@ -668,7 +596,7 @@ func TestExecuteLoop_StoreUnavailable(t *testing.T) {
 		t.Fatalf("WriteFile .ralph: %v", err)
 	}
 
-	err := executeLoop(loop.ModePlan, 1, true, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, false)
 	if err == nil {
 		t.Fatal("expected error from git operations")
 	}
@@ -686,7 +614,7 @@ func TestExecuteSmartRun_StoreUnavailable(t *testing.T) {
 		t.Fatalf("WriteFile .ralph: %v", err)
 	}
 
-	err := executeSmartRun(1, true, false)
+	err := executeSmartRun(1, true, false, false)
 	if err == nil {
 		t.Fatal("expected error from git operations")
 	}
@@ -701,7 +629,7 @@ func TestExecuteLoop_NotificationsURLSet(t *testing.T) {
 	writeExecTestFile(t, dir, "ralph.toml", cfg)
 	writeExecTestFile(t, dir, "PLAN.md", "# Plan\n")
 
-	err := executeLoop(loop.ModePlan, 1, true, false)
+	err := executeLoop(loop.ModePlan, 1, true, false, false)
 	if err == nil {
 		t.Fatal("expected error from git operations")
 	}
@@ -720,7 +648,7 @@ func TestExecuteSmartRun_NotificationsURLSet(t *testing.T) {
 	writeExecTestFile(t, dir, "CHRONICLE.md", "# Done\n\nSome content.\n")
 	writeExecTestFile(t, dir, "BUILD.md", "# Build\n")
 
-	err := executeSmartRun(1, true, false)
+	err := executeSmartRun(1, true, false, false)
 	if err == nil {
 		t.Fatal("expected error from git operations")
 	}
@@ -865,6 +793,43 @@ func TestSignalContextGraceful_CancelCleansUp(t *testing.T) {
 	}
 }
 
+// TestSignalContextGraceful_CancelAfterFirstSignal covers the ctx.Done() branch
+// inside the second select of signalContextGraceful: send one SIGINT (closes
+// stopCh), then cancel the context instead of sending a second signal.
+// Skipped on Windows where SIGINT cannot be sent to self reliably.
+func TestSignalContextGraceful_CancelAfterFirstSignal(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("SIGINT cannot be reliably sent to self on Windows")
+	}
+
+	ctx, cancel, stopCh := signalContextGraceful()
+	defer cancel()
+
+	proc, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatalf("FindProcess: %v", err)
+	}
+
+	// First SIGINT: closes stopCh.
+	if err := proc.Signal(syscall.SIGINT); err != nil {
+		t.Fatalf("Signal(SIGINT): %v", err)
+	}
+	select {
+	case <-stopCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("stopCh not closed after SIGINT")
+	}
+
+	// Cancel instead of a second SIGINT: the goroutine's second select should
+	// hit case <-ctx.Done() and exit, leaving the context cancelled.
+	cancel()
+	select {
+	case <-ctx.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("context not cancelled after cancel()")
+	}
+}
+
 // ---- Roam orchestration tests ----
 
 func TestExecuteLoop_Roam_StaysOnCurrentBranch(t *testing.T) {
@@ -884,7 +849,7 @@ func TestExecuteLoop_Roam_StaysOnCurrentBranch(t *testing.T) {
 	branchBefore := strings.TrimSpace(string(outBefore))
 
 	// roam=true: should stay on the current branch (no sweep branch creation).
-	_ = executeLoop(loop.ModeBuild, 1, true, true)
+	_ = executeLoop(loop.ModeBuild, 1, true, true, false)
 
 	after := exec.Command("git", "branch", "--show-current")
 	after.Dir = dir

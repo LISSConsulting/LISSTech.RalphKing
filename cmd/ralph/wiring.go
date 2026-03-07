@@ -21,8 +21,8 @@ import (
 )
 
 // runWithRegent runs the loop under Regent supervision without TUI.
-// Events are drained to stdout.
-func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRunner *git.Runner, dir string, sw store.Writer, run regent.RunFunc) error {
+// Events are drained to stdout using the provided formatter.
+func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRunner *git.Runner, dir string, sw store.Writer, formatter lineFormatter, run regent.RunFunc) error {
 	events := make(chan loop.LogEntry, 128)
 	lp.Events = events
 
@@ -40,7 +40,7 @@ func runWithRegent(ctx context.Context, lp *loop.Loop, cfg *config.Config, gitRu
 			if entry.Kind != loop.LogRegent {
 				rgt.UpdateState(entry)
 			}
-			_, _ = fmt.Fprintln(os.Stdout, formatLogLine(entry))
+			_, _ = fmt.Fprintln(os.Stdout, formatter.format(entry))
 		}
 	}()
 
@@ -140,7 +140,7 @@ func finishTUI(program *tea.Program) error {
 // runWithStateTracking runs the loop without Regent supervision in no-TUI mode,
 // draining events to stdout and persisting state to .ralph/regent-state.json
 // so that `ralph status` works even when the Regent is disabled.
-func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, sw store.Writer, run regent.RunFunc) error {
+func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRunner *git.Runner, mode string, sw store.Writer, formatter lineFormatter, run regent.RunFunc) error {
 	events := make(chan loop.LogEntry, 128)
 	lp.Events = events
 
@@ -154,7 +154,7 @@ func runWithStateTracking(ctx context.Context, lp *loop.Loop, dir string, gitRun
 			if sw != nil {
 				_ = sw.Append(entry)
 			}
-			_, _ = fmt.Fprintln(os.Stdout, formatLogLine(entry))
+			_, _ = fmt.Fprintln(os.Stdout, formatter.format(entry))
 			st.trackEntry(entry)
 		}
 	}()

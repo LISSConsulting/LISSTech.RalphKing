@@ -1,6 +1,6 @@
 
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> Current state: **Specs 001–005 fully implemented. No remaining work items.** All 12 packages pass; go vet clean; golangci-lint 0 issues; tests green. `internal/tui/components` 100%, `internal/tui/panels` 100%. cmd/ralph 76.2% — confirmed ceiling: `runWithRegentTUI`/`runWithTUIAndState`/`runDashboard` (0%) require real TTY; `os.Getwd()` error paths untriggerable in tests; `TestSpecListCmd_SpecsNotDir` skipped on Windows.
+> Current state: **Specs 001–006 fully implemented. No remaining work items.** All 12 packages pass; go vet clean; golangci-lint 0 issues; tests green. `internal/tui/components` 100%, `internal/tui/panels` 100%. cmd/ralph ~76% — confirmed ceiling: `runWithRegentTUI`/`runWithTUIAndState`/`runDashboard` (0%) require real TTY; `os.Getwd()` error paths untriggerable in tests; `TestSpecListCmd_SpecsNotDir` skipped on Windows.
 
 ## Completed Work
 
@@ -18,347 +18,45 @@
 | Test coverage | Git 93.2%, TUI 97.0% (internal/tui; +9.5pp via comprehensive new tests v0.0.86), loop 98.6% (cross-platform runner.Run tests via self-exec init()), claude 97.8%, regent 95.9%, config 93.1%, spec 96.2%, notify 100.0%, **cmd/ralph 72.5%** (was 71.6% → +0.9pp via `TestFinishTUI_Success` using `tea.WithoutRenderer()` + test I/O — `finishTUI` 0%→50%), **rootCmd 100%** (was 80% — added TestRootCmd_NoSubcommand_CallsDashboard), **components 100%** (was 89.1% — added LogView.Update tests covering KeyMsg/MouseMsg/non-scroll paths), **store 91.0%** (was 90.0% — added onAppend commit-from-complete branch test), **panels 100%** (was 94.7% — added AbbreviatePath home-dir, zero-height constructors/SetSize, Update f/[/default-key/non-key branches, splitLines trailing-newline, iterDelegate.Render selected, SpecsPanel j/k cmd invocation) | 0.0.6, 0.0.14, 0.0.16, v0.0.32, v0.0.36–v0.0.40, v0.0.56, v0.0.58–v0.0.63, v0.0.65, v0.0.68, v0.0.70, v0.0.71, v0.0.72, v0.0.75, v0.0.83, v0.0.84, v0.0.86, v0.0.89, v0.0.90, v0.0.91, v0.0.92 |
 | Refactoring | Split `cmd/ralph/main.go` into main/commands/execute/wiring, prompt files, extract `classifyResult`/`needsPlanPhase`/`formatStatus`/`formatLogLine`/`formatSpecList`/`formatScaffoldResult` pure functions with table-driven tests, command tree structure tests, end-to-end command execution tests (cmd/ralph 8.8% → 41.8%); added `runWithStateTracking`/`runWithRegent`/`openEditor` tests (41.8% → 53.4%); added `executeLoop`/`executeSmartRun` integration tests + plan/build/run RunE tests (53.4% → 70.7%); added config-invalid/regent-enabled/corrupted-state-file tests for `executeSmartRun` and `showStatus` (70.7% → 72.0%) | 0.0.9, v0.0.21, v0.0.33–v0.0.38 |
 
-Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` specs. Spec `003-tui-redesign/spec.md` **fully complete** (T001–T045, all phases including Phase 8 polish). Spec `004-speckit-alignment/` **fully complete** (T001–T034, all phases). Spec `005-spec-bounded-roam/` **fully complete** (T001–T020, all phases).
+Specs implemented: `ralph-core.md`, `the-regent.md`, all `002-v2-improvements/` specs. Spec `003-tui-redesign/spec.md` **fully complete** (T001–T045, all phases including Phase 8 polish). Spec `004-speckit-alignment/` **fully complete** (T001–T034, all phases). Spec `005-spec-bounded-roam/` **fully complete** (T001–T020, all phases). Spec `006-polish-and-hardening/` **fully complete** (T001–T023, all 7 phases).
 
 | Phase | Features | Branch |
 |-------|----------|--------|
 | Spec kit alignment (spec 004, all phases) | Directory-based spec discovery (`List()` emits one SpecFile per `specs/NNN-name/` dir with artifact-presence status: specified→planned→tasked); new status constants (StatusSpecified 📋, StatusPlanned 📐, StatusTasked ✅); SpecFile.Dir + SpecFile.IsDir fields; `detectDirStatus()` checks tasks.md>plan.md>spec.md; `spec.New()` removed (template.go, spec-template.md deleted); `specNewCmd()` removed from CLI; `formatSpecList()` shows Dir for directory specs; TUI specItem.Description() shows Dir for IsDir specs; TUI `n` key creates directory (not flat file); `ralph loop` parent with plan/build/run subcommands (old top-level plan/run freed for speckit); top-level `build` preserved as alias; speckit commands: `specify`/`plan`/`clarify`/`tasks`/`run` at top level; `executeSpeckit()` spawns `claude -p "/<skill>" --verbose`; `spec.Resolve()` maps branch name or --spec flag to spec directory; `internal/spec/resolve.go` with ActiveSpec struct; PLAN.md + BUILD.md updated for spec kit directory awareness | 004-speckit-alignment |
 | Spec-bounded loop with --roam (spec 005, all phases) | `LogSpecComplete`/`LogSweepComplete` log kinds in `event.go`; `iteration()` refactored to `(cost, subtype, commitsProduced, err)` — `headBefore`/`headAfter` diff detects new commits; completion state machine (`prevSubtype`+`commitsProduced`) in `Run()`; `git.CreateAndCheckout(name)` (`git checkout -b`); `BuildConfig.Roam bool` with `toml:"roam"` tag; `--roam` flag on `buildCmd`/`loopBuildCmd`/`loopRunCmd`; `createSweepBranch()` helper (`sweep/YYYY-MM-DD`, collision retry `-2`…`-10`); `Loop.Roam`/`Loop.Spec`/`Loop.SpecDir` fields; `augmentPrompt()` helper (spec-boundary or sweep directive); `spec.Resolve()` wired in `executeLoop`/`executeSmartRun` for `!effectiveRoam`; `roam = false` in `ralph.toml`; full test coverage across all 20 tasks | 005-spec-bounded-roam |
+| Polish & hardening (spec 006, all 7 phases) | F1: `lineFormatter` struct (`format.go`) delegates to `tui.RenderLogLine` for color, plain `[HH:MM:SS] msg` for no-color; replaces old `formatLogLine()`; wired into all drain goroutines via `lineFormatter{color: !noColor}`; F2: `--no-color` persistent flag on `rootCmd`; `PersistentPreRunE` prints yellow-bold warning when `ANTHROPIC_API_KEY` is set; F3: test coverage — `TestCheckDir_PathIsFile` (spec/resolve), `TestSaveState_CreateTempError` (regent/state), `TestLoadAutoDiscovery` (config), `TestRunTests_ShellNotFound` (regent/tester), `TestAppend_AfterClose`/`TestEnforceRetention_ReadOnlyDir`/`TestNewJSONL_DirIsFile` (store); F4: `loopSetup` struct + `setupLoop(noTUI, roam, noColor bool)` in `execute.go`; `executeLoop`/`executeSmartRun` both call it; F5: README — flag table (`--no-tui`, `--no-color`, `--max`, `--roam`) + usage examples + ANTHROPIC_API_KEY section; F6: deps updated (`colorprofile` 0.4.2, `go-runewidth` 0.0.20, `pflag` 1.0.10, `x/sys` 0.41.0); F7: `ci.yml` emits `coverage.out` + uploads artifact; `release.yml` tag-triggered cross-compile + `svenstaro/upload-release-action@v2` | 006-polish-and-hardening (v0.1.28) |
 
 ## Remaining Work
 
-### Improvement Sweep (v0.1.27, 2026-03-02)
+### Queue
 
-Full sweep completed — no findings:
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.7%, `internal/store` 91.0%, `cmd/ralph` 75.9% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, key bindings, and config fields match the implementation.
-- **Spec consistency**: Full compliance check against spec 005 (T001–T020, FR-001–FR-014) — zero drift found. All 14 FRs implemented and verified. FR-010 (`--roam` + `--spec` conflict guard) is intentionally unreachable since `--spec` flag does not exist on build commands; documented in tasks.md as "defensive check for future compatibility".
-- **CI health**: Both workflows clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (twenty-sixth consecutive confirmation); no action required.
-- **Dead code**: None found. All unexported helper functions verified in active use.
+No remaining work items. All specs 001–006 fully implemented.
 
-### Improvement Sweep (v0.1.26, 2026-03-02)
+### Improvement Sweep History
 
-Full sweep completed — one stale-reference finding resolved:
-- **Stale references**: Fixed README.md config example — `[notifications]` section (url, on_complete, on_error, on_stop) was absent despite being present in `ralph.toml` and fully implemented in `internal/notify`. Added to README config example after `[tui]` section, matching `ralph.toml` exactly.
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.7%, `internal/store` 91.0%, `cmd/ralph` 75.9% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Spec consistency**: Full compliance check against spec 005 (T001–T020, FR-001–FR-014) — zero drift found. All 14 FRs implemented and verified.
-- **CI health**: Both workflows clean — `golangci-lint-action@v7` with `v2.1.6` pinned.
-- **Dead code**: None found. All unexported helper functions verified in active use.
+**Established floors (as of v0.1.44, 2026-03-07):** `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 99.0% (Windows; ~99.5%+ Linux CI), `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 92.0% (`IterationLog` 95.2% — ReadAt error covered; `EnforceRetention` ReadDir non-IsNotExist branch is Windows ceiling since `os.ReadDir` on a regular file returns IsNotExist on Windows), `cmd/ralph` 76.7% (TTY ceiling). `specifyCmd` 95% (remaining 5% = `os.Getwd()` error, impossible). Total: 92.2% (Windows). `go vet ./...` clean. `golangci-lint` 0 issues.
 
-### Improvement Sweep (v0.1.25, 2026-03-02)
+**Sweeps with findings (most recent first):**
 
-Full sweep completed — no findings:
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.7%, `internal/store` 91.0%, `cmd/ralph` 75.9% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, key bindings, and config fields match the implementation.
-- **Spec consistency**: Full compliance check against spec 005 (T001–T020, FR-001–FR-014) — zero drift found. All 14 FRs implemented and verified. FR-010 (`--roam` + `--spec` conflict guard) is intentionally unreachable since `--spec` flag does not exist on build commands; documented in tasks.md as "defensive check for future compatibility".
-- **CI health**: Both workflows clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (twenty-fifth consecutive confirmation); no action required.
-- **Dead code**: None found. All unexported helper functions verified in active use.
+- **v0.1.41** (2026-03-06): +2 tests in `internal/store` — `TestIterationLog_ReadError` (call IterationLog after Close; covers ReadAt error path; `IterationLog` 90.5%→95.2%), `TestEnforceRetention_DirIsFile` (pass regular file as dir; covers ReadDir non-IsNotExist error on Linux; skipped on Windows — Windows ceiling confirmed: `os.ReadDir` on a file returns IsNotExist). `internal/store` 91.0%→92.0%.
 
-### Improvement Sweep (v0.1.24, 2026-03-02)
+- **v0.1.40** (2026-03-06): +3 tests in `internal/spec` — `TestCheckDir_StatError` (null-byte path → EINVAL, non-IsNotExist stat error; `checkDir` 87.5%→100%), `TestList_NonMdFileIgnored` (non-.md flat file in specs/ → skip branch covered), `TestList_SpecsNotDir` (specs/ is a regular file → non-IsNotExist ReadDir error; Linux-only). +1 test in `cmd/ralph` — `TestSignalContextGraceful_CancelAfterFirstSignal` (ctx.Done in second select after first SIGINT; Linux-only). `internal/spec` 98.0%→99.0%.
+- **v0.1.37** (2026-03-06): Spec 005 FR-005 intentional drift documented — `--roam` no longer creates `sweep/YYYY-MM-DD` branch (refactor `b872e6b` removed `createSweepBranch()`); roam now operates on the current branch. No code change.
+- **v0.1.30** (2026-03-06): Fixed 2 lint issues — `w.Close()` unchecked return in `commands_test.go:146`; trailing double blank line in `git_test.go:555`. `golangci-lint` → 0 issues.
+- **v0.1.29** (2026-03-06): Marked all 23 task checkboxes `[x]` in `specs/006-polish-and-hardening/tasks.md` (documentation-only; runtime unaffected).
+- **v0.1.23** (2026-03-02): Fixed TUI bug — `LogSpecComplete`/`LogSweepComplete` not in `handleLogEntry` switch, leaving dashboard in stale "building" state after spec/sweep completion. Added state transitions and `theme.go` rendering. +4 tests.
+- **v0.1.21** (2026-03-02): Marked all 20 task checkboxes `[x]` in `specs/005-spec-bounded-roam/tasks.md`.
+- **v0.1.26** (2026-03-02): Added `[notifications]` section to README.md config example (was missing despite being fully implemented).
+- **v0.1.02** (2026-03-01): Added `TestClaudeAgentRun/empty_executable_defaults_to_claude_binary_name` — `internal/loop` 98.6%→99.3%.
+- **v0.1.00** (2026-03-01): Marked all 45/34 task checkboxes `[x]` in specs 003/004.
 
-Full sweep completed — no findings:
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.7%, `internal/store` 91.0%, `cmd/ralph` 75.9% (confirmed ceiling). `signalContextGraceful` at 62.5% on Windows is a known ceiling — SIGINT cannot be sent reliably on Windows; `TestSignalContextGraceful_TwoStageStop` covers this on Linux/CI. `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, key bindings, and config fields match the implementation.
-- **Spec consistency**: Full compliance check against spec 005 (T001–T020, FR-001–FR-014) — zero drift found. FR-010 (`--roam` + `--spec` conflict guard) is intentionally unreachable since `--spec` flag does not exist on build commands; documented in tasks.md as "defensive check for future compatibility".
-- **CI health**: Both workflows clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (twenty-fourth consecutive confirmation); no action required.
-- **Dead code**: None found. All unexported helper functions verified in active use.
+- **v0.1.45** (2026-03-07): Added `*_cov.html` to `.gitignore` coverage section — `spec_cov.html` was untracked (generated by `go tool cover -html`); existing `coverage.*` pattern did not match `*_cov.html` naming. All tests pass; golangci-lint 0 issues.
 
-### Improvement Sweep (v0.1.23, 2026-03-02)
+- **v0.1.44** (2026-03-07): +1 test in `cmd/ralph` — `TestSpecifyCmd_MkdirAllError` (create file named `specs` in temp dir so `os.MkdirAll("specs/004-my-feature")` fails; covers `return fmt.Errorf("create spec directory: %w", mkErr)` branch in `specifyCmd`). `specifyCmd` 90%→95%. `cmd/ralph` 76.6%→76.7%.
 
-Full sweep completed — one bug found and fixed:
-- **TUI state bug fixed**: `LogSpecComplete` and `LogSweepComplete` were not handled in `handleLogEntry`'s state-transition switch (`app.go`). When the loop exits via spec/sweep completion, it emits one of these events and returns `nil` **without** emitting `LogDone`. The TUI therefore never transitioned to `StateIdle`, leaving the dashboard in a stale "building" state. Fix: added both kinds to the `LogDone, LogStopped` case. Also added specific rendering in `theme.go` (same ✅ + `resultStyle` as `LogDone`). Added 4 test cases: 2 in `TestUpdate_LogEntry_LogDoneStoppedErrorRegent` (state transitions) and 2 in `TestRenderLogLine_AllKinds` (rendering). All 12 packages pass; `go vet ./...` clean.
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.7%, `internal/store` 91.0%, `cmd/ralph` 75.9% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: None found. README.md, CLAUDE.md all current.
-- **Spec consistency**: Full compliance check against spec 005 (T001–T020, FR-001–FR-014) — zero drift found.
-- **CI health**: Both workflows clean — `golangci-lint-action@v7` with `v2.1.6` pinned.
-- **Dead code**: None found. All unexported helper functions verified in active use.
+**Sweeps with no findings:** v0.1.48, v0.1.47, v0.1.46, v0.1.43, v0.1.42, v0.1.39, v0.1.38, v0.1.36, v0.1.35, v0.1.34, v0.1.33, v0.1.32, v0.1.31, v0.1.27, v0.1.25, v0.1.24, v0.1.22, v0.1.20, v0.1.19, v0.1.18, v0.1.17, v0.1.16, v0.1.15, v0.1.14, v0.1.13, v0.1.12, v0.1.11, v0.1.10, v0.1.09, v0.1.08, v0.1.07, v0.1.06, v0.1.05, v0.1.04, v0.1.03, v0.1.01, v0.0.98.
 
-### Improvement Sweep (v0.1.22, 2026-03-02)
-
-Full sweep completed — no findings:
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.7%, `internal/store` 91.0%, `cmd/ralph` 75.9% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, key bindings, and config fields match the implementation.
-- **Spec consistency**: Full compliance check against spec 005 (T001–T020, FR-001–FR-014) — zero drift found. FR-010 (`--roam` + `--spec` conflict guard) is intentionally unreachable since `--spec` flag does not exist on build commands; documented in tasks.md as "defensive check for future compatibility".
-- **CI health**: Both workflows clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (twenty-third consecutive confirmation); no action required.
-- **Dead code**: None found. All unexported helper functions verified in active use.
-
-### Improvement Sweep (v0.1.21, 2026-03-02)
-
-Full sweep completed — one documentation-drift finding resolved:
-- **Spec consistency**: Fixed `specs/005-spec-bounded-roam/tasks.md` — all 20 task checkboxes were `[ ]` despite spec being fully complete (T001–T020). Marked all `[x]`. Same documentation-only fix as spec 003 and 004 in v0.1.00. Runtime behavior unaffected (detectDirStatus uses file presence, not checkbox state).
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.7%, `internal/store` 91.0%, `cmd/ralph` 75.9% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, key bindings, and config fields match the implementation.
-- **CI health**: Both workflows clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (twenty-second consecutive confirmation); no action required.
-- **Dead code**: None found.
-
-### Improvement Sweep (v0.1.20, 2026-03-02)
-
-Full sweep completed — one stale-reference finding resolved:
-- **Stale references**: Fixed README.md config example — (1) `rollback_on_test_failure = true` was incorrect; actual default is `false` per `config.go:167` and `ralph.toml:27`; corrected. (2) Added `max_turns = 0` to `[claude]` section. (3) Added `prompt_file = "PLAN.md"` and `prompt_file = "BUILD.md"` to `[plan]`/`[build]` sections. (4) Added `test_command = "go test ./..."` and `hang_timeout_seconds = 300` to `[regent]` section. README config example now matches `ralph.toml` for all documented fields.
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.7%, `internal/store` 91.0%, `cmd/ralph` 75.9% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **CI health**: Both workflows clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (twenty-first consecutive confirmation); no action required.
-- **Dead code**: None found.
-- **Spec consistency**: Full compliance check against spec 005 (T001–T020, FR-001–FR-014) — zero drift found. FR-010 (`--roam` + `--spec` conflict guard) is intentionally unreachable since `--spec` flag does not exist on build commands; documented in tasks.md as "defensive check for future compatibility".
-
-### Improvement Sweep (v0.1.19, 2026-03-02)
-
-Full sweep completed — no findings:
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.7%, `internal/store` 91.0%, `cmd/ralph` 75.9% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, key bindings, and config fields match the implementation.
-- **CI health**: Both workflows clean — `golangci-lint-action@v7` with `v2.1.6` pinned.
-- **Dead code**: None found.
-- **Spec consistency**: Full compliance check against spec 005 (T001–T020, FR-001–FR-014) — zero drift found. FR-010 (`--roam` + `--spec` conflict guard) is intentionally unreachable since `--spec` flag does not exist on build commands; documented in tasks.md as "defensive check for future compatibility".
-
-### Improvement Sweep (v0.1.18, 2026-03-02)
-
-Full sweep completed — one stale-reference finding resolved:
-- **Stale references**: Fixed README.md — added `roam = false` to `[build]` config example (Spec 005 added this field; it was in `ralph.toml` and documented there but missing from README's config snippet). Added `ralph build --roam` to the commands table with description "Cross-spec improvement sweep on a sweep/YYYY-MM-DD branch".
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.4%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.7%, `internal/store` 91.0%, `cmd/ralph` 75.9% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **CI health**: Both workflows clean — `golangci-lint-action@v7` with `v2.1.6` pinned.
-- **Dead code**: None found.
-- **Spec consistency**: Full compliance check against spec 005 (T001–T020, FR-001–FR-014) — zero drift found. Note: FR-010 (`--roam` + `--spec` conflict guard) is intentionally unreachable since `--spec` flag does not exist on build commands; documented in tasks.md as "defensive check for future compatibility".
-
-### Improvement Sweep (v0.1.17, 2026-03-02)
-
-Full sweep completed — Spec 005 complete, no additional findings:
-- **Spec 005 complete**: All 20 tasks implemented and verified. `LogSpecComplete`/`LogSweepComplete` in `event.go`; `iteration()` returns `(cost, subtype, commitsProduced, err)`; completion state machine in `Run()`; `git.CreateAndCheckout()`; `BuildConfig.Roam`; `--roam` on build/loopBuild/loopRun; `createSweepBranch()`; `augmentPrompt()`; `spec.Resolve()` wired; `roam = false` in `ralph.toml`. All 12 packages pass; go vet clean; golangci-lint 0 issues.
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: None found. README.md, CLAUDE.md all current.
-- **CI health**: Both workflows clean.
-- **Dead code**: None found.
-
-### Improvement Sweep (v0.1.16, 2026-03-02)
-
-Full sweep completed — no actionable findings:
-- **Spec 005 gap confirmed**: Code search verified all 20 tasks remain unimplemented. Confirmed absent: `LogSpecComplete`/`LogSweepComplete` in `event.go` (LogKind enum ends at `LogRegent`); `iteration()` still returns `(float64, error)` — two-value call site at `loop.go:104`; no `commitsProduced`/`prevSubtype` logic in `Run()`; no `Loop.Roam`/`Loop.Spec`/`Loop.SpecDir` fields in Loop struct; no `CreateAndCheckout` on `git.Runner` (9 methods, none by that name); no `Roam bool` in `BuildConfig`; no `--roam` flag on `buildCmd`/`loopBuildCmd`/`loopRunCmd`/`loopPlanCmd`; no sweep branch creation in `execute.go`; no prompt augmentation (`## Spec Context`) in `loop.go`; no `roam = false` in `ralph.toml`. Spec 005 task list in Remaining Work section is accurate. Read full `event.go` and `loop.go` source to confirm.
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, key bindings, and config fields match the implementation.
-- **Spec consistency**: Full compliance check against spec 004 (T001–T034, FR-001–FR-012) — zero drift found. ralph.toml fields verified complete (all 8 sections present; `roam` field absence is expected — it's a spec 005 deliverable in T018).
-- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (eighteenth consecutive confirmation); no action required.
-- **Dead code**: None found.
-
-### Improvement Sweep (v0.1.15, 2026-03-02)
-
-Full sweep completed — no actionable findings:
-- **Spec 005 gap confirmed**: Code search verified all 20 tasks remain unimplemented. Confirmed absent: `LogSpecComplete`/`LogSweepComplete` in `event.go`, `iteration()` still returns `(float64, error)`, no `commitsProduced`/`prevSubtype` in `loop.go`, no `CreateAndCheckout` on `git.Runner`, no `Roam bool` in `BuildConfig`, no `--roam` flag on `buildCmd`/`loopBuildCmd`/`loopRunCmd`, no `Loop.Roam`/`Loop.Spec`/`Loop.SpecDir` fields, no sweep branch creation in `execute.go`, no prompt augmentation (`## Spec Context`) in `loop.go`, no `roam = false` in `ralph.toml`. Spec 005 task list in Remaining Work section is accurate.
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, key bindings, and config fields match the implementation.
-- **Spec consistency**: Full compliance check against spec 004 (T001–T034, FR-001–FR-012) — zero drift found. ralph.toml fields verified complete (all 8 sections present).
-- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (seventeenth consecutive confirmation); no action required.
-- **Dead code**: None found.
-
-### Improvement Sweep (v0.1.14, 2026-03-01)
-
-Full sweep completed — no actionable findings:
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, key bindings, and config fields match the implementation.
-- **Spec consistency**: Full compliance check against spec 003 (FR-001–FR-023) and spec 004 (T001–T034, FR-001–FR-012) — zero drift found.
-- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (sixteenth consecutive confirmation); no action required.
-- **Dead code**: None found. All unexported helper functions verified in active use.
-
-### Improvement Sweep (v0.1.13, 2026-03-01)
-
-Full sweep completed — one stale-reference finding resolved:
-- **Stale references**: Fixed README.md Iterations panel description — `]` was listed as a key for "view summary" in the Iterations panel (`2`), but `]` is only handled in the Main panel (`3`) for tab cycling. The actual flow is: press `enter` in Iterations panel → iteration log loads in Main panel → press `]` in Main panel to reach Iteration Summary tab. Updated description to: `j`/`k` navigate · `enter` view log (loads in Main panel; use `]` there for summary).
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found. No dead code found.
-- **Test coverage**: All packages at confirmed floors (unchanged).
-- **CI health**: Both workflows clean — golangci-lint-action@v7 with v2.1.6 pinned. ci.yml push triggers for develop/feat/** remain non-functional (fifteenth consecutive confirmation); no action required.
-
-### Improvement Sweep (v0.1.12, 2026-03-01)
-
-Full sweep completed — five doc/config fixes applied:
-- **Stale references**: Fixed `cmd/ralph/main.go` Long description — spec kit workflow order was `specify → clarify → plan` (wrong); corrected to `specify → plan → clarify → tasks → run` (matches README and spec kit concept: clarify resolves plan ambiguities).
-- **Stale references**: Fixed README.md `x` key description — "Stop loop after current iteration" was incorrect (`x` calls `StopLoop()` which immediately cancels context, not after-iteration); corrected to "Cancel running loop immediately (dashboard mode)".
-- **Stale references**: Fixed README.md `ralph init` comment — "Scaffold ralph.toml in current project" was incomplete; corrected to "Scaffold ralph project (config, prompts, specs dir)" matching the cobra `Short` text and actual behavior.
-- **Stale references**: Added `[tui] log_retention = 20` to both `README.md` config example and `ralph.toml` — the field was implemented (config.go:283, default=20, tested) but absent from user-facing config examples.
-- **Stale references**: Fixed `.specify/memory/constitution.md` — Technical Constraints said `Go 1.23+` but `go.mod` requires `go 1.24.2`; corrected to `Go 1.24+`.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found. No dead code removal attempted (FooterProps.ScrollOffset/NewBelow, MainView.SwitchToOutput, Regent.NotifyOutput, tui.DimBorderStyle are exported symbols retained for testing utility and future wiring).
-- **Test coverage**: All packages at confirmed floors (unchanged).
-- **CI health**: Both workflows clean — golangci-lint-action@v7 with v2.1.6 pinned. ci.yml push triggers for develop/feat/** remain non-functional (fourteenth consecutive confirmation); no action required.
-
-### Improvement Sweep (v0.1.11, 2026-03-01)
-
-Full sweep completed — no actionable findings:
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, and file names match the implementation.
-- **Spec consistency**: Full compliance check against spec 004 (T001–T034), all 12 FRs verified — zero drift found.
-- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (thirteenth consecutive confirmation); no action required.
-- **Dead code**: None found. All unexported helper functions verified in active use.
-
-### Improvement Sweep (v0.1.10, 2026-03-01)
-
-Full sweep completed — no actionable findings:
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, and file names match the implementation.
-- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (twelfth consecutive confirmation); no action required.
-- **Dead code**: None found. All 50+ unexported helper functions verified in active use.
-
-### Improvement Sweep (v0.1.09, 2026-03-01)
-
-Full sweep completed — no actionable findings:
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, and file names match the implementation.
-- **Spec consistency**: Full compliance check against spec 004 (T001–T034), all 12 FRs verified — zero drift found.
-- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (eleventh consecutive confirmation); no action required.
-- **Dead code**: None found. All unexported helper functions verified in active use.
-
-### Improvement Sweep (v0.1.08, 2026-03-01)
-
-Full sweep completed — no actionable findings:
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, and file names match the implementation.
-- **Spec consistency**: Full compliance check against spec 004 (T001–T034), all 12 FRs verified — zero drift found.
-- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (tenth consecutive confirmation); no action required.
-- **Dead code**: None found. All unexported helper functions verified in active use.
-
-### Improvement Sweep (v0.1.07, 2026-03-01)
-
-Full sweep completed — one stale-fixture finding resolved:
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files.
-- **Stale references**: Replaced historical spec names (`ralph-core`, `the-regent`) used as synthetic test fixture data in `cmd/ralph/commands_test.go` (TestFormatSpecList "single done spec" + "multiple specs with mixed statuses") and `internal/tui/panels/specs_test.go` (TestNewSpecsPanel_WithSpecs) with generic names (`test-spec`, `spec-one`, `spec-two`). Tests are purely synthetic — behavior and coverage unchanged.
-- **Spec consistency**: Full compliance check against spec 004 (T001–T034), all 12 FRs verified — zero drift found.
-- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (ninth consecutive confirmation); no action required.
-- **Dead code**: None found. All unexported helper functions verified in active use.
-
-### Improvement Sweep (v0.1.06, 2026-03-01)
-
-Full sweep completed — no actionable findings:
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found in Go source files. References in `.claude/`, `.specify/` skill templates and `PLAN.md` are expected documentation patterns, not code issues.
-- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, and file names match the implementation.
-- **Spec consistency**: Full compliance check against spec 004 (T001–T034), all 12 FRs verified — zero drift found.
-- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (eighth consecutive confirmation); no action required.
-- **Dead code**: None found. All unexported helper functions verified in active use.
-
-### Improvement Sweep (v0.1.05, 2026-03-01)
-
-Full sweep completed — one stale-reference finding resolved:
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere.
-- **Stale references**: Fixed three doc comments referencing deleted spec files — `internal/spec/spec.go` SpecFile.Name/Path examples (removed `"ralph-core"` reference); `cmd/ralph/execute.go` showStatus doc (removed "Per ralph-core.md:" prefix); `cmd/ralph/quit_unix.go` registerQuitHandler doc (removed "Per the-regent.md:" prefix). README.md, CLAUDE.md all current.
-- **Spec consistency**: Full compliance check against spec 004 (T001–T034), all 12 FRs verified — zero drift found.
-- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (seventh consecutive confirmation); no action required.
-- **Dead code**: None found. All unexported helper functions verified in active use.
-
-### Improvement Sweep (v0.1.04, 2026-03-01)
-
-Full sweep completed — no actionable findings:
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere.
-- **Stale references**: None found. README.md, CLAUDE.md all current; all commands, flags, and file names match the implementation.
-- **Spec consistency**: Full compliance check against spec 004 (T001–T034), all 12 FRs verified — zero drift found.
-- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (sixth consecutive confirmation); no action required.
-- **Dead code**: None found. All unexported helper functions verified in active use.
-
-### Improvement Sweep (v0.1.03, 2026-03-01)
-
-Full sweep completed — one stale-reference finding resolved:
-- **Test coverage**: All packages confirmed at established floors. `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 99.3%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `executeDashboard` 22.7% is a TTY ceiling (same as runWithRegentTUI/runDashboard — path through store setup + runDashboard is blocked by TTY requirement). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere.
-- **Stale references**: Fixed CLAUDE.md — removed references to deleted `specs/ralph-core.md` and `specs/the-regent.md` (replaced with current spec kit layout description); removed `specs/ralph-core.md` reference from Config section; added `internal/store/` and `internal/notify/` to Architecture section; added TUI subdirs note.
-- **Spec consistency**: Full compliance check against spec 004 (T001–T034) — zero drift found. All 12 FRs implemented and verified.
-- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned.
-- **Dead code**: None found. All 26 unexported helper functions verified in active use.
-
-### Improvement Sweep (v0.1.02, 2026-03-01)
-
-Full sweep completed — one actionable finding resolved:
-- **Test coverage**: Added `TestClaudeAgentRun/empty_executable_defaults_to_claude_binary_name` covering the `if exe == "" { exe = "claude" }` default branch in `ClaudeAgent.Run` (`internal/loop/runner.go:32`). Approach: clear PATH via `t.Setenv("PATH", "")` then create `&ClaudeAgent{}` with empty Executable — `cmd.Start()` fails with "claude agent: start: not found". `internal/loop` package: 98.6%→99.3%; `ClaudeAgent.Run` function: 92.0%→96.0%. Remaining 4% (1 stmt) is `StdoutPipe()` failure — OS-level impossibility, confirmed ceiling.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found.
-- **Stale references**: None found. README.md, CLAUDE.md, all CI workflows current.
-- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned.
-- **Dead code**: None found.
-- **Spec compliance**: Full compliance check against spec 003 (T001–T045) and spec 004 (T001–T034) — zero implementation drift found.
-
-### Improvement Sweep (v0.1.00, 2026-03-01)
-
-Full sweep completed — one documentation-only carry-forward finding, no functional changes:
-- **Test coverage**: All packages confirmed at or above established floors. Numbers unchanged from v0.0.99: `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 98.6%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling — `runWithRegentTUI`/`runWithTUIAndState`/`runDashboard` require real TTY; no further improvement without programFactory injection). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere. No dead code. All unexported functions verified in active use. 8 legitimately skipped tests (platform/environment conditions).
-- **Documentation drift (resolved v0.1.01)**: Marked all 45 task checkboxes `[x]` in `specs/003-tui-redesign/tasks.md` and all 34 task checkboxes `[x]` in `specs/004-speckit-alignment/tasks.md`. Both specs were 100% implemented; runtime was unaffected throughout.
-- **Stale references**: None found. README.md, CLAUDE.md, .golangci.yml all current.
-- **CI health**: Both `ci.yml` and `release.yml` clean — `golangci-lint-action@v7` with `v2.1.6` pinned. `ci.yml` push triggers for `develop` and `feat/**` remain non-functional (fifth consecutive confirmation); no action required.
-- **Dead code**: None found.
-- **Spec compliance**: Full compliance check against spec 003 (T001–T045) and spec 004 (T001–T034) — zero implementation drift found.
-
-### Improvement Sweep (v0.0.99, 2026-03-01)
-
-Full sweep completed — one documentation drift finding:
-- **Test coverage**: All packages confirmed at or above 90% floor. Current numbers unchanged from v0.0.98: `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 98.6%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling). `go vet ./...` clean.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere. No dead code. All unexported functions verified in active use. 8 skipped tests, all legitimately conditional (platform/environment reasons).
-- **Documentation drift (low priority)**: `specs/003-tui-redesign/tasks.md` has all 45 task checkboxes as `[ ]` despite spec being fully complete (T001–T045); `specs/004-speckit-alignment/tasks.md` has all 34 task checkboxes as `[ ]` despite spec being fully complete (T001–T034). These are documentation-only artifacts — `detectDirStatus()` uses file presence not checkbox state, so runtime behavior is unaffected. Update: mark all tasks `[x]` in both files.
-- **Stale references**: None found. README.md, CLAUDE.md all current. No deleted commands/features referenced.
-- **CI health**: `ci.yml` push triggers still list `develop` (does not exist) and `feat/**` (naming convention not used) — confirmed non-functional-gap for the fourth consecutive sweep. No action required.
-- **Dead code**: None found.
-
-### Improvement Sweep (v0.0.98, 2026-03-01)
-
-Full sweep completed — no actionable findings:
-- **Test coverage**: All packages confirmed at or above 90% floor. Current numbers: `internal/claude` 100%, `internal/notify` 100%, `internal/tui/components` 100%, `internal/tui/panels` 100%, `internal/tui` 99.1%, `internal/loop` 98.6%, `internal/spec` 98.0%, `internal/regent` 95.9%, `internal/config` 93.2%, `internal/git` 93.2%, `internal/store` 91.0%, `cmd/ralph` 76.2% (confirmed ceiling — unchanged). Updated header from `~72%` to `76.2%` to reflect actual measured ceiling.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere. `ti.Placeholder` in specs.go and `constitution.md` mentions of "placeholder" are false positives (UI property name and documentation wording). No dead code. All unexported functions verified in active use.
-- **Stale references**: No drift found. CLAUDE.md, README.md all current.
-- **Spec consistency**: Full compliance check against spec 003 (T001–T045) and spec 004 (T001–T034) acceptance criteria — zero drift found.
-- **CI health**: One low-priority informational finding — `ci.yml` push triggers list `develop` (branch does not exist) and `feat/**` (naming convention not used; actual branches are `NNN-feature-name`). Feature branches only receive CI via PR-to-main triggers, which is the correct merge gate. Not a functional gap; no action required unless branch naming conventions change.
-- **Dead code**: None found.
-
-### Improvement Sweep (v0.0.97, 2026-03-01)
-
-Full sweep completed — actionable findings resolved:
-- **Test coverage**: Added `TestHandleLogEntry_LogIterComplete` covering the `LogIterComplete` case in `handleLogEntry` (app.go:309-319, 3 statements — iterationsPanel.AddIteration + secondary.AddIteration); added `TestParseStream_AssistantNoMessage` covering the `msg.Message == nil` early-return in `parseAssistantMessage` (parser.go:94-96). `internal/claude`: 97.8%→100%; `internal/tui`: 98.2%→99.1%. Remaining gaps: `tickCmd()` (tea.Tick callback unreachable), `tea.ExecProcess` closure body in `handleEditSpecRequest` (requires running editor subprocess; not reliably testable on Windows), all previously confirmed residuals.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere.
-- **Stale references**: Updated CLAUDE.md — corrected `internal/spec/` description ("templating"→"active spec resolution") and added `charmbracelet/bubbles` to approved deps list.
-- **Spec consistency**: No drift found (same as v0.0.96 sweep).
-- **CI health**: Clean (same as v0.0.96 sweep).
-- **Dead code**: None found.
-
-### Improvement Sweep (v0.0.96, 2026-03-01)
-
-Full sweep completed — actionable findings resolved:
-- **Test coverage**: Added `TestRenderLogLine_NarrowWidth_ToolUse` and `TestRenderLogLine_NarrowWidth_LogText` covering the `maxInput < 20` (width=30 gives -2 → clamped to 20) and `maxText < 20` (width=30 gives 13 → clamped to 20) branches in `RenderLogLine`. `internal/tui/theme.go:RenderLogLine`: 88.6%→100%; `internal/tui` package: 97.0%→98.2%. Remaining gaps are confirmed residuals: `tickCmd()` (tea.Tick callback unreachable in tests), `os.Getwd()` errors throughout cmd/ralph (OS-level impossibility), `runWithRegentTUI`/`runWithTUIAndState`/`runDashboard` (0%, TTY required), git Pull/Push/Stash edge cases (old-git or impossible two-step failures), ScaffoldProject write errors (chmod Unix-only/unreliable), SaveState CreateTemp/Write/Close errors (OS permission manipulation), store.NewJSONL OpenFile/Seek errors (OS manipulation), EnforceRetention ReadDir non-IsNotExist error (behaves like IsNotExist on Windows, per TestSpecListCmd_SpecsNotDir skip pattern).
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere.
-- **Stale references**: No drift found.
-- **Spec consistency**: Full compliance check against spec 004 acceptance criteria — zero drift found.
-- **CI health**: Both `ci.yml` and `release.yml` are clean — `golangci-lint-action@v7` with `v2.1.6` pinned, all other actions at v4/v5.
-- **Dead code**: No orphaned functions or unused constants found.
-
-### Improvement Sweep (v0.0.95, 2026-03-01)
-
-Full sweep completed — actionable findings resolved:
-- **Test coverage**: Added 10 tests targeting speckit command coverage gaps. `specifyCmd`: 75%→90%; `speckitPlanCmd`/`clarifyCmd`/`speckitTasksCmd`/`speckitRunCmd`: 68.8%→93.8% each (resolve-error path + all-prereqs-reach-executeSpeckit path). Added `TestCheckDir_PathIsFile` covering `!info.IsDir()` branch in `checkDir`: 75%→87.5%. `internal/spec`: 96.9%→98.0%. `cmd/ralph`: 72.6%→76.2%. Remaining gaps are confirmed residuals: `checkDir()` non-IsNotExist stat error requires platform-specific null-byte path; `specifyCmd`/speckit cmds `os.Getwd()` error + `os.MkdirAll` error paths are OS-level impossibilities in tests.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere.
-- **Stale references**: No drift found.
-- **Spec consistency**: Full compliance check against spec 004 acceptance criteria — zero drift found.
-- **CI health**: Both `ci.yml` and `release.yml` are clean — `golangci-lint-action@v7` with `v2.1.6` pinned, all other actions at v4/v5.
-- **Dead code**: No orphaned functions or unused constants found.
-
-### Improvement Sweep (v0.0.94, 2026-03-01)
-
-Full sweep completed — no actionable findings:
-- **Test coverage**: Added `TestIsNumeric` (empty-string branch in `isNumeric()`) and `TestSpecItem_Description_IsDir` (IsDir=true path in `specItem.Description()`). panels: 99.7%→100%; spec: 95.9%→96.9%. Remaining gaps are confirmed residuals: `List()` non-IsNotExist ReadDir error unreachable on Windows (`TestSpecListCmd_SpecsNotDir` Windows skip pattern), `checkDir()` non-IsNotExist stat error requires platform-specific null-byte path.
-- **Code hygiene**: No TODO/FIXME/HACK/XXX found anywhere.
-- **Stale references**: Fixed README.md — removed deleted `ralph spec new` command, added speckit workflow commands (`specify`/`plan`/`clarify`/`tasks`/`run`), moved loop commands under `ralph loop` in docs. Updated Spec Kit Integration section.
-- **Spec consistency**: Full compliance check against spec 004 acceptance criteria — zero drift found. All 12 FRs implemented and tested.
-- **CI health**: Both `ci.yml` and `release.yml` are clean — `golangci-lint-action@v7` with `v2.1.6` pinned, all other actions at v4/v5.
-- **Dead code**: No orphaned functions or unused constants found.
+**v0.1.39 sweep action:** Trimmed CHRONICLE.md from 592 → 169 lines by consolidating 30+ identical "no findings" sweep records into this summary. All Key Learnings preserved intact.
 
 ## Future Backlog (from GitHub Issues #1 and #2)
 

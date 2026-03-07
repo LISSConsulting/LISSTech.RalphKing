@@ -28,8 +28,9 @@ func loopPlanCmd() *cobra.Command {
 		Short: "Run Claude in plan mode",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			max, _ := cmd.Flags().GetInt("max")
-			noTUI, _ := cmd.Flags().GetBool("no-tui")
-			return executeLoop(loop.ModePlan, max, noTUI, false)
+			noTUI, _ := cmd.Root().PersistentFlags().GetBool("no-tui")
+			noColor, _ := cmd.Root().PersistentFlags().GetBool("no-color")
+			return executeLoop(loop.ModePlan, max, noTUI, false, noColor)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
@@ -42,9 +43,10 @@ func loopBuildCmd() *cobra.Command {
 		Short: "Run Claude in build mode",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			max, _ := cmd.Flags().GetInt("max")
-			noTUI, _ := cmd.Flags().GetBool("no-tui")
+			noTUI, _ := cmd.Root().PersistentFlags().GetBool("no-tui")
+			noColor, _ := cmd.Root().PersistentFlags().GetBool("no-color")
 			roam, _ := cmd.Flags().GetBool("roam")
-			return executeLoop(loop.ModeBuild, max, noTUI, roam)
+			return executeLoop(loop.ModeBuild, max, noTUI, roam, noColor)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
@@ -58,9 +60,10 @@ func loopRunCmd() *cobra.Command {
 		Short: "Smart mode: plan if needed, then build",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			max, _ := cmd.Flags().GetInt("max")
-			noTUI, _ := cmd.Flags().GetBool("no-tui")
+			noTUI, _ := cmd.Root().PersistentFlags().GetBool("no-tui")
+			noColor, _ := cmd.Root().PersistentFlags().GetBool("no-color")
 			roam, _ := cmd.Flags().GetBool("roam")
-			return executeSmartRun(max, noTUI, roam)
+			return executeSmartRun(max, noTUI, roam, noColor)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")
@@ -75,9 +78,10 @@ func buildCmd() *cobra.Command {
 		Short: "Run Claude in build mode",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			max, _ := cmd.Flags().GetInt("max")
-			noTUI, _ := cmd.Flags().GetBool("no-tui")
+			noTUI, _ := cmd.Root().PersistentFlags().GetBool("no-tui")
+			noColor, _ := cmd.Root().PersistentFlags().GetBool("no-color")
 			roam, _ := cmd.Flags().GetBool("roam")
-			return executeLoop(loop.ModeBuild, max, noTUI, roam)
+			return executeLoop(loop.ModeBuild, max, noTUI, roam, noColor)
 		},
 	}
 	cmd.Flags().Int("max", 0, "override max iterations (0 = use config)")

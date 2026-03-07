@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -566,6 +567,79 @@ func TestIterationSummary_CommitFromComplete(t *testing.T) {
 	}
 	if iters[0].Commit != "deadbeef" {
 		t.Errorf("Commit: expected %q, got %q", "deadbeef", iters[0].Commit)
+	}
+}
+
+// TestEnforceRetention_ReadOnlyDir verifies that EnforceRetention returns an
+// error when os.Remove fails because the directory is read-only.
+func TestEnforceRetention_ReadOnlyDir(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("cannot test permission errors as root")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod read-only directory is not reliably enforced on Windows")
+	}
+
+	dir := t.TempDir()
+	// Create two .jsonl files so EnforceRetention will try to delete the oldest.
+	for i := 0; i < 2; i++ {
+		name := fmt.Sprintf("%010d-%d.jsonl", i, i)
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("{}"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Make the directory read-only so os.Remove will fail.
+	if err := os.Chmod(dir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
+
+	err := store.EnforceRetention(dir, 1)
+	if err == nil {
+		t.Fatal("expected error when directory is read-only and remove fails")
+	}
+}
+
+func TestIterationLog_ReadError(t *testing.T) {
+	dir := t.TempDir()
+	s, err := store.NewJSONL(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	_ = s.Append(loop.LogEntry{Kind: loop.LogIterStart, Iteration: 1, Timestamp: now})
+	_ = s.Append(loop.LogEntry{Kind: loop.LogIterComplete, Iteration: 1, CostUSD: 0.01, Timestamp: now})
+
+	// Close the store so the underlying file handle is invalid.
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// IterationLog now attempts ReadAt on a closed file — must return an error.
+	_, err = s.IterationLog(1)
+	if err == nil {
+		t.Fatal("expected error when reading from a closed store")
+	}
+}
+
+func TestEnforceRetention_DirIsFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// On Windows, os.ReadDir on a regular file returns an IsNotExist error,
+		// so EnforceRetention returns nil — the non-IsNotExist ReadDir error
+		// branch is a Windows ceiling.
+		t.Skip("os.ReadDir on a file returns IsNotExist on Windows")
+	}
+	base := t.TempDir()
+	file := filepath.Join(base, "not-a-dir")
+	if err := os.WriteFile(file, []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Passing a regular file as dir: os.ReadDir returns ENOTDIR (non-IsNotExist).
+	err := store.EnforceRetention(file, 5)
+	if err == nil {
+		t.Fatal("expected error when dir argument is a regular file")
 	}
 }
 

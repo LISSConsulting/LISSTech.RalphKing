@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -135,6 +137,79 @@ func TestFormatScaffoldResult(t *testing.T) {
 	}
 }
 
+// captureStderr captures output written to os.Stderr during fn.
+func captureStderr(fn func()) string {
+	r, w, _ := os.Pipe()
+	old := os.Stderr
+	os.Stderr = w
+	fn()
+	_ = w.Close()
+	os.Stderr = old
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	return buf.String()
+}
+
+// TestAPIKeyWarning_KeySet verifies the warning appears on stderr when
+// ANTHROPIC_API_KEY is set.
+func TestAPIKeyWarning_KeySet(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "sk-test-key-12345")
+
+	root := rootCmd()
+	got := captureStderr(func() {
+		if root.PersistentPreRunE != nil {
+			_ = root.PersistentPreRunE(root, nil)
+		}
+	})
+
+	if !strings.Contains(got, "ANTHROPIC_API_KEY") {
+		t.Errorf("expected warning to mention ANTHROPIC_API_KEY, got: %q", got)
+	}
+	if !strings.Contains(got, "WARNING") {
+		t.Errorf("expected 'WARNING' in output, got: %q", got)
+	}
+}
+
+// TestAPIKeyWarning_KeyUnset verifies no warning is printed when
+// ANTHROPIC_API_KEY is not set.
+func TestAPIKeyWarning_KeyUnset(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
+	root := rootCmd()
+	got := captureStderr(func() {
+		if root.PersistentPreRunE != nil {
+			_ = root.PersistentPreRunE(root, nil)
+		}
+	})
+
+	if strings.Contains(got, "ANTHROPIC_API_KEY") {
+		t.Errorf("should not print warning when env var is unset, got: %q", got)
+	}
+}
+
+// TestAPIKeyWarning_NoColor verifies --no-color suppresses ANSI escapes.
+func TestAPIKeyWarning_NoColor(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "sk-test-key-12345")
+
+	root := rootCmd()
+	if err := root.PersistentFlags().Set("no-color", "true"); err != nil {
+		t.Fatalf("set --no-color: %v", err)
+	}
+
+	got := captureStderr(func() {
+		if root.PersistentPreRunE != nil {
+			_ = root.PersistentPreRunE(root, nil)
+		}
+	})
+
+	if strings.Contains(got, "\x1b[") {
+		t.Errorf("--no-color mode should not emit ANSI escapes, got: %q", got)
+	}
+	if !strings.Contains(got, "ANTHROPIC_API_KEY") {
+		t.Errorf("warning text should still appear with --no-color, got: %q", got)
+	}
+}
+
 func TestRootCmdStructure(t *testing.T) {
 	root := rootCmd()
 
@@ -142,10 +217,14 @@ func TestRootCmdStructure(t *testing.T) {
 		t.Errorf("root Use = %q, want %q", root.Use, "ralph")
 	}
 
-	// --no-tui persistent flag must exist
+	// --no-tui and --no-color persistent flags must exist
 	noTUI := root.PersistentFlags().Lookup("no-tui")
 	if noTUI == nil {
 		t.Fatal("missing --no-tui persistent flag")
+	}
+	noColor := root.PersistentFlags().Lookup("no-color")
+	if noColor == nil {
+		t.Fatal("missing --no-color persistent flag")
 	}
 
 	// Collect all top-level subcommand names
