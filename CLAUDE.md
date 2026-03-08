@@ -18,6 +18,8 @@ Regent (supervisor) → Ralph (loop) → Claude (worker)
 - `internal/store/` — JSONL session log storage and querying
 - `internal/notify/` — desktop notifications on loop events
 - `internal/regent/` — Supervisor: crash/hang detection, test-gated rollback
+- `internal/worktree/` — Git worktree detection, listing, and lifecycle management
+- `internal/orchestrator/` — Parallel-agent orchestration; one Regent per worktree agent
 
 Specs live in `specs/NNN-name/` directories (spec kit layout). Read `spec.md`, `plan.md`, and `tasks.md` from the relevant spec directory before implementing anything.
 

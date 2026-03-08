@@ -443,12 +443,14 @@ ralph build -w --no-tui --max 5
 │   ├── 📂 git/                      # Pull, push, branch, stash helpers
 │   ├── 📂 loop/                     # Core iteration: prompt → claude → parse → git
 │   ├── 📂 notify/                   # Desktop notifications on loop events
+│   ├── 📂 orchestrator/             # Parallel-agent orchestration; one Regent per agent
 │   ├── 📂 regent/                   # Supervisor: crash/hang detection, rollback
 │   ├── 📂 spec/                     # Spec file discovery & active spec resolution
 │   ├── 📂 store/                    # JSONL session log storage & querying
-│   └── 📂 tui/                      # Bubbletea + lipgloss multi-panel TUI
-│       ├── 📂 components/           #   └─ Reusable TUI components
-│       └── 📂 panels/              #   └─ Specs, Iterations, Main, Secondary
+│   ├── 📂 tui/                      # Bubbletea + lipgloss multi-panel TUI
+│   │   ├── 📂 components/           #   └─ Reusable TUI components
+│   │   └── 📂 panels/              #   └─ Specs, Iterations, Main, Secondary
+│   └── 📂 worktree/                 # Git worktree detection, listing, and lifecycle
 ├── 📂 specs/                        # Feature specifications (spec kit layout)
 │   ├── 📂 003-tui-redesign/
 │   ├── 📂 004-speckit-alignment/

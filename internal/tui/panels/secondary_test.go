@@ -228,6 +228,57 @@ func TestSecondaryPanel_ShowDetail(t *testing.T) {
 	}
 }
 
+// TestSecondaryPanel_EnableWorktrees verifies that EnableWorktrees adds the
+// Worktrees tab and that the panel renders without panicking.
+func TestSecondaryPanel_EnableWorktrees(t *testing.T) {
+	entries := []WorktreeEntry{
+		{Branch: "main", State: "idle"},
+		{Branch: "feat", State: "running"},
+	}
+	p := NewSecondaryPanel(80, 20)
+	p = p.EnableWorktrees(entries)
+	if !p.hasWorktrees {
+		t.Error("EnableWorktrees should set hasWorktrees=true")
+	}
+	view := p.View()
+	if view == "" {
+		t.Error("View() after EnableWorktrees should not be empty")
+	}
+}
+
+// TestSecondaryPanel_EnableWorktrees_ZeroHeight verifies the contentH < 1 clamp
+// inside EnableWorktrees does not panic.
+func TestSecondaryPanel_EnableWorktrees_ZeroHeight(t *testing.T) {
+	p := NewSecondaryPanel(80, 0)
+	p = p.EnableWorktrees(nil)
+	_ = p.View()
+}
+
+// TestSecondaryPanel_SetWorktreeEntries verifies that SetWorktreeEntries updates
+// the worktree list when worktrees are enabled, and is a no-op otherwise.
+func TestSecondaryPanel_SetWorktreeEntries(t *testing.T) {
+	t.Run("no-op when worktrees not enabled", func(t *testing.T) {
+		p := NewSecondaryPanel(80, 20)
+		p2 := p.SetWorktreeEntries([]WorktreeEntry{{Branch: "feat", State: "running"}})
+		if p2.hasWorktrees {
+			t.Error("SetWorktreeEntries should be a no-op when worktrees not enabled")
+		}
+	})
+
+	t.Run("updates entries when enabled", func(t *testing.T) {
+		p := NewSecondaryPanel(80, 20)
+		p = p.EnableWorktrees([]WorktreeEntry{{Branch: "main", State: "idle"}})
+		p = p.SetWorktreeEntries([]WorktreeEntry{
+			{Branch: "main", State: "idle"},
+			{Branch: "feat", State: "running"},
+		})
+		if !p.hasWorktrees {
+			t.Error("hasWorktrees should remain true after SetWorktreeEntries")
+		}
+		_ = p.View() // must not panic
+	})
+}
+
 func TestNewSecondaryPanel_ZeroHeight(t *testing.T) {
 	// contentH < 1 clamp branch: should not panic.
 	p := NewSecondaryPanel(80, 0)
