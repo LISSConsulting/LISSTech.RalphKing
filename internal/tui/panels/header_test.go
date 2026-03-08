@@ -135,6 +135,40 @@ func TestAbbreviatePath(t *testing.T) {
 	}
 }
 
+func TestTruncateToWidth(t *testing.T) {
+	tests := []struct {
+		name     string
+		s        string
+		maxWidth int
+		wantFull bool // true if we expect the original string back unchanged
+		wantSuf  string
+	}{
+		{name: "zero maxWidth returns original", s: "hello", maxWidth: 0, wantFull: true},
+		{name: "negative maxWidth returns original", s: "hello", maxWidth: -1, wantFull: true},
+		{name: "fits within maxWidth returns original", s: "hi", maxWidth: 10, wantFull: true},
+		{name: "exact width returns original", s: "hello", maxWidth: 5, wantFull: true},
+		{name: "exceeds maxWidth gets ellipsis", s: "hello world", maxWidth: 6, wantSuf: "…"},
+		{name: "long string truncated", s: "abcdefghij", maxWidth: 4, wantSuf: "…"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := truncateToWidth(tt.s, tt.maxWidth)
+			if tt.wantFull {
+				if got != tt.s {
+					t.Errorf("truncateToWidth(%q, %d) = %q, want original %q", tt.s, tt.maxWidth, got, tt.s)
+				}
+				return
+			}
+			if !strings.HasSuffix(got, tt.wantSuf) {
+				t.Errorf("truncateToWidth(%q, %d) = %q, want suffix %q", tt.s, tt.maxWidth, got, tt.wantSuf)
+			}
+			if lipgloss.Width(got) > tt.maxWidth {
+				t.Errorf("truncateToWidth(%q, %d) = %q width %d exceeds maxWidth", tt.s, tt.maxWidth, got, lipgloss.Width(got))
+			}
+		})
+	}
+}
+
 func TestFormatElapsed(t *testing.T) {
 	tests := []struct {
 		d    time.Duration

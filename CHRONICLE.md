@@ -26,6 +26,7 @@ Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY ve
 
 - **Docs**: Added `internal/orchestrator/` and `internal/worktree/` to CLAUDE.md and README.md (both missing since spec 007)
 - **Test coverage**: Added `TestSecondaryPanel_EnableWorktrees` + `TestSecondaryPanel_SetWorktreeEntries`; panels package 95.6%→~97%
+- **Test coverage**: Added `TestTruncateToWidth` (6 subtests); `truncateToWidth` 0%→100%; panels package 97.6%→98.4%
 - **Code hygiene**: zero TODO/FIXME/HACK/XXX in non-test Go source
 - **Dead code**: none found
 - **CI health**: all actions current (same as v0.1.59 sweep)
