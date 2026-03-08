@@ -22,6 +22,14 @@
 
 Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
 
+## Improvement Sweep (2026-03-08) — v0.1.59+
+
+- **Docs**: Added `internal/orchestrator/` and `internal/worktree/` to CLAUDE.md and README.md (both missing since spec 007)
+- **Test coverage**: Added `TestSecondaryPanel_EnableWorktrees` + `TestSecondaryPanel_SetWorktreeEntries`; panels package 95.6%→~97%
+- **Code hygiene**: zero TODO/FIXME/HACK/XXX in non-test Go source
+- **Dead code**: none found
+- **CI health**: all actions current (same as v0.1.59 sweep)
+
 ## Improvement Sweep (2026-03-07, updated 2026-03-09) — v0.1.59 (no new findings)
 
 Full sweep completed with zero actionable findings:
