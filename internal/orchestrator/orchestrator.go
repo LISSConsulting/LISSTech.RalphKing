@@ -107,7 +107,11 @@ func (o *Orchestrator) Launch(ctx context.Context, branch, specName, specDir str
 		return fmt.Errorf("orchestrator: max parallel agents (%d) reached", o.MaxParallel)
 	}
 
+	// events is the outward-facing channel consumed by the fan-in goroutine.
+	// loopEvents is the internal channel the loop writes to; a drain goroutine
+	// bridges the two and calls rgt.UpdateState() to keep the hang timer alive.
 	events := make(chan loop.LogEntry, 128)
+	loopEvents := make(chan loop.LogEntry, 128)
 	stopCh := make(chan struct{})
 
 	agent := &WorktreeAgent{
@@ -158,7 +162,7 @@ func (o *Orchestrator) Launch(ctx context.Context, branch, specName, specDir str
 		Git:       git.NewRunner(wtPath),
 		Config:    o.cfg,
 		Dir:       wtPath,
-		Events:    events,
+		Events:    loopEvents,
 		Spec:      specName,
 		SpecDir:   specDir,
 		StopAfter: stopCh,
@@ -169,15 +173,52 @@ func (o *Orchestrator) Launch(ctx context.Context, branch, specName, specDir str
 		// (crash detection, hang detection, per-worktree rollback). Creating one
 		// Regent per agent satisfies FR-019/FR-020: failures are isolated — a
 		// hanging or crashing agent does not affect any peer.
+		//
+		// The Regent emits its own messages (start, retry, hang) directly to the
+		// events channel. Loop output flows through loopEvents → drain goroutine
+		// → events, with the drain calling rgt.UpdateState() to reset the hang
+		// timer on every loop event.
 		var runErr error
 		if o.cfg.Regent.Enabled {
 			rgt := regent.New(o.cfg.Regent, wtPath, git.NewRunner(wtPath), events)
 			lp.PostIteration = rgt.RunPostIterationTests
+
+			// Drain loop events → regent state update → fan-in channel.
+			drainDone := make(chan struct{})
+			go func() {
+				defer close(drainDone)
+				for entry := range loopEvents {
+					if entry.Kind != loop.LogRegent {
+						rgt.UpdateState(entry)
+					}
+					select {
+					case events <- entry:
+					default:
+					}
+				}
+			}()
+
 			runErr = rgt.Supervise(ctx, func(ctx context.Context) error {
 				return lp.Run(ctx, mode, maxOverride)
 			})
+			close(loopEvents)
+			<-drainDone
 		} else {
+			// No Regent — forward loop events directly.
+			drainDone := make(chan struct{})
+			go func() {
+				defer close(drainDone)
+				for entry := range loopEvents {
+					select {
+					case events <- entry:
+					default:
+					}
+				}
+			}()
+
 			runErr = lp.Run(ctx, mode, maxOverride)
+			close(loopEvents)
+			<-drainDone
 		}
 
 		o.mu.Lock()

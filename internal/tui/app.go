@@ -482,6 +482,11 @@ func (m Model) handleTaggedEvent(msg taggedEventMsg) (tea.Model, tea.Cmd) {
 		m.mainView = m.mainView.AppendLine(rendered)
 	}
 
+	// Route Regent events to the Secondary panel so the Regent tab is populated.
+	if msg.Entry.Kind == loop.LogRegent {
+		m.secondary = m.secondary.AppendLine(rendered, panels.TabRegent)
+	}
+
 	// Update worktrees tab with fresh agent state snapshot.
 	if m.orch != nil {
 		m.secondary = m.secondary.SetWorktreeEntries(agentsToEntries(m.orch.ActiveAgents()))
