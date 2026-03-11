@@ -7,6 +7,7 @@ type RunOptions struct {
 	Model                 string
 	MaxTurns              int
 	DangerSkipPermissions bool
+	Dir                   string // working directory for the subprocess; empty = inherit parent
 }
 
 // Agent is the interface for AI code agents. Claude is the default

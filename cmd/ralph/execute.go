@@ -178,6 +178,9 @@ func executeLoop(mode loop.Mode, maxOverride int, noTUI bool, roam bool, focus s
 // worktree directory. Must be called before any prompt pre-flight checks.
 func setupWorktree(setup *loopSetup) error {
 	wtr := worktree.NewRunner(setup.dir)
+	if setup.cfg != nil {
+		wtr.WorktreeDir = setup.cfg.Worktree.ResolvedWorktreeDir()
+	}
 	if err := wtr.Detect(); err != nil {
 		return err
 	}

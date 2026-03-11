@@ -351,6 +351,7 @@ max_parallel = 5
 auto_merge = false
 merge_target = ""
 path_template = ""
+worktree_dir = ""
 `,
 		},
 		{

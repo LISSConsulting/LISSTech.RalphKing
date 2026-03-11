@@ -222,6 +222,7 @@ func (l *Loop) iteration(ctx context.Context, n, maxIter int, prompt, branch str
 		Model:                 l.Config.Claude.Model,
 		MaxTurns:              l.Config.Claude.MaxTurns,
 		DangerSkipPermissions: l.Config.Claude.DangerSkipPermissions,
+		Dir:                   l.Dir,
 	})
 	if agentErr != nil {
 		return 0, "", false, fmt.Errorf("start claude: %w", agentErr)

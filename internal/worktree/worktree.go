@@ -27,8 +27,9 @@ type WorktreeOps interface {
 // Runner invokes worktrunk commands as subprocesses from a given working
 // directory. Dir must be the root of the git repository.
 type Runner struct {
-	Dir        string
-	executable string // cached after Detect()
+	Dir          string
+	WorktreeDir  string // custom base directory for worktrees; empty = worktrunk default
+	executable   string // cached after Detect()
 }
 
 // NewRunner returns a new Runner rooted at dir.

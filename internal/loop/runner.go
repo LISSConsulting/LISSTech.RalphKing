@@ -34,6 +34,9 @@ func (a *ClaudeAgent) Run(ctx context.Context, prompt string, opts claude.RunOpt
 	}
 
 	cmd := exec.CommandContext(ctx, exe, args...)
+	if opts.Dir != "" {
+		cmd.Dir = opts.Dir
+	}
 	isolateProcess(cmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

@@ -38,7 +38,21 @@ type WorktreeConfig struct {
 	MaxParallel  int    `toml:"max_parallel"`
 	AutoMerge    bool   `toml:"auto_merge"`
 	MergeTarget  string `toml:"merge_target"`
-	PathTemplate string `toml:"path_template"`
+	PathTemplate string `toml:"path_template"` // deprecated: use worktree_dir
+	WorktreeDir  string `toml:"worktree_dir"`  // base directory for worktrees; default ~/.ralph/worktrees
+}
+
+// ResolvedWorktreeDir returns the absolute path for worktree storage.
+// Defaults to ~/.ralph/worktrees if WorktreeDir is empty.
+func (w WorktreeConfig) ResolvedWorktreeDir() string {
+	if w.WorktreeDir != "" {
+		return w.WorktreeDir
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".ralph", "worktrees")
 }
 
 // NotificationsConfig controls webhook/ntfy.sh notifications.
@@ -318,7 +332,8 @@ enabled = false        # enable git worktree support via worktrunk
 max_parallel = 5       # maximum number of concurrent worktree agents
 auto_merge = false     # automatically merge on spec-complete + tests pass
 merge_target = ""      # branch to merge into (empty = branch worktree was created from)
-path_template = ""     # worktree path template (empty = worktrunk default)
+path_template = ""     # deprecated: use worktree_dir
+worktree_dir = ""      # base directory for worktrees (default: ~/.ralph/worktrees)
 `
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return "", fmt.Errorf("config: write %s: %w", path, err)

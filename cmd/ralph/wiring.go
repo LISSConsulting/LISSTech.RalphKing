@@ -412,6 +412,7 @@ func runDashboard(ctx context.Context, cfg *config.Config, dir string, sw store.
 	// Wire orchestrator when worktree mode is enabled.
 	if cfg.Worktree.Enabled {
 		wtRunner := worktree.NewRunner(dir)
+		wtRunner.WorktreeDir = cfg.Worktree.ResolvedWorktreeDir()
 		if err := wtRunner.Detect(); err == nil {
 			orch := orchestrator.New(cfg, wtRunner)
 			model = model.WithOrchestrator(orch)

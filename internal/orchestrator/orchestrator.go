@@ -122,7 +122,11 @@ func (o *Orchestrator) Launch(ctx context.Context, branch, specName, specDir str
 	o.mu.Unlock()
 
 	// Create/switch worktree outside the lock (subprocess call).
-	wtPath, err := o.WorktreeOps.Switch(branch, true)
+	// Try reuse first (branch already exists as a feature branch), then create.
+	wtPath, err := o.WorktreeOps.Switch(branch, false)
+	if err != nil {
+		wtPath, err = o.WorktreeOps.Switch(branch, true)
+	}
 	if err != nil {
 		o.mu.Lock()
 		agent.State = StateFailed

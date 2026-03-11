@@ -45,4 +45,5 @@ enabled = true  # enable git worktree support via worktrunk
 max_parallel = 5  # maximum number of concurrent worktree agents
 auto_merge = false  # automatically merge on spec-complete + tests pass
 merge_target = ""  # branch to merge into (empty = branch worktree was created from)
-path_template = ""  # worktree path template (empty = worktrunk default)
+path_template = ""  # deprecated: use worktree_dir
+worktree_dir = ""   # base directory for worktrees (default: ~/.ralph/worktrees)
