@@ -22,6 +22,13 @@
 
 Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
 
+## Improvement Sweep (2026-03-11) — v0.1.60+
+
+- **Test coverage**: Added `TestSecondaryPanel_WorktreesTab_ViewAndUpdate` + `TestSecondaryPanel_SetSize_WithWorktrees`; covers TabWorktrees branches in Update/View/SetSize; panels 98.4%→99.1%
+- **Test coverage**: Added `TestScaffoldProject/appends_entry_to_gitignore_that_has_no_trailing_newline`; covers no-trailing-newline branch in ScaffoldProject; config 93.3%→94.0%
+- **Code hygiene**: zero TODO/FIXME/HACK/XXX in non-test Go source
+- **Dead code**: none found
+
 ## Improvement Sweep (2026-03-08) — v0.1.59+
 
 - **Docs**: Added `internal/orchestrator/` and `internal/worktree/` to CLAUDE.md and README.md (both missing since spec 007)

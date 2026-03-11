@@ -169,6 +169,47 @@ func TestScaffoldProject(t *testing.T) {
 		}
 	})
 
+	t.Run("appends entry to gitignore that has no trailing newline", func(t *testing.T) {
+		dir := t.TempDir()
+		// Pre-create all files so only .gitignore append logic runs.
+		for name, content := range map[string]string{
+			"ralph.toml":   "x",
+			"PLAN.md":      "x",
+			"BUILD.md":     "x",
+			"CHRONICLE.md": "x",
+		} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.MkdirAll(filepath.Join(dir, "specs"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		// Write .gitignore WITHOUT a trailing newline to trigger the newline-insertion branch.
+		if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("node_modules/"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		created, err := ScaffoldProject(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(created) != 1 || created[0] != filepath.Join(dir, ".gitignore") {
+			t.Errorf("expected only .gitignore in created, got %v", created)
+		}
+		content, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The existing content and the new entry should each be on their own lines.
+		if !strings.Contains(string(content), "node_modules/\n") {
+			t.Errorf("existing content should end with newline; got %q", string(content))
+		}
+		if !strings.Contains(string(content), ".ralph/regent-state.json") {
+			t.Error("entry should be appended")
+		}
+	})
+
 	t.Run("skips gitignore when entry already present", func(t *testing.T) {
 		dir := t.TempDir()
 		// Pre-create all files including .gitignore with the entry already present

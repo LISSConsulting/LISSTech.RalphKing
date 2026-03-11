@@ -279,6 +279,56 @@ func TestSecondaryPanel_SetWorktreeEntries(t *testing.T) {
 	})
 }
 
+// TestSecondaryPanel_WorktreesTab_ViewAndUpdate verifies that navigating to the
+// Worktrees tab renders correctly and that key/non-key messages are forwarded
+// to the worktrees panel without panicking.
+func TestSecondaryPanel_WorktreesTab_ViewAndUpdate(t *testing.T) {
+	entries := []WorktreeEntry{
+		{Branch: "main", State: "idle"},
+		{Branch: "feat", State: "running"},
+	}
+	p := NewSecondaryPanel(80, 20)
+	p = p.EnableWorktrees(entries)
+
+	// Navigate to Worktrees tab (index 4: Regent→Git→Tests→Cost→Worktrees).
+	for i := 0; i < 4; i++ {
+		p, _ = p.Update(keyMsg("]"))
+	}
+	if p.activeTab != TabWorktrees {
+		t.Fatalf("expected TabWorktrees (4), got %v", p.activeTab)
+	}
+
+	// View() should exercise the TabWorktrees branch.
+	view := p.View()
+	if view == "" {
+		t.Error("View() on Worktrees tab should be non-empty")
+	}
+
+	// Key message forwarded to worktrees panel (Update key branch).
+	p2, _ := p.Update(keyMsg("j"))
+	_ = p2.View()
+
+	// Non-key message forwarded to worktrees panel (Update non-key branch).
+	p3, _ := p.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	_ = p3.View()
+}
+
+// TestSecondaryPanel_SetSize_WithWorktrees verifies that SetSize also resizes
+// the worktrees panel when worktrees are enabled.
+func TestSecondaryPanel_SetSize_WithWorktrees(t *testing.T) {
+	p := NewSecondaryPanel(80, 20)
+	p = p.EnableWorktrees([]WorktreeEntry{{Branch: "main", State: "idle"}})
+	p = p.SetSize(120, 40)
+	if p.width != 120 || p.height != 40 {
+		t.Errorf("SetSize: got %dx%d, want 120x40", p.width, p.height)
+	}
+	// Navigate to Worktrees tab to verify the resized panel renders.
+	for i := 0; i < 4; i++ {
+		p, _ = p.Update(keyMsg("]"))
+	}
+	_ = p.View() // must not panic
+}
+
 func TestNewSecondaryPanel_ZeroHeight(t *testing.T) {
 	// contentH < 1 clamp branch: should not panic.
 	p := NewSecondaryPanel(80, 0)
