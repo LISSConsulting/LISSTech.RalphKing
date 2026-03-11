@@ -13,11 +13,11 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/orchestrator"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui/panels"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/orchestrator"
+	"github.com/LISSConsulting/RalphSpec/internal/spec"
+	"github.com/LISSConsulting/RalphSpec/internal/store"
+	"github.com/LISSConsulting/RalphSpec/internal/tui/panels"
 )
 
 // Model is the root bubbletea model for the multi-panel Ralph TUI.

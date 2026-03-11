@@ -3,9 +3,9 @@ package tui
 import (
 	"time"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/spec"
+	"github.com/LISSConsulting/RalphSpec/internal/store"
 )
 
 // logEntryMsg wraps a LogEntry for broadcasting to all panels.

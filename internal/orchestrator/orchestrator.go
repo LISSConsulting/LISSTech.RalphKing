@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/worktree"
+	"github.com/LISSConsulting/RalphSpec/internal/config"
+	"github.com/LISSConsulting/RalphSpec/internal/git"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/regent"
+	"github.com/LISSConsulting/RalphSpec/internal/worktree"
 )
 
 const mergedEventsBuf = 256

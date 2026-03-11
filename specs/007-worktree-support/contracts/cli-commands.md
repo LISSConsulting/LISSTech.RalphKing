@@ -80,7 +80,7 @@ Removed 2 worktrees (008-notifications, 009-api-cleanup).
 ```
 $ ralph build --worktree
 Creating worktree for 007-worktree-support...
-Worktree created at ../LISSTech.RalphKing.007-worktree-support
+Worktree created at ../RalphSpec.007-worktree-support
 Starting build loop in worktree...
 ```
 

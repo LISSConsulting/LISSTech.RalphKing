@@ -9,7 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
+	"github.com/LISSConsulting/RalphSpec/internal/spec"
 )
 
 func makeSpec(name, path string, status spec.Status) spec.SpecFile {

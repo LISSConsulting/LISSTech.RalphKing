@@ -6,8 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/spec"
 )
 
 func TestViewHeight_MatchesTerminal(t *testing.T) {

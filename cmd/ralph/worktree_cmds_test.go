@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/worktree"
+	"github.com/LISSConsulting/RalphSpec/internal/worktree"
 )
 
 // TestWorktreeListCmd_DetectFails covers worktreeListCmd.RunE up to and

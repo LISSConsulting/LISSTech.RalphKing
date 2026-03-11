@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
+	"github.com/LISSConsulting/RalphSpec/internal/git"
+	"github.com/LISSConsulting/RalphSpec/internal/spec"
 )
 
 // resolveSpec resolves the active spec directory from --spec flag or git branch.

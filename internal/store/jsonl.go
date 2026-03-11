@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
 )
 
 // JSONL is a Store backed by an append-only JSONL file. Each line is a

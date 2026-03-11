@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/claude"
+	"github.com/LISSConsulting/RalphSpec/internal/claude"
 )
 
 // init runs as a fake Claude subprocess when _FAKE_CLAUDE=1 is set.

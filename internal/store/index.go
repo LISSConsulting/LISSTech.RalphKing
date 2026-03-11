@@ -1,6 +1,6 @@
 package store
 
-import "github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+import "github.com/LISSConsulting/RalphSpec/internal/loop"
 
 // iterRange is the [start, end) byte range of one iteration in the JSONL file.
 // start is the offset of the LogIterStart line; end is the offset of the first

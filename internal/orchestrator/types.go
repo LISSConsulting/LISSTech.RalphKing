@@ -3,7 +3,7 @@
 package orchestrator
 
 import (
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
 )
 
 // AgentState represents the lifecycle state of a worktree agent.

@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/tui"
 )
 
 // lineFormatter renders loop.LogEntry values as terminal lines.

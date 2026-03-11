@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
 )
 
 func TestNewTheme_DefaultAccent(t *testing.T) {

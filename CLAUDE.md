@@ -1,4 +1,4 @@
-# CLAUDE.md — RalphKing
+# CLAUDE.md — RalphSpec
 
 Spec-driven AI coding loop CLI in Go. Ralph runs Claude Code against specs in a continuous loop; The Regent supervises for crashes, hangs, and test regressions.
 
@@ -49,3 +49,9 @@ Project constitution at `.specify/memory/constitution.md`. Five principles: spec
 ## Config
 
 `ralph.toml` at repo root is the example config. All available config fields and their defaults are shown there.
+
+## Git Workflow
+
+- Default branch: `trunk`
+- Development branch: `develop`
+- Feature work happens on spec branches (e.g., `007-worktree-support`)

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/worktree"
+	"github.com/LISSConsulting/RalphSpec/internal/config"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/worktree"
 )
 
 // fakeWorktreeOps is a test double for WorktreeOps.

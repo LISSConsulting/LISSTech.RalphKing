@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/claude"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
+	"github.com/LISSConsulting/RalphSpec/internal/claude"
+	"github.com/LISSConsulting/RalphSpec/internal/config"
 )
 
 // mockAgent is a test double for claude.Agent.

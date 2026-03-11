@@ -3,7 +3,7 @@ package orchestrator
 import (
 	"sync"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
 )
 
 // startFanIn launches a goroutine that subscribes to an agent's Events channel,

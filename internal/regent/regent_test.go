@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/config"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
 )
 
 func defaultTestRegentConfig() config.RegentConfig {

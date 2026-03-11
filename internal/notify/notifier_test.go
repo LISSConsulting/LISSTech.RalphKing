@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
 )
 
 // captureServer starts an httptest.Server that records incoming requests.
@@ -177,13 +177,13 @@ func TestHook_IgnoresOtherKinds(t *testing.T) {
 func TestHook_FallbackTitle(t *testing.T) {
 	srv, collect := captureServer(t)
 
-	// Empty project name → fallback title "RalphKing"
+	// Empty project name → fallback title "RalphSpec"
 	n := New(srv.URL, "", true, false, false)
 	n.Hook(loop.LogEntry{Kind: loop.LogIterComplete, Message: "done"})
 
 	reqs := waitForRequests(t, collect, 1)
-	if reqs[0].title != "RalphKing" {
-		t.Errorf("X-Title = %q, want RalphKing", reqs[0].title)
+	if reqs[0].title != "RalphSpec" {
+		t.Errorf("X-Title = %q, want RalphSpec", reqs[0].title)
 	}
 }
 

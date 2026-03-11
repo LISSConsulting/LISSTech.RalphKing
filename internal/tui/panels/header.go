@@ -86,7 +86,7 @@ func RenderHeader(props HeaderProps, width int, accentStyle lipgloss.Style) stri
 		mode = "—"
 	}
 
-	name := "RalphKing"
+	name := "RalphSpec"
 	if props.ProjectName != "" {
 		name = props.ProjectName
 	}

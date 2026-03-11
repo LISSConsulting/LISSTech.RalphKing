@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
 )
 
 // Notifier posts plain-text HTTP notifications for selected loop events.
@@ -21,9 +21,9 @@ type Notifier struct {
 }
 
 // New creates a Notifier. projectName is used as the X-Title header; if empty,
-// "RalphKing" is used instead.
+// "RalphSpec" is used instead.
 func New(notifURL, projectName string, onComplete, onError, onStop bool) *Notifier {
-	title := "RalphKing"
+	title := "RalphSpec"
 	if projectName != "" {
 		title = projectName
 	}

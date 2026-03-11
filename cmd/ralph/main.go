@@ -26,8 +26,8 @@ func main() {
 func rootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "ralph",
-		Short: "RalphKing — spec-driven AI coding loop",
-		Long: "RalphKing — spec-driven AI coding loop\n\n" +
+		Short: "RalphSpec — spec-driven AI coding loop",
+		Long: "RalphSpec — spec-driven AI coding loop\n\n" +
 			"Spec kit workflow: specify → plan → clarify → tasks → run\n" +
 			"Loop commands: ralph loop plan/build/run\n" +
 			"Run without a subcommand to enter dashboard mode (TUI idle state).",

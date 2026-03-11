@@ -3,7 +3,7 @@
 **Feature Branch**: `003-tui-redesign`
 **Created**: 2026-02-26
 **Status**: Draft
-**Input**: Redesign the RalphKing TUI in the likeness of lazygit and lazydocker — a multi-panel, keyboard-driven terminal dashboard for monitoring and controlling the spec-driven AI coding loop and The Regent supervisor.
+**Input**: Redesign the RalphSpec TUI in the likeness of lazygit and lazydocker — a multi-panel, keyboard-driven terminal dashboard for monitoring and controlling the spec-driven AI coding loop and The Regent supervisor.
 
 ## Clarifications
 
@@ -42,11 +42,11 @@ A multi-panel dashboard inspired by lazygit and lazydocker where:
 
 ### Reference Architecture
 
-lazygit and lazydocker use `gocui` for panel management. RalphKing's constitution mandates `bubbletea` + `lipgloss` (Technical Constraints, §IV). This spec implements the lazygit/lazydocker UX patterns (side list panels, tabbed main view, context-sensitive keybindings, panel focus cycling) using bubbletea's Elm architecture and lipgloss for layout and styling.
+lazygit and lazydocker use `gocui` for panel management. RalphSpec's constitution mandates `bubbletea` + `lipgloss` (Technical Constraints, §IV). This spec implements the lazygit/lazydocker UX patterns (side list panels, tabbed main view, context-sensitive keybindings, panel focus cycling) using bubbletea's Elm architecture and lipgloss for layout and styling.
 
 Key patterns to port from lazydocker:
 
-| lazydocker concept | RalphKing equivalent |
+| lazydocker concept | RalphSpec equivalent |
 |---|---|
 | `Panels` struct with `SideListPanel[T]` per resource | `panels` package with list panels for Specs and Iterations |
 | `Views` struct holding `*gocui.View` references | Sub-models composed into root `Model` via bubbletea |

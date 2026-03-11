@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/claude"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
+	"github.com/LISSConsulting/RalphSpec/internal/claude"
+	"github.com/LISSConsulting/RalphSpec/internal/config"
 )
 
 func TestEmitToChannel(t *testing.T) {

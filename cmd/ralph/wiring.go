@@ -11,15 +11,15 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/orchestrator"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/worktree"
+	"github.com/LISSConsulting/RalphSpec/internal/config"
+	"github.com/LISSConsulting/RalphSpec/internal/git"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/orchestrator"
+	"github.com/LISSConsulting/RalphSpec/internal/regent"
+	"github.com/LISSConsulting/RalphSpec/internal/spec"
+	"github.com/LISSConsulting/RalphSpec/internal/store"
+	"github.com/LISSConsulting/RalphSpec/internal/tui"
+	"github.com/LISSConsulting/RalphSpec/internal/worktree"
 )
 
 // runWithRegent runs the loop under Regent supervision without TUI.

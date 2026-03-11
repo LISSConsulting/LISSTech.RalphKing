@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/config"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
 )
 
 // RunFunc is the function the Regent supervises. Typically wraps loop.Loop.Run.

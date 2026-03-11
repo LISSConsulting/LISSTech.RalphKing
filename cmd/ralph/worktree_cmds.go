@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/worktree"
+	"github.com/LISSConsulting/RalphSpec/internal/worktree"
 )
 
 // worktreeCmd returns the `ralph worktree` parent command.

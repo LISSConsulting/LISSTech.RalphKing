@@ -5,7 +5,7 @@
 ## Prerequisites
 
 - Go 1.24+
-- Existing RalphKing repo with `ralph.toml` configured
+- Existing RalphSpec repo with `ralph.toml` configured
 - Terminal emulator supporting 256 colors (recommended: 80×24 minimum)
 
 ## Build & Run

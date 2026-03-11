@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
 )
 
 // TestLineFormatter_PlainMode covers the no-color path, migrating the

@@ -7,7 +7,7 @@ package store
 import (
 	"time"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
 )
 
 // Writer persists loop events to durable storage.

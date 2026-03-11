@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/LISS_TECH-RalphKing-7D56F4?style=for-the-badge&labelColor=000" alt="LISSTech RalphKing">
+  <img src="https://img.shields.io/badge/LISS_TECH-RalphSpec-7D56F4?style=for-the-badge&labelColor=000" alt="RalphSpec">
 </p>
 
-<h1 align="center">👑 RalphKing</h1>
+<h1 align="center">👑 RalphSpec</h1>
 <p align="center">
   <strong>Spec-driven AI coding loop CLI — with a supervisor that keeps the King honest</strong>
 </p>
@@ -42,7 +42,7 @@
 
 ```sh
 # 📥 Install
-go install github.com/LISSConsulting/LISSTech.RalphKing/cmd/ralph@latest
+go install github.com/LISSConsulting/RalphSpec/cmd/ralph@latest
 
 # 🎬 Initialize a new project
 ralph init
@@ -430,7 +430,7 @@ ralph build -w --no-tui --max 5
 ## 📁 Project Structure
 
 ```
-📦 LISSTech.RalphKing
+📦 RalphSpec
 ├── 📂 cmd/ralph/                   # CLI entry point (cobra)
 │   ├── 🎯 main.go                  #   └─ Root command, signal handling
 │   ├── 🔧 commands.go              #   └─ Subcommand definitions

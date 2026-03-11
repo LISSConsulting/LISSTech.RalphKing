@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/notify"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/worktree"
+	"github.com/LISSConsulting/RalphSpec/internal/config"
+	"github.com/LISSConsulting/RalphSpec/internal/git"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/notify"
+	"github.com/LISSConsulting/RalphSpec/internal/regent"
+	"github.com/LISSConsulting/RalphSpec/internal/spec"
+	"github.com/LISSConsulting/RalphSpec/internal/store"
+	"github.com/LISSConsulting/RalphSpec/internal/worktree"
 )
 
 // loopSetup holds all shared state initialised by setupLoop.
@@ -198,6 +198,15 @@ func setupWorktree(setup *loopSetup) error {
 		fmt.Fprintf(os.Stderr, "ralph: reusing existing worktree for %s at %s\n", branch, wtPath)
 	} else {
 		fmt.Fprintf(os.Stderr, "ralph: created worktree for %s at %s\n", branch, wtPath)
+	}
+
+	// Guard: if the worktree path resolves to the same directory we
+	// started in, worktrunk didn't actually create a separate worktree
+	// (e.g. the branch is already checked out in the main working tree).
+	absWT, _ := filepath.Abs(wtPath)
+	absDir, _ := filepath.Abs(setup.dir)
+	if absWT == absDir {
+		return fmt.Errorf("worktree: branch %s is already checked out in %s — switch to a different branch before using --worktree", branch, absDir)
 	}
 
 	// Update the loop to operate in the worktree directory.

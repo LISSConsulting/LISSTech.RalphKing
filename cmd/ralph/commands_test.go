@@ -12,8 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
+	"github.com/LISSConsulting/RalphSpec/internal/regent"
+	"github.com/LISSConsulting/RalphSpec/internal/spec"
 )
 
 func isWindows() bool { return runtime.GOOS == "windows" }

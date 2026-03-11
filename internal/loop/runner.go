@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/claude"
+	"github.com/LISSConsulting/RalphSpec/internal/claude"
 )
 
 // ClaudeAgent implements claude.Agent by spawning the Claude CLI as a subprocess.

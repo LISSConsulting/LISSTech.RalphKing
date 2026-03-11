@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
+	"github.com/LISSConsulting/RalphSpec/internal/store"
 )
 
 // IterationSelectedMsg is emitted when the user selects an iteration.

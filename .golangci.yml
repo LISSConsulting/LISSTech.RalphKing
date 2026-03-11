@@ -1,4 +1,4 @@
-# golangci-lint configuration — RalphKing
+# golangci-lint configuration — RalphSpec
 # Constitution requires: go vet, go fmt, go-critic all pass with zero warnings.
 version: "2"
 

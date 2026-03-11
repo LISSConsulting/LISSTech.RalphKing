@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/regent"
 )
 
 // TestFormatLogLine is superseded by TestLineFormatter_PlainMode in format_test.go.

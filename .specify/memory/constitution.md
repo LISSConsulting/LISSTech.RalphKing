@@ -19,7 +19,7 @@ Sync Impact Report
 - Follow-up TODOs: none
 -->
 
-# RalphKing Constitution
+# RalphSpec Constitution
 
 ## Core Principles
 

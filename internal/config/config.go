@@ -270,7 +270,7 @@ func InitFile(dir string) (string, error) {
 		return "", fmt.Errorf("config: ralph.toml already exists at %s", path)
 	}
 
-	content := `# ralph.toml — RalphKing project configuration
+	content := `# ralph.toml — RalphSpec project configuration
 # Place this file in the root of your project.
 
 [project]

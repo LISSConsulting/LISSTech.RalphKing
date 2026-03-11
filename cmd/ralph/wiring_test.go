@@ -12,12 +12,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/git"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/regent"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui"
+	"github.com/LISSConsulting/RalphSpec/internal/config"
+	"github.com/LISSConsulting/RalphSpec/internal/git"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/regent"
+	"github.com/LISSConsulting/RalphSpec/internal/store"
+	"github.com/LISSConsulting/RalphSpec/internal/tui"
 )
 
 func TestNewStateTracker(t *testing.T) {

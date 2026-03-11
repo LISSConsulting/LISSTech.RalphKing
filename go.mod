@@ -1,4 +1,4 @@
-module github.com/LISSConsulting/LISSTech.RalphKing
+module github.com/LISSConsulting/RalphSpec
 
 go 1.24.2
 

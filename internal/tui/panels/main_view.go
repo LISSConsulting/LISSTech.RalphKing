@@ -4,7 +4,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui/components"
+	"github.com/LISSConsulting/RalphSpec/internal/tui/components"
 )
 
 // MainTab identifies the active content tab in the main view.

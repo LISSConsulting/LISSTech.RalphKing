@@ -1,8 +1,8 @@
-# ralph.toml — RalphKing project configuration
+# ralph.toml — RalphSpec project configuration
 # Place this file in the root of your project.
 
 [project]
-name = "LISSTech.RalphKing"
+name = "RalphSpec"
 
 [claude]
 model = "sonnet"

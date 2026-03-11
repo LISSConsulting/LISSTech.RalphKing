@@ -41,8 +41,8 @@ func TestRenderHeader_EmptyFieldFallbacks(t *testing.T) {
 
 	rendered := RenderHeader(props, 200, accent)
 
-	// Fallbacks: no project name → "RalphKing", no branch → "—", no mode → "—"
-	for _, want := range []string{"RalphKing", "—"} {
+	// Fallbacks: no project name → "RalphSpec", no branch → "—", no mode → "—"
+	for _, want := range []string{"RalphSpec", "—"} {
 		if !strings.Contains(rendered, want) {
 			t.Errorf("RenderHeader() with empty props missing %q; got %q", want, rendered)
 		}

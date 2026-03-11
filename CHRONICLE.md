@@ -61,7 +61,7 @@ Full sweep completed with zero actionable findings:
 ## Key Learnings
 
 ### Architecture
-- Module: `github.com/LISSConsulting/LISSTech.RalphKing`, Go 1.24
+- Module: `github.com/LISSConsulting/RalphSpec`, Go 1.24
 - Deps: `cobra`, `BurntSushi/toml`, `bubbletea`, `lipgloss`, `bubbles`
 - `GitOps` interface at consumer for testability; `RunFunc` lets Regent supervise any loop variant
 - `LoopController` decouples TUI from wiring; `Loop.PostIteration` wires Regent per agent

@@ -10,13 +10,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/config"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/loop"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/orchestrator"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/spec"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/store"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/tui/panels"
-	"github.com/LISSConsulting/LISSTech.RalphKing/internal/worktree"
+	"github.com/LISSConsulting/RalphSpec/internal/config"
+	"github.com/LISSConsulting/RalphSpec/internal/loop"
+	"github.com/LISSConsulting/RalphSpec/internal/orchestrator"
+	"github.com/LISSConsulting/RalphSpec/internal/spec"
+	"github.com/LISSConsulting/RalphSpec/internal/store"
+	"github.com/LISSConsulting/RalphSpec/internal/tui/panels"
+	"github.com/LISSConsulting/RalphSpec/internal/worktree"
 )
 
 // mockStoreReader is a minimal store.Reader for unit tests.
