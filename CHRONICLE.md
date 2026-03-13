@@ -1,5 +1,5 @@
 > Go CLI: spec-driven AI coding loop with Regent supervisor.
-> **Specs 001-008 ALL COMPLETE. Tagged v0.1.57. tui/components at 100% coverage.**
+> **Specs 001-008 ALL COMPLETE. Tagged v0.1.68. tui/components at 100% coverage.**
 
 ## Completed Work
 
@@ -21,6 +21,17 @@
 ## Remaining Work
 
 Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
+
+## Improvement Sweep (2026-03-13, eighth pass) — v0.1.68 (no new findings)
+
+Full sweep completed with zero actionable findings:
+- **Test coverage**: total 90.3% — all remaining gaps confirmed platform ceilings (same as seventh pass)
+- **Code hygiene**: zero TODO/FIXME/HACK/XXX in non-test Go source
+- **Stale references**: README and CLAUDE.md current; all 11 internal packages documented; CI action versions current (checkout@v4, setup-go@v5, golangci-lint-action@v7, upload-artifact@v4)
+- **Spec consistency**: specs 001-008 fully implemented, T001-T084 complete
+- **CI health**: all actions current
+- **Dead code**: none found
+- **go vet**: clean
 
 ## Improvement Sweep (2026-03-13, seventh pass) — v0.1.67+
 
