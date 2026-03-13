@@ -22,6 +22,15 @@
 
 Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
 
+## Improvement Sweep (2026-03-13, ninth pass) — v0.1.68 (no new findings)
+
+Full sweep completed with zero actionable findings:
+- **Test coverage**: total 90.3% — all remaining gaps confirmed platform ceilings (same as eighth pass)
+- **Code hygiene**: zero TODO/FIXME/HACK/XXX in non-test Go source
+- **Stale references**: README "King" persona references are intentional branding (kept during RalphKing→RalphSpec module rename); CLAUDE.md current; CI action versions current
+- **Dead code**: none found
+- **go vet**: clean
+
 ## Improvement Sweep (2026-03-13, eighth pass) — v0.1.68 (no new findings)
 
 Full sweep completed with zero actionable findings:
