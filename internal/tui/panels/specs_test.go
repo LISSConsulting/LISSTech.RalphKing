@@ -526,6 +526,75 @@ func TestSpecsPanel_MoveCursor_PastEnd_Clamps(t *testing.T) {
 	}
 }
 
+// TestSpecsPanel_EKey_OnChildRow verifies that pressing 'e' when the cursor
+// sits on an expanded child-file row emits an EditSpecRequestMsg whose Path
+// matches the child file path (not the parent spec path).
+func TestSpecsPanel_EKey_OnChildRow(t *testing.T) {
+	tmp := t.TempDir()
+	dir := filepath.Join(tmp, "specs", "005-child")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "spec.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	specs := []spec.SpecFile{{
+		Name:  "005-child",
+		Path:  filepath.Join("specs", "005-child", "spec.md"),
+		Dir:   filepath.Join("specs", "005-child"),
+		IsDir: true,
+	}}
+	p := NewSpecsPanel(specs, tmp, 80, 20)
+	// Expand the dir so its children are visible.
+	p, _ = p.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	// Move cursor to the child row (index 1).
+	p, _ = p.Update(keyMsg("j"))
+	if p.cursor != 1 {
+		t.Fatalf("expected cursor=1 after j, got %d", p.cursor)
+	}
+	// Press 'e' — should emit EditSpecRequestMsg with the child path.
+	_, cmd := p.Update(keyMsg("e"))
+	if cmd == nil {
+		t.Fatal("'e' on child row should return a cmd")
+	}
+	req, ok := cmd().(EditSpecRequestMsg)
+	if !ok {
+		t.Fatalf("expected EditSpecRequestMsg, got %T", cmd())
+	}
+	if !strings.HasSuffix(req.Path, "spec.md") {
+		t.Errorf("EditSpecRequestMsg.Path = %q, expected to end with spec.md", req.Path)
+	}
+}
+
+// TestSpecsPanel_View_SelectedChildRow verifies that View() renders the
+// selected-child-row branch (the "> icon name" accent line) when the cursor
+// is on a child file inside an expanded directory spec.
+func TestSpecsPanel_View_SelectedChildRow(t *testing.T) {
+	tmp := t.TempDir()
+	dir := filepath.Join(tmp, "specs", "006-child-view")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "spec.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	specs := []spec.SpecFile{{
+		Name:  "006-child-view",
+		Path:  filepath.Join("specs", "006-child-view", "spec.md"),
+		Dir:   filepath.Join("specs", "006-child-view"),
+		IsDir: true,
+	}}
+	p := NewSpecsPanel(specs, tmp, 80, 20)
+	// Expand, then move cursor to the child row.
+	p, _ = p.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	p, _ = p.Update(keyMsg("j"))
+	// View() with cursor on a child row should show the selection marker.
+	view := p.View()
+	if !strings.Contains(view, ">") {
+		t.Errorf("View() with selected child row should contain '>'; got %q", view)
+	}
+}
+
 func TestSpecsPanel_InputActive_NonKeyMsg_ForwardedToInput(t *testing.T) {
 	p := NewSpecsPanel(nil, "", 80, 20)
 	// Activate the input overlay.

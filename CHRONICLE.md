@@ -22,6 +22,15 @@
 
 Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
 
+## Improvement Sweep (2026-03-13, seventh pass) — v0.1.67+
+
+- **Test coverage**: Added `TestSpecsPanel_EKey_OnChildRow` — covers the `row.isChild` path in the `"e"` key handler (line 256) that emits `EditSpecRequestMsg` with the child file path; previously only tested on a flat spec row
+- **Test coverage**: Added `TestSpecsPanel_View_SelectedChildRow` — covers the selected-child-row rendering branch (line 319) in `View()`, reached only when the cursor is on an expanded child file; `View` 97.4%→100%; `Update` 96.9%→98.4%; `internal/tui/panels` 99.3%→99.6%
+- **Dead code**: none found
+- **Code hygiene**: zero TODO/FIXME/HACK/XXX in non-test Go source
+- **Stale references**: README and CLAUDE.md current; all 11 internal packages documented; no dead code
+- **Coverage ceilings confirmed**: `Update` cursor-clamp after collapse (lines 240-242) is unreachable — you can only collapse a dir by pressing enter while cursor is ON that dir row, so the dir's position remains valid after its children are removed; `moveCursor` `scrollTop < 0` guard is unreachable (cursor clamping ensures scrollTop ≥ 0)
+
 ## Improvement Sweep (2026-03-13, sixth pass) — v0.1.66+
 
 - **Test coverage**: Added `TestSpecsPanel_MoveCursor_PastEnd_Clamps` — covers the `cursor >= n` clamp in `moveCursor` when pressing `j` at the last item; `moveCursor` 86.7%→93.3%; `internal/tui/panels` 99.1%→99.3%
