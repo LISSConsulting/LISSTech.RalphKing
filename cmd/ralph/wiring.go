@@ -11,6 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/LISSConsulting/RalphSpec/internal/claude"
 	"github.com/LISSConsulting/RalphSpec/internal/config"
 	"github.com/LISSConsulting/RalphSpec/internal/git"
 	"github.com/LISSConsulting/RalphSpec/internal/loop"
@@ -303,6 +304,9 @@ type loopController struct {
 	outerCtx  context.Context
 	mu        sync.Mutex
 	cancel    context.CancelFunc
+	// agent overrides the default claude binary; nil → loop.NewClaudeAgent().
+	// Used in tests to inject a fast-failing fake.
+	agent claude.Agent
 }
 
 // IsRunning reports whether a loop goroutine is currently active.
@@ -338,8 +342,12 @@ func (lc *loopController) StopLoop() {
 
 // runLoop executes the loop and forwards events to the TUI channel.
 func (lc *loopController) runLoop(ctx context.Context, mode string) {
+	agent := lc.agent
+	if agent == nil {
+		agent = loop.NewClaudeAgent()
+	}
 	lp := &loop.Loop{
-		Agent:  loop.NewClaudeAgent(),
+		Agent:  agent,
 		Git:    lc.gitRunner,
 		Config: lc.cfg,
 		Dir:    lc.dir,

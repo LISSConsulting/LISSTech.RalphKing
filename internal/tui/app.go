@@ -332,10 +332,28 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Use the spec name as the branch — it matches the existing feature branch
 		// (e.g. "023-cadence-msp"). Do NOT prefix with "wt/" — that would create
 		// a new branch from the current HEAD (trunk) instead of using the spec's branch.
-		if m.orch != nil && m.focus == FocusSpecs {
-			if sel := m.specsPanel.SelectedSpec(); sel != nil {
-				// Ignore error — agent won't appear if launch fails (e.g. max parallel).
-				_ = m.orch.Launch(context.Background(), sel.Name, sel.Name, sel.Dir, loop.ModeBuild, 0)
+		if m.orch == nil {
+			m.mainView = m.mainView.AppendLine(m.theme.RenderLogLine(loop.LogEntry{
+				Kind:    loop.LogError,
+				Message: "worktree mode unavailable — wt (worktrunk) not detected on PATH",
+			}, m.layout.Main.Width))
+			return m, nil
+		}
+		if m.focus != FocusSpecs {
+			return m, nil
+		}
+		if sel := m.specsPanel.SelectedSpec(); sel != nil {
+			if err := m.orch.Launch(context.Background(), sel.Name, sel.Name, sel.Dir, loop.ModeBuild, 0); err != nil {
+				m.mainView = m.mainView.AppendLine(m.theme.RenderLogLine(loop.LogEntry{
+					Kind:    loop.LogError,
+					Message: fmt.Sprintf("worktree launch failed: %v", err),
+				}, m.layout.Main.Width))
+			} else {
+				m.mainView = m.mainView.AppendLine(m.theme.RenderLogLine(loop.LogEntry{
+					Kind:    loop.LogInfo,
+					Message: fmt.Sprintf("worktree agent launched for %s", sel.Name),
+				}, m.layout.Main.Width))
+				m.secondary = m.secondary.SetWorktreeEntries(agentsToEntries(m.orch.ActiveAgents()))
 			}
 		}
 		return m, nil

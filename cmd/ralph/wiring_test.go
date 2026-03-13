@@ -12,6 +12,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/LISSConsulting/RalphSpec/internal/claude"
 	"github.com/LISSConsulting/RalphSpec/internal/config"
 	"github.com/LISSConsulting/RalphSpec/internal/git"
 	"github.com/LISSConsulting/RalphSpec/internal/loop"
@@ -19,6 +20,15 @@ import (
 	"github.com/LISSConsulting/RalphSpec/internal/store"
 	"github.com/LISSConsulting/RalphSpec/internal/tui"
 )
+
+// errAgent is a claude.Agent stub that immediately returns an error.
+// Used in TestLoopController_StartLoop_ForwardGoroutine to ensure the loop
+// fails deterministically without requiring the real claude binary.
+type errAgent struct{ err error }
+
+func (a *errAgent) Run(_ context.Context, _ string, _ claude.RunOptions) (<-chan claude.Event, error) {
+	return nil, a.err
+}
 
 func TestNewStateTracker(t *testing.T) {
 	dir := t.TempDir()
@@ -640,7 +650,10 @@ func TestLoopController_StartLoop_ForwardGoroutine(t *testing.T) {
 	// sw.Append and tuiSend channel paths run when the loop emits at least one
 	// event. That requires a git repo (CurrentBranch succeeds) and a prompt
 	// file (ReadFile succeeds) so loop.Run reaches the emit(LogInfo) call
-	// before failing to exec the Claude binary.
+	// before failing on the agent.
+	//
+	// We inject errAgent so the loop fails deterministically regardless of
+	// whether the real claude binary is present on the test machine.
 	dir := t.TempDir()
 	t.Chdir(dir)
 	initGitRepo(t, dir)
@@ -668,6 +681,7 @@ func TestLoopController_StartLoop_ForwardGoroutine(t *testing.T) {
 		sw:        sw,
 		tuiSend:   tuiSend,
 		outerCtx:  context.Background(),
+		agent:     &errAgent{err: errors.New("fake: no claude")},
 	}
 
 	ctrl.StartLoop("plan")
