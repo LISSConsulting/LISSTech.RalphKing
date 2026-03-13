@@ -664,3 +664,26 @@ func TestBuildRoam(t *testing.T) {
 		}
 	})
 }
+
+func TestResolvedWorktreeDir(t *testing.T) {
+	t.Run("explicit WorktreeDir is returned as-is", func(t *testing.T) {
+		w := WorktreeConfig{WorktreeDir: "/custom/path"}
+		got := w.ResolvedWorktreeDir()
+		if got != "/custom/path" {
+			t.Errorf("got %q, want %q", got, "/custom/path")
+		}
+	})
+
+	t.Run("empty WorktreeDir defaults to ~/.ralph/worktrees", func(t *testing.T) {
+		w := WorktreeConfig{}
+		got := w.ResolvedWorktreeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			t.Skip("cannot determine home dir")
+		}
+		want := filepath.Join(home, ".ralph", "worktrees")
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+}

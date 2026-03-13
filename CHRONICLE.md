@@ -22,6 +22,15 @@
 
 Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
 
+## Improvement Sweep (2026-03-13, third pass) — v0.1.63+
+
+- **Test coverage**: Added `TestResolvedWorktreeDir` (2 subtests); `WorktreeConfig.ResolvedWorktreeDir` 0%→83.3% (remaining 16.7% is `os.UserHomeDir()` error path, a platform ceiling); `internal/config` 90.0%→93.6%
+- **Dead code**: none found
+- **Code hygiene**: zero TODO/FIXME/HACK/XXX in non-test Go source
+- **Stale references**: README and CLAUDE.md current; all 11 internal packages documented
+- **CI health**: all actions current (checkout@v4, setup-go@v5, golangci-lint-action@v7, upload-artifact@v4)
+- **Coverage ceilings confirmed**: `ScaffoldProject` 83.3% (write-error paths require OS tricks); `findConfig` 90.9% (`os.Getwd()` failure); `orchestrator.Launch` StateCompleted path (requires real Claude binary); `autoMergeIfNeeded` RunTests error path (PATH clearing doesn't affect cmd.exe on Windows)
+
 ## Improvement Sweep (2026-03-13, second pass) — v0.1.62+
 
 - **Test coverage**: Added `TestSwitchGit_{ReuseExisting,CreateNew,ReuseExistingBranch,MkdirAllFails,GitFails}`; covers all `switchGit()` branches (0%→100%); `internal/worktree` 85.0%→99.2%
