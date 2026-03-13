@@ -22,6 +22,13 @@
 
 Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
 
+## Improvement Sweep (2026-03-13, second pass) — v0.1.62+
+
+- **Test coverage**: Added `TestSwitchGit_{ReuseExisting,CreateNew,ReuseExistingBranch,MkdirAllFails,GitFails}`; covers all `switchGit()` branches (0%→100%); `internal/worktree` 85.0%→99.2%
+- **Dead code**: Simplified `exe()` in `detect.go` — removed unreachable `len(candidates) > 0` guard and `return "wt"` fallback; `wtExecutables()` always returns a non-empty slice
+- **Code hygiene**: zero TODO/FIXME/HACK/XXX in non-test Go source
+- **Coverage ceiling**: `wtExecutables()` at 66.7% on Windows — non-Windows `return []string{"wt", "git-wt"}` branch is a platform ceiling, cannot be covered in Windows CI
+
 ## Improvement Sweep (2026-03-13) — v0.1.61+
 
 - **Test reliability**: Fixed `TestLoopController_StartLoop_ForwardGoroutine` flakiness on machines with claude installed; injected `errAgent` stub via new `loopController.agent` field so the test no longer relies on claude being absent from PATH
