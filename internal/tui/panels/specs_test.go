@@ -507,3 +507,36 @@ func TestSpecsPanel_JKOnEmpty_NoCmd(t *testing.T) {
 		t.Error("k on empty panel should return nil cmd")
 	}
 }
+
+func TestSpecsPanel_MoveCursor_PastEnd_Clamps(t *testing.T) {
+	specs := []spec.SpecFile{
+		makeSpec("spec-a", "specs/spec-a.md", spec.StatusDone),
+		makeSpec("spec-b", "specs/spec-b.md", spec.StatusDone),
+	}
+	p := NewSpecsPanel(specs, "", 80, 20)
+	// Move to last item.
+	p, _ = p.Update(keyMsg("j"))
+	if p.cursor != 1 {
+		t.Fatalf("expected cursor=1 after j, got %d", p.cursor)
+	}
+	// Press j again — cursor would be 2 but n=2, so it clamps to n-1=1.
+	p, _ = p.Update(keyMsg("j"))
+	if p.cursor != 1 {
+		t.Errorf("cursor should stay clamped at %d (n-1), got %d", len(specs)-1, p.cursor)
+	}
+}
+
+func TestSpecsPanel_InputActive_NonKeyMsg_ForwardedToInput(t *testing.T) {
+	p := NewSpecsPanel(nil, "", 80, 20)
+	// Activate the input overlay.
+	p, _ = p.Update(keyMsg("n"))
+	if !p.inputActive {
+		t.Fatal("setup: inputActive should be true after 'n'")
+	}
+	// Send a non-key message while input is active; the textinput model's
+	// Update should be invoked (line 199 in specs.go).
+	p2, _ := p.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
+	if !p2.inputActive {
+		t.Error("inputActive should still be true after a non-key message")
+	}
+}

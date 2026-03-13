@@ -22,6 +22,14 @@
 
 Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
 
+## Improvement Sweep (2026-03-13, sixth pass) — v0.1.66+
+
+- **Test coverage**: Added `TestSpecsPanel_MoveCursor_PastEnd_Clamps` — covers the `cursor >= n` clamp in `moveCursor` when pressing `j` at the last item; `moveCursor` 86.7%→93.3%; `internal/tui/panels` 99.1%→99.3%
+- **Test coverage**: Added `TestSpecsPanel_InputActive_NonKeyMsg_ForwardedToInput` — covers line 199 (`p.input.Update(msg)`) when a non-key message arrives while `inputActive` is true
+- **Dead code**: none found
+- **Code hygiene**: zero TODO/FIXME/HACK/XXX in non-test Go source
+- **Coverage ceilings confirmed**: `moveCursor` `scrollTop < 0` guard (line 171) is unreachable — cursor clamping ensures scrollTop ≥ 0 before that point; `Update` cursor-clamp after collapse (lines 240-242) is unreachable — you can only collapse a dir by pressing enter while cursor is ON that dir row, so the dir's position remains valid after its children are removed
+
 ## Improvement Sweep (2026-03-13, fifth pass) — v0.1.65+
 
 - **Test coverage**: Added `TestClaudeAgentRun/Dir_option_sets_working_directory` — covers the `opts.Dir != ""` branch in `ClaudeAgent.Run` that sets `cmd.Dir`; `internal/loop` runner 92.9%→96.4%
