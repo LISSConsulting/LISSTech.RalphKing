@@ -22,6 +22,13 @@
 
 Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
 
+## Improvement Sweep (2026-03-13) — v0.1.61+
+
+- **Test reliability**: Fixed `TestLoopController_StartLoop_ForwardGoroutine` flakiness on machines with claude installed; injected `errAgent` stub via new `loopController.agent` field so the test no longer relies on claude being absent from PATH
+- **TUI feedback**: W key now shows error message in Main panel when worktree mode is unavailable (`m.orch == nil`) and logs success/failure of each agent launch; previously silent
+- **Code hygiene**: zero TODO/FIXME/HACK/XXX in non-test Go source
+- **Note**: `TestSpeckitTasksCmd_AllPrereqs_ReachesSpeckit` and `TestExecuteLoop_Roam_*` are slow integration tests (~50s each) that invoke the real claude binary; they pass but are expected to be slow on developer machines — CI should run fine since claude is absent there
+
 ## Improvement Sweep (2026-03-11) — v0.1.60+
 
 - **Test coverage**: Added `TestSecondaryPanel_WorktreesTab_ViewAndUpdate` + `TestSecondaryPanel_SetSize_WithWorktrees`; covers TabWorktrees branches in Update/View/SetSize; panels 98.4%→99.1%
