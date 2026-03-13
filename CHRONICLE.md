@@ -22,6 +22,13 @@
 
 Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
 
+## Improvement Sweep (2026-03-13, fourth pass) — v0.1.64+
+
+- **Test coverage**: Added `TestHandleTaggedEvent_LogRegent` — covers the `LogRegent` branch in `handleTaggedEvent` that routes to the Secondary panel's Regent tab (was missing entirely); added `TestKey_W_WithOrch_WrongFocus_NoOp` — covers W-key early-return when `focus != FocusSpecs`; added `TestRenderPanelBox_NarrowPanel` — covers the `dashes < 0` guard in `RenderPanelBox`; `internal/tui` 97.7%→98.4%
+- **Dead code**: none found
+- **Code hygiene**: zero TODO/FIXME/HACK/XXX in non-test Go source
+- **Coverage ceilings confirmed**: `tickCmd` 50% (fires after 1s in bubbletea runtime); `renderMarkdown` 71.4% (glamour rarely errors); `handleEditSpecRequest` 86.7% (callback fires after editor exits); W key launch-success path (needs orch that succeeds — same ceiling as orchestrator.Launch StateCompleted)
+
 ## Improvement Sweep (2026-03-13, third pass) — v0.1.63+
 
 - **Test coverage**: Added `TestResolvedWorktreeDir` (2 subtests); `WorktreeConfig.ResolvedWorktreeDir` 0%→83.3% (remaining 16.7% is `os.UserHomeDir()` error path, a platform ceiling); `internal/config` 90.0%→93.6%

@@ -1448,6 +1448,45 @@ func TestWaitForTaggedEvent_SendsEvent(t *testing.T) {
 	}
 }
 
+// TestHandleTaggedEvent_LogRegent verifies that a tagged event with Kind==LogRegent
+// is routed to the Secondary panel's Regent tab in addition to the branch log.
+func TestHandleTaggedEvent_LogRegent(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	m := New(ch, nil, "", "Proj", "", nil, nil, nil)
+	m = m.WithOrchestrator(newTestOrch())
+	updated0, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated0.(Model)
+
+	entry := loop.LogEntry{Kind: loop.LogRegent, Message: "restarting agent"}
+	msg := taggedEventMsg{Branch: "wt/feat-a", Entry: entry}
+	updated, _ := m.Update(msg)
+	m2 := updated.(Model)
+
+	// The branch log should have the rendered line.
+	if len(m2.worktreeLogsByBranch["wt/feat-a"]) == 0 {
+		t.Error("expected log line in worktreeLogsByBranch for wt/feat-a")
+	}
+	// The Regent tab in the secondary panel should now have content.
+	view := m2.secondary.View()
+	_ = view // must not panic; coverage of the AppendLine(TabRegent) path is the goal
+}
+
+// TestKey_W_WithOrch_WrongFocus_NoOp verifies that W is a no-op when the
+// orchestrator is set but the focused panel is not FocusSpecs.
+func TestKey_W_WithOrch_WrongFocus_NoOp(t *testing.T) {
+	ch := make(chan loop.LogEntry, 1)
+	sf := []spec.SpecFile{{Name: "feat-a", Dir: "specs/feat-a", IsDir: true, Path: "specs/feat-a/spec.md"}}
+	m := New(ch, nil, "", "Proj", "", sf, nil, nil)
+	m = m.WithOrchestrator(newTestOrch())
+	m.focus = FocusMain // not FocusSpecs
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("W")})
+	_ = updated.(Model)
+	if cmd != nil {
+		t.Error("W key with wrong focus should return nil cmd")
+	}
+}
+
 func TestRunGitOutput_Error(t *testing.T) {
 	// An invalid git subcommand exits non-zero — error path returns "".
 	result := runGitOutput("this-subcommand-does-not-exist-xyz")

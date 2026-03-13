@@ -245,6 +245,17 @@ func TestRenderPanelBox(t *testing.T) {
 	}
 }
 
+// TestRenderPanelBox_NarrowPanel covers the dashes<0 guard: when the panel is
+// narrower than the label the function clamps dashes to 0 rather than panicking.
+func TestRenderPanelBox_NarrowPanel(t *testing.T) {
+	th := NewTheme("")
+	// width=3 with a long title forces dashes < 0; must not panic.
+	rendered := th.RenderPanelBox("content", 99, "VeryLongTitleThatExceedsWidth", false, 3, 2)
+	if rendered == "" {
+		t.Error("RenderPanelBox with narrow width should still return non-empty output")
+	}
+}
+
 func TestRenderLogLinePkgFunc(t *testing.T) {
 	th := NewTheme("")
 	now := time.Now()
