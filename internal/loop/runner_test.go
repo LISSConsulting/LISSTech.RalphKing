@@ -264,6 +264,18 @@ func TestClaudeAgentRun(t *testing.T) {
 		}
 	})
 
+	t.Run("Dir option sets working directory", func(t *testing.T) {
+		workDir := t.TempDir()
+		agent := setUpFakeClaude(t, exe, 0, "", "")
+
+		ch, err := agent.Run(context.Background(), "test", claude.RunOptions{Dir: workDir})
+		if err != nil {
+			t.Fatalf("unexpected error with Dir set: %v", err)
+		}
+		for range ch {
+		}
+	})
+
 	t.Run("invalid executable returns error", func(t *testing.T) {
 		agent := &ClaudeAgent{Executable: "/nonexistent/binary"}
 		_, err := agent.Run(context.Background(), "test", claude.RunOptions{})

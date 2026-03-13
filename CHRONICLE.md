@@ -22,6 +22,14 @@
 
 Spec 008 ALL PHASES COMPLETE — T001-T084 done. T082-T084 require manual TTY verification.
 
+## Improvement Sweep (2026-03-13, fifth pass) — v0.1.65+
+
+- **Test coverage**: Added `TestClaudeAgentRun/Dir_option_sets_working_directory` — covers the `opts.Dir != ""` branch in `ClaudeAgent.Run` that sets `cmd.Dir`; `internal/loop` runner 92.9%→96.4%
+- **Dead code**: none found
+- **Code hygiene**: zero TODO/FIXME/HACK/XXX in non-test Go source
+- **Stale references**: README and CLAUDE.md current; all 11 internal packages documented; CI actions all current
+- **Coverage ceilings confirmed**: `StdoutPipe()` error path in runner.Run (platform ceiling); `store.NewJSONL` OpenFile/Seek error paths (Windows: chmod restrictions not enforced); `store.Append` marshal/sync errors (platform); `store.IterationLog` size<=0 guard (unreachable defensive code); `store.EnforceRetention` ReadDir non-IsNotExist error (Windows: returns IsNotExist for files); `git.Pull` rebase-abort-failed and merge-success paths; `git.Push` -u fallback success (local git); `git.Stash` "No local changes" exit (modern git exits 0); `spec.List` ReadDir non-IsNotExist (Windows ceiling)
+
 ## Improvement Sweep (2026-03-13, fourth pass) — v0.1.64+
 
 - **Test coverage**: Added `TestHandleTaggedEvent_LogRegent` — covers the `LogRegent` branch in `handleTaggedEvent` that routes to the Secondary panel's Regent tab (was missing entirely); added `TestKey_W_WithOrch_WrongFocus_NoOp` — covers W-key early-return when `focus != FocusSpecs`; added `TestRenderPanelBox_NarrowPanel` — covers the `dashes < 0` guard in `RenderPanelBox`; `internal/tui` 97.7%→98.4%
