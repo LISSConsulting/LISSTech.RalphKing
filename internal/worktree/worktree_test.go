@@ -465,6 +465,132 @@ func TestList_FallbackToPorcelain(t *testing.T) {
 	}
 }
 
+// ─── switchGit tests ──────────────────────────────────────────────────────────
+
+// TestSwitchGit_ReuseExisting verifies that switchGit returns immediately when
+// the worktree directory already exists, without invoking git.
+func TestSwitchGit_ReuseExisting(t *testing.T) {
+	wtBase := t.TempDir()
+	dir := t.TempDir()
+
+	branch := "feat/existing"
+	dirName := strings.ReplaceAll(branch, "/", "-")
+	existingPath := filepath.Join(wtBase, dirName)
+	if err := os.MkdirAll(existingPath, 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	r := NewRunner(dir)
+	r.WorktreeDir = wtBase
+
+	got, err := r.Switch(branch, false)
+	if err != nil {
+		t.Fatalf("Switch: %v", err)
+	}
+	if got != existingPath {
+		t.Errorf("got %q, want %q", got, existingPath)
+	}
+}
+
+// TestSwitchGit_CreateNew verifies that switchGit runs 'git worktree add -b'
+// when create=true and the target directory does not yet exist.
+func TestSwitchGit_CreateNew(t *testing.T) {
+	repoDir := t.TempDir()
+	initGitRepo(t, repoDir)
+
+	wtBase := t.TempDir()
+
+	r := NewRunner(repoDir)
+	r.WorktreeDir = wtBase
+
+	branch := "feat/new-git-wt"
+	got, err := r.Switch(branch, true)
+	if err != nil {
+		t.Fatalf("Switch create: %v", err)
+	}
+	expected := filepath.Join(wtBase, "feat-new-git-wt")
+	if got != expected {
+		t.Errorf("got %q, want %q", got, expected)
+	}
+	if info, statErr := os.Stat(got); statErr != nil || !info.IsDir() {
+		t.Errorf("expected worktree dir to exist at %s", got)
+	}
+}
+
+// TestSwitchGit_MkdirAllFails covers the error path when WorktreeDir cannot
+// be created because a file already exists at that path.
+func TestSwitchGit_MkdirAllFails(t *testing.T) {
+	repoDir := t.TempDir()
+	initGitRepo(t, repoDir)
+
+	baseParent := t.TempDir()
+	wtBase := filepath.Join(baseParent, "notadir")
+	if err := os.WriteFile(wtBase, []byte("block"), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	r := NewRunner(repoDir)
+	r.WorktreeDir = wtBase
+
+	_, err := r.Switch("feat/block", true)
+	if err == nil {
+		t.Fatal("expected error when WorktreeDir cannot be created")
+	}
+	if !strings.Contains(err.Error(), "create worktree dir") {
+		t.Errorf("error should mention 'create worktree dir', got: %v", err)
+	}
+}
+
+// TestSwitchGit_ReuseExistingBranch verifies that switchGit runs
+// 'git worktree add <path> <branch>' when create=false and the target
+// directory does not yet exist (i.e. the branch exists but has no worktree).
+func TestSwitchGit_ReuseExistingBranch(t *testing.T) {
+	repoDir := t.TempDir()
+	initGitRepo(t, repoDir)
+
+	// Create a branch that is not checked out.
+	branchCmd := exec.Command("git", "branch", "feat/for-wt")
+	branchCmd.Dir = repoDir
+	if out, err := branchCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git branch: %v\n%s", err, out)
+	}
+
+	wtBase := t.TempDir()
+
+	r := NewRunner(repoDir)
+	r.WorktreeDir = wtBase
+
+	got, err := r.Switch("feat/for-wt", false)
+	if err != nil {
+		t.Fatalf("Switch create=false: %v", err)
+	}
+	expected := filepath.Join(wtBase, "feat-for-wt")
+	if got != expected {
+		t.Errorf("got %q, want %q", got, expected)
+	}
+	if info, statErr := os.Stat(got); statErr != nil || !info.IsDir() {
+		t.Errorf("expected worktree dir to exist at %s", got)
+	}
+}
+
+// TestSwitchGit_GitFails covers the error path when 'git worktree add' fails
+// (e.g. the directory is not a git repository).
+func TestSwitchGit_GitFails(t *testing.T) {
+	notARepo := t.TempDir()
+	wtBase := t.TempDir()
+
+	r := NewRunner(notARepo)
+	r.WorktreeDir = wtBase
+
+	_, err := r.Switch("feat/fail", true)
+	if err == nil {
+		t.Fatal("expected error from git worktree add in non-git directory")
+	}
+	if !strings.Contains(err.Error(), "git worktree add") {
+		t.Errorf("error should mention 'git worktree add', got: %v", err)
+	}
+}
+
 // ─── exe() fallback test ──────────────────────────────────────────────────────
 
 func TestExeFallback(t *testing.T) {

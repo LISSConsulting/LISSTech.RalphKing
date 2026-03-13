@@ -49,14 +49,12 @@ func isWTVersion(s string) bool {
 	return strings.HasPrefix(low, "wt v") || strings.Contains(low, "worktrunk")
 }
 
-// exe returns the cached executable path, falling back to "wt" if Detect was
-// not called. Callers that skip Detect() will get a helpful exec error.
+// exe returns the cached executable path, falling back to the first candidate
+// from wtExecutables() if Detect was not called. Callers that skip Detect()
+// will get a helpful exec error when the binary is absent.
 func (r *Runner) exe() string {
 	if r.executable != "" {
 		return r.executable
 	}
-	if candidates := wtExecutables(); len(candidates) > 0 {
-		return candidates[0]
-	}
-	return "wt"
+	return wtExecutables()[0]
 }
