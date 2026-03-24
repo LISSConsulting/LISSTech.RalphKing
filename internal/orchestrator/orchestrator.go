@@ -82,6 +82,18 @@ func (o *Orchestrator) AgentByBranch(branch string) *WorktreeAgent {
 	return o.agents[branch]
 }
 
+// AgentState returns the current state of the agent for the given branch
+// under the orchestrator lock. Returns StateCreating and false if not found.
+func (o *Orchestrator) AgentState(branch string) (AgentState, bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	a, ok := o.agents[branch]
+	if !ok {
+		return StateCreating, false
+	}
+	return a.State, true
+}
+
 // Launch creates a worktree for branch, starts a loop inside it, and registers
 // the agent with the fan-in multiplexer. The loop runs in a background
 // goroutine.
@@ -228,11 +240,12 @@ func (o *Orchestrator) Launch(ctx context.Context, branch, specName, specDir str
 		} else if agent.State == StateRunning {
 			agent.State = StateCompleted
 		}
+		finalState := agent.State
 		o.mu.Unlock()
 
 		close(events)
 
-		if agent.State == StateCompleted {
+		if finalState == StateCompleted {
 			o.autoMergeIfNeeded(agent, branch)
 		}
 	}()

@@ -511,10 +511,8 @@ func waitAgentTerminal(t *testing.T, o *Orchestrator, branch string, timeout tim
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		if a := o.AgentByBranch(branch); a != nil {
-			if a.State != StateRunning && a.State != StateCreating {
-				return a
-			}
+		if s, ok := o.AgentState(branch); ok && s != StateRunning && s != StateCreating {
+			return o.AgentByBranch(branch)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
